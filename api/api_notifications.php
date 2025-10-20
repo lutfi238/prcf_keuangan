@@ -51,7 +51,7 @@ switch ($user_role) {
                 'type' => 'proposal',
                 'title' => 'Proposal Baru',
                 'message' => $row['judul_proposal'],
-                'link' => 'review_proposal.php?id=' . $row['id_proposal'],
+                'link' => 'review_proposal_fm.php?id=' . $row['id_proposal'],
                 'time' => $row['notification_time'],
                 'sort_time' => strtotime($row['notification_time'])
             ];
@@ -101,7 +101,7 @@ switch ($user_role) {
                 'type' => 'proposal',
                 'title' => 'Proposal Disetujui FM',
                 'message' => $row['judul_proposal'],
-                'link' => 'review_proposal.php?id=' . $row['id_proposal'],
+                'link' => 'review_proposal_dir.php?id=' . $row['id_proposal'],
                 'time' => $row['notification_time'],
                 'sort_time' => strtotime($row['notification_time'])
             ];
@@ -176,7 +176,7 @@ switch ($user_role) {
                 'type' => 'success',
                 'title' => 'Proposal Disetujui',
                 'message' => $row['judul_proposal'],
-                'link' => 'review_proposal.php?id=' . $row['id_proposal'],
+                'link' => 'view_proposal.php?id=' . $row['id_proposal'],
                 'time' => $row['notification_time'],
                 'sort_time' => strtotime($row['notification_time'])
             ];
@@ -193,7 +193,7 @@ switch ($user_role) {
                 'type' => 'warning',
                 'title' => 'Proposal Perlu Revisi',
                 'message' => $row['judul_proposal'],
-                'link' => 'review_proposal.php?id=' . $row['id_proposal'],
+                'link' => 'view_proposal.php?id=' . $row['id_proposal'],
                 'time' => $row['notification_time'],
                 'sort_time' => strtotime($row['notification_time'])
             ];

@@ -61,7 +61,7 @@ function send_otp_email($email, $otp) {
                     </div>
                     
                     <div class="warning">
-                        <strong>⏱️ Penting:</strong> Kode ini hanya berlaku selama <strong>1 menit (60 detik)</strong>.<br>
+                        <strong>⏱️ Penting:</strong> Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>
                         🔒 Jangan bagikan kode ini kepada siapapun!
                     </div>
                     

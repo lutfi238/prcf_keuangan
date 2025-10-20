@@ -1,4 +1,7 @@
 <?php
+// Start output buffering to prevent any output before headers
+ob_start();
+
 session_start();
 require_once '../includes/config.php';
 require_once '../includes/maintenance_config.php';
@@ -6,7 +9,16 @@ require_once '../includes/maintenance_config.php';
 // Check maintenance mode
 check_maintenance();
 
+// Debug: Log session state
+error_log("🔍 verify_otp.php - Session state: " . json_encode([
+    'pending_login' => isset($_SESSION['pending_login']),
+    'user_id' => $_SESSION['user_id'] ?? null,
+    'logged_in' => $_SESSION['logged_in'] ?? false,
+    'session_id' => session_id()
+]));
+
 if (!isset($_SESSION['pending_login'])) {
+    error_log("⚠️ verify_otp.php - No pending_login, redirecting to login.php");
     header('Location: login.php');
     exit();
 }
@@ -15,14 +27,29 @@ $error = '';
 $success = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['verify_otp'])) {
-        $entered_otp = $_POST['otp'];
+    // Debug: Log POST data
+    error_log("🔍 verify_otp.php - POST received: " . json_encode([
+        'verify_otp_isset' => isset($_POST['verify_otp']),
+        'otp_isset' => isset($_POST['otp']),
+        'otp_value' => $_POST['otp'] ?? 'NOT SET',
+        'resend_otp_isset' => isset($_POST['resend_otp']),
+        'session_otp' => $_SESSION['otp'] ?? 'NOT SET',
+        'session_otp_time' => $_SESSION['otp_time'] ?? 'NOT SET'
+    ]));
+    
+    if (!empty($_POST['verify_otp'])) {
+        $entered_otp = preg_replace('/\D/', '', $_POST['otp'] ?? '');
         $current_time = time();
         
-        // Check if OTP expired (60 seconds)
-        if ($current_time - $_SESSION['otp_time'] > 60) {
+        // Debug: Log OTP comparison
+        error_log("🔍 OTP Comparison - Entered: '$entered_otp' vs Session: '" . ($_SESSION['otp'] ?? 'NOT SET') . "'");
+        error_log("🔍 Time check - Current: $current_time, OTP Time: " . ($_SESSION['otp_time'] ?? 0) . ", Diff: " . ($current_time - ($_SESSION['otp_time'] ?? 0)) . " seconds");
+        
+        // Check if OTP expired (300 seconds = 5 minutes)
+        if ($current_time - ($_SESSION['otp_time'] ?? 0) > 300) {
             $error = 'Kode OTP telah kadaluarsa';
-        } elseif ($entered_otp == $_SESSION['otp']) {
+            error_log("❌ OTP Expired");
+        } elseif ($entered_otp === (string)($_SESSION['otp'] ?? '')) {
             // OTP correct
             $user_id = $_SESSION['user_id'];
             
@@ -33,47 +60,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $result = $stmt->get_result();
             $user = $result->fetch_assoc();
             
-            unset($_SESSION['otp']);
-            unset($_SESSION['otp_time']);
-            unset($_SESSION['pending_login']);
-            unset($_SESSION['otp_attempts']);
-            unset($_SESSION['demo_otp_display']);
+            // Clear OTP data
+            unset($_SESSION['otp'], $_SESSION['otp_time'], $_SESSION['pending_login'], $_SESSION['otp_attempts']);
             
-            // Redirect based on role
+            // Set session with proper data
+            $_SESSION['user_id'] = $user['id_user'];
+            $_SESSION['user_name'] = $user['nama'];
+            $_SESSION['user_role'] = $user['role'];
+            $_SESSION['user_email'] = $user['email'];
+            $_SESSION['logged_in'] = true;
+            
+            // Log untuk debugging
+            error_log("✅ OTP Verified - User {$user['nama']} ({$user['role']}) logging in");
+            
+            // Determine redirect URL based on role
+            $redirect = '../pages/dashboards/';
             switch ($user['role']) {
-                case 'Project Manager':
-                    header('Location: ../pages/dashboards/dashboard_pm.php');
-                    break;
-                case 'Staff Accountant':
-                    header('Location: ../pages/dashboards/dashboard_sa.php');
-                    break;
-                case 'Finance Manager':
-                    header('Location: ../pages/dashboards/dashboard_fm.php');
-                    break;
-                case 'Direktur':
-                    header('Location: ../pages/dashboards/dashboard_dir.php');
-                    break;
-                default:
-                    header('Location: ../pages/dashboards/dashboard_pm.php');
+                case 'Project Manager':  $redirect .= 'dashboard_pm.php'; break;
+                case 'Staff Accountant': $redirect .= 'dashboard_sa.php'; break;
+                case 'Finance Manager':  $redirect .= 'dashboard_fm.php'; break;
+                case 'Direktur':         $redirect .= 'dashboard_dir.php'; break;
+                default:                 $redirect .= 'dashboard_pm.php'; break;
             }
+            
+            error_log("✅ Redirecting to: $redirect");
+            
+            // Force session to be written BEFORE any output
+            session_write_close();
+            
+            // Use JavaScript redirect for better compatibility
+            // This works even if headers are already sent
+            ob_end_clean(); // Clear output buffer
+            ?>
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta http-equiv="refresh" content="0;url=<?php echo htmlspecialchars($redirect); ?>">
+                <script>
+                    // JavaScript redirect as fallback
+                    window.location.href = "<?php echo htmlspecialchars($redirect); ?>";
+                </script>
+            </head>
+            <body>
+                <p>Redirecting to dashboard...</p>
+                <p>If not redirected, <a href="<?php echo htmlspecialchars($redirect); ?>">click here</a>.</p>
+            </body>
+            </html>
+            <?php
             exit();
         } else {
             $_SESSION['otp_attempts'] = ($_SESSION['otp_attempts'] ?? 0) + 1;
             $error = 'Kode OTP salah, ulangi lagi';
+            error_log("❌ OTP Wrong - Entered: '$entered_otp' vs Expected: '" . ($_SESSION['otp'] ?? 'NOT SET') . "' (Attempt: " . $_SESSION['otp_attempts'] . ")");
         }
-    } elseif (isset($_POST['resend_otp'])) {
+    } elseif (!empty($_POST['resend_otp'])) {
         $current_time = time();
-        if ($current_time - $_SESSION['otp_time'] < 15) {
+        if ($current_time - ($_SESSION['otp_time'] ?? 0) < 15) {
             $error = 'Tunggu sebentar sebelum meminta OTP baru';
         } else {
-            $otp = rand(100000, 999999);
-            $_SESSION['otp'] = $otp;
+            $_SESSION['otp'] = rand(100000, 999999);
             $_SESSION['otp_time'] = $current_time;
             $_SESSION['otp_attempts'] = 0;
 
-            if (defined('EMAIL_OTP_ENABLED') && EMAIL_OTP_ENABLED === true) {
-                $email_sent = send_otp_email($_SESSION['user_email'], $otp);
-                if ($email_sent) {
+            if (!empty($_SESSION['user_email']) && EMAIL_OTP_ENABLED) {
+                if (send_otp_email($_SESSION['user_email'], $_SESSION['otp'])) {
                     $success = 'Kode OTP baru telah dikirim ke email Anda.';
                 } else {
                     $error = 'Gagal mengirim OTP email. Silakan coba lagi.';
@@ -117,7 +167,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
             <?php endif; ?>
 
-            <form method="POST" class="space-y-6">
+            <!-- DEBUG MODE: Show OTP (REMOVE IN PRODUCTION!) -->
+            <?php if (defined('DEVELOPER_MODE') && DEVELOPER_MODE): ?>
+            <div class="mb-6 bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded-lg text-sm" role="alert">
+                <strong>🔧 DEBUG MODE:</strong><br>
+                OTP: <strong class="text-2xl font-mono"><?php echo $_SESSION['otp'] ?? 'NOT SET'; ?></strong><br>
+                <small>Time remaining: <?php echo max(0, 300 - (time() - ($_SESSION['otp_time'] ?? time()))); ?> seconds</small>
+            </div>
+            <?php endif; ?>
+
+            <form method="POST" class="space-y-6" id="otpForm">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">Kode OTP</label>
                     <input type="text" name="otp" maxlength="6" required autocomplete="one-time-code"
@@ -132,10 +191,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <button type="submit" name="resend_otp" value="1" formnovalidate class="text-blue-600 hover:text-blue-700 font-medium">
                         Kirim ulang kode
                     </button>
-                    <span class="text-gray-400">Kode berlaku selama 1 menit</span>
+                    <span class="text-gray-400">Kode berlaku selama 5 menit</span>
                 </div>
 
-                <button type="submit" name="verify_otp"
+                <button type="submit" name="verify_otp" value="1"
                     class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition duration-200 shadow-lg">
                     <i class="fas fa-check mr-2"></i> Verifikasi & Masuk
                 </button>
@@ -147,5 +206,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <p class="mt-1">Periksa folder spam atau klik "Kirim ulang kode" untuk mendapatkan OTP baru.</p>
         </div>
     </div>
+
+    <!-- DEBUG: Form submission logger -->
+    <script>
+        document.getElementById('otpForm').addEventListener('submit', function(e) {
+            console.log('🔍 Form submitting...');
+            console.log('OTP value:', document.querySelector('input[name="otp"]').value);
+            console.log('verify_otp button:', document.querySelector('button[name="verify_otp"]'));
+            console.log('Form action:', this.action || 'same page');
+            console.log('Form method:', this.method);
+        });
+
+        // Auto-focus OTP input
+        document.querySelector('input[name="otp"]').focus();
+
+        // Debug: Log when page loads
+        console.log('✅ verify_otp.php loaded');
+        console.log('Session ID visible in cookies:', document.cookie.includes('PHPSESSID'));
+    </script>
 </body>
 </html>

@@ -104,9 +104,13 @@ $stmt->execute();
 $proposal = $stmt->get_result()->fetch_assoc();
 
 if (!$proposal) {
+    error_log("⚠️ review_proposal_fm.php - Proposal not found: ID = $proposal_id");
     header('Location: ../dashboards/dashboard_fm.php');
     exit();
 }
+
+// Log access for debugging
+error_log("✅ review_proposal_fm.php - FM viewing proposal: ID = $proposal_id, Status = " . $proposal['status']);
 
 // Close session writing
 session_write_close();
@@ -314,6 +318,26 @@ session_write_close();
                     </div>
                 </div>
             </div>
+            <?php elseif ($proposal['status'] === 'rejected'): ?>
+            <div class="p-8 border-t border-gray-200 bg-red-50">
+                <div class="flex items-center text-red-700">
+                    <i class="fas fa-times-circle text-2xl mr-3"></i>
+                    <div>
+                        <p class="font-bold">Proposal Ditolak / Perlu Revisi</p>
+                        <p class="text-sm">Proposal ini telah ditolak dan perlu perbaikan oleh Project Manager.</p>
+                    </div>
+                </div>
+            </div>
+            <?php elseif ($proposal['status'] === 'draft'): ?>
+            <div class="p-8 border-t border-gray-200 bg-gray-50">
+                <div class="flex items-center text-gray-700">
+                    <i class="fas fa-file text-2xl mr-3"></i>
+                    <div>
+                        <p class="font-bold">Proposal Masih Draft</p>
+                        <p class="text-sm">Proposal ini masih dalam tahap draft dan belum disubmit.</p>
+                    </div>
+                </div>
+            </div>
             <?php else: ?>
             <div class="p-8 border-t border-gray-200 bg-gray-50">
                 <div class="flex items-center text-gray-700">
@@ -327,6 +351,21 @@ session_write_close();
             <?php endif; ?>
         </div>
     </main>
+
+    <!-- JavaScript to handle back button and prevent cache issues -->
+    <script>
+        // Detect browser back button navigation
+        window.addEventListener('pageshow', function(event) {
+            // If page is loaded from browser cache (back button)
+            if (event.persisted) {
+                console.log('Page loaded from cache (back button) - reloading...');
+                window.location.reload();
+            }
+        });
+
+        // Log page access for debugging
+        console.log('✅ review_proposal_fm.php loaded - Proposal ID: <?php echo $proposal_id; ?>, Status: <?php echo $proposal['status']; ?>');
+    </script>
 </body>
 </html>
 

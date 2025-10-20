@@ -2,6 +2,13 @@
 
 > Sistem Manajemen Keuangan Terintegrasi untuk PRCF Indonesia
 
+## 📚 Table of Contents
+1. [Struktur Folder Terorganisir](#-struktur-folder-terorganisir)
+2. [Fitur Utama](#-fitur-utama)
+3. [Quick Start](#-quick-start)
+4. [Dokumentasi Lengkap](#-dokumentasi-lengkap)
+5. [Local Setup](includes/README_LOCAL_SETUP.md) *(how to configure SMTP & secrets)*
+
 ## 📁 Struktur Folder Terorganisir
 
 Proyek ini telah direstrukturisasi untuk kemudahan maintenance dan skalabilitas:

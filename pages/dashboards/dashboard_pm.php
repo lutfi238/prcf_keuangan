@@ -12,12 +12,22 @@ require_once '../../includes/maintenance_config.php';
 // Check maintenance mode (admin with whitelisted IP can bypass)
 check_maintenance();
 
+// Debug: Log session state on dashboard access
+error_log("🔍 dashboard_pm.php - Session check: " . json_encode([
+    'logged_in' => $_SESSION['logged_in'] ?? false,
+    'user_id' => $_SESSION['user_id'] ?? null,
+    'user_role' => $_SESSION['user_role'] ?? null,
+    'session_id' => session_id()
+]));
+
 if (!isset($_SESSION['logged_in'])) {
+    error_log("⚠️ dashboard_pm.php - Not logged in, redirecting to login.php");
     header('Location: ../../auth/login.php');
     exit();
 }
 
 if ($_SESSION['user_role'] !== 'Project Manager') {
+    error_log("⚠️ dashboard_pm.php - Wrong role: " . ($_SESSION['user_role'] ?? 'none'));
     header('Location: ../../auth/unauthorized.php');
     exit();
 }
@@ -66,7 +76,7 @@ while ($row = $approved_proposals->fetch_assoc()) {
         'type' => 'success',
         'id' => $row['id_proposal'],
         'title' => 'Proposal disetujui: ' . $row['judul_proposal'],
-        'link' => '../proposals/review_proposal.php?id=' . $row['id_proposal'],
+        'link' => '../proposals/view_proposal.php?id=' . $row['id_proposal'],
         'time' => time_elapsed_string($row['updated_at']),
         'is_unread' => $is_unread
     ];
@@ -83,7 +93,7 @@ while ($row = $rejected_proposals->fetch_assoc()) {
         'type' => 'rejected',
         'id' => $row['id_proposal'],
         'title' => 'Proposal ditolak: ' . $row['judul_proposal'],
-        'link' => '../proposals/review_proposal.php?id=' . $row['id_proposal'],
+        'link' => '../proposals/view_proposal.php?id=' . $row['id_proposal'],
         'time' => time_elapsed_string($row['updated_at']),
         'is_unread' => $is_unread
     ];
@@ -341,7 +351,7 @@ session_write_close();
                                 'approved' => 'Disetujui (Final)',
                                 'rejected' => 'Ditolak'
                             ];
-                            $link = '../proposals/review_proposal.php?id=' . $activity['id']; // READ-ONLY for PM
+                            $link = '../proposals/view_proposal.php?id=' . $activity['id']; // READ-ONLY for PM
                         } else {
                             $icon = 'fa-chart-line';
                             $color = 'green';

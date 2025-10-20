@@ -11,14 +11,25 @@ $success = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['login'])) {
-        $identifier = $_POST['identifier'];
+        $identifier = trim($_POST['identifier']);
         $password = $_POST['password'];
-        
-        $stmt = $conn->prepare("SELECT * FROM user WHERE email = ? OR no_HP = ?");
-        $stmt->bind_param("ss", $identifier, $identifier);
+
+        $email_identifier = strtolower($identifier);
+        $phone_identifier = null;
+        if (PHONE_LOGIN_ENABLED && preg_match('/^[0-9+\s-]+$/', $identifier)) {
+            $phone_identifier = normalize_phone_number($identifier);
+        }
+
+        if ($phone_identifier) {
+            $stmt = $conn->prepare("SELECT * FROM user WHERE no_HP = ?");
+            $stmt->bind_param("s", $phone_identifier);
+        } else {
+            $stmt = $conn->prepare("SELECT * FROM user WHERE email = ?");
+            $stmt->bind_param("s", $email_identifier);
+        }
         $stmt->execute();
         $result = $stmt->get_result();
-        
+
         if ($result->num_rows === 1) {
             $user = $result->fetch_assoc();
             if (password_verify($password, $user['password_hash'])) {
@@ -94,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     exit();
                 }
             } else {
-                $error = 'Email/nomor atau password salah.';
+                $error = PHONE_LOGIN_ENABLED ? 'Email/nomor atau password salah.' : 'Email atau password salah.';
             }
         } else {
             $error = 'Email/nomor atau password salah.';
@@ -129,6 +140,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         <?php endif; ?>
 
+        <?php if (!empty($_SESSION['reset_success'])): ?>
+            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+                <?php echo $_SESSION['reset_success']; unset($_SESSION['reset_success']); ?>
+            </div>
+        <?php endif; ?>
+
         <form method="POST" class="space-y-4">
             <div>
                 <label class="block text-gray-700 text-sm font-medium mb-2">Email atau Nomor HP</label>
@@ -144,6 +161,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     placeholder="Masukkan password">
             </div>
 
+            <div class="flex justify-between items-center text-sm">
+                <a href="forgot_password.php" class="text-blue-600 hover:text-blue-700">Lupa password?</a>
+            </div>
             <button type="submit" name="login" 
                 class="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition duration-200 font-medium">
                 Login
