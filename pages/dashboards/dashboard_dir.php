@@ -1081,6 +1081,7 @@ session_write_close();
 
         // Date filter for DIR (proposals/reports)
         function showDateFilterDIR(context) {
+            // Remove any existing menu and clean up event listeners
             const existingMenu = document.getElementById('columnFilterMenu');
             if (existingMenu) existingMenu.remove();
 
@@ -1123,12 +1124,14 @@ session_write_close();
             document.body.appendChild(menu);
 
             setTimeout(() => {
-                document.addEventListener('click', function closeMenu(e) {
+                // Store reference to the close function for cleanup
+                const closeMenuHandler = function closeMenu(e) {
                     if (!menu.contains(e.target) && !e.target.closest('th')) {
                         menu.remove();
-                        document.removeEventListener('click', closeMenu);
+                        document.removeEventListener('click', closeMenuHandler);
                     }
-                });
+                };
+                document.addEventListener('click', closeMenuHandler);
             }, 50);
         }
 

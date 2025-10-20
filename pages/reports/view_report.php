@@ -23,11 +23,11 @@ $report_id = $_GET['id'] ?? 0;
 
 // Determine return dashboard
 $return_dashboard = match($user_role) {
-    'Project Manager' => 'dashboard_pm.php',
-    'Finance Manager' => 'dashboard_fm.php',
-    'Staff Accountant' => 'dashboard_sa.php',
-    'Direktur' => 'dashboard_dir.php',
-    default => 'index.php'
+    'Project Manager' => '../dashboards/dashboard_pm.php',
+    'Finance Manager' => '../dashboards/dashboard_fm.php',
+    'Staff Accountant' => '../dashboards/dashboard_sa.php',
+    'Direktur' => '../dashboards/dashboard_dir.php',
+    default => '../../index.php'
 };
 
 // Get report header
@@ -46,9 +46,16 @@ if (!$report) {
 
 // Get report details
 $details_stmt = $conn->prepare("SELECT * FROM laporan_keuangan_detail WHERE id_laporan_keu = ? ORDER BY id_detail ASC");
-$details_stmt->bind_param("i", $report_id);
-$details_stmt->execute();
-$details = $details_stmt->get_result();
+if ($details_stmt === false) {
+    // Table might not exist or there's a database issue
+    error_log("Database Error in view_report.php: Failed to prepare query for laporan_keuangan_detail. " . $conn->error);
+    // Create empty result set to prevent fatal error
+    $details = [];
+} else {
+    $details_stmt->bind_param("i", $report_id);
+    $details_stmt->execute();
+    $details = $details_stmt->get_result();
+}
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -163,16 +170,22 @@ $details = $details_stmt->get_result();
                             </tr>
                         </thead>
                         <tbody>
-                            <?php 
+                            <?php
                             $no = 1;
                             $total_requested = 0;
                             $total_actual = 0;
                             $total_balance = 0;
-                            
-                            while ($detail = $details->fetch_assoc()): 
-                                $total_requested += $detail['requested'];
-                                $total_actual += $detail['actual'];
-                                $total_balance += $detail['balance'];
+
+                            // Handle both mysqli_result object and empty array
+                            if (is_array($details)) {
+                                // Empty array - no details available
+                                echo '<tr><td colspan="13" class="border border-gray-200 px-3 py-4 text-center text-gray-500">Tidak ada detail pengeluaran</td></tr>';
+                            } else {
+                                // mysqli_result object
+                                while ($detail = $details->fetch_assoc()):
+                                    $total_requested += $detail['requested'];
+                                    $total_actual += $detail['actual'];
+                                    $total_balance += $detail['balance'];
                             ?>
                             <tr class="hover:bg-gray-50">
                                 <td class="border border-gray-200 px-3 py-2 text-sm"><?php echo $no++; ?></td>
@@ -191,7 +204,7 @@ $details = $details_stmt->get_result();
                                 </td>
                                 <td class="border border-gray-200 px-3 py-2 text-sm"><?php echo htmlspecialchars($detail['explanation']); ?></td>
                             </tr>
-                            <?php endwhile; ?>
+                            <?php endwhile; } ?>
                         </tbody>
                         <tfoot class="bg-gray-100 font-semibold">
                             <tr>
