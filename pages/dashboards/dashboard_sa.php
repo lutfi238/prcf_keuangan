@@ -56,6 +56,20 @@ $reports = $conn->query("SELECT lh.*, u.nama as creator_name
     WHERE lh.status_lap IN ('submitted', 'verified') 
     ORDER BY lh.created_at DESC");
 
+// Get all projects for filter
+$projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE status_proyek != 'cancelled' ORDER BY nama_proyek ASC");
+$project_list = [];
+if ($projects) {
+    while ($proj = $projects->fetch_assoc()) {
+        $project_list[] = $proj;
+    }
+}
+
+// Stats overview (dynamic)
+$sa_count_submitted = $conn->query("SELECT COUNT(*) as c FROM laporan_keuangan_header WHERE status_lap = 'submitted'")->fetch_assoc()['c'];
+$sa_count_verified = $conn->query("SELECT COUNT(*) as c FROM laporan_keuangan_header WHERE status_lap = 'verified'")->fetch_assoc()['c'];
+$sa_count_rejected = $conn->query("SELECT COUNT(*) as c FROM laporan_keuangan_header WHERE status_lap = 'rejected'")->fetch_assoc()['c'];
+
 // Get notifications for SA
 $notif_pending_reports = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'submitted'")->fetch_assoc()['count'];
 $total_notifications = $notif_pending_reports;
@@ -104,6 +118,12 @@ session_write_close();
     <title>Dashboard Staff Accounting - PRCFI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .filter-active .filter-label,
+        .filter-active .filter-icon {
+            color: #2563eb;
+        }
+    </style>
 </head>
 <body class="bg-white min-h-screen">
     <!-- Header -->
@@ -211,7 +231,7 @@ session_write_close();
                 <div class="flex items-center justify-between">
                     <div>
                         <p class="text-sm text-gray-600 mb-1">Menunggu Validasi</p>
-                        <p class="text-3xl font-bold text-gray-800">5</p>
+                        <p class="text-3xl font-bold text-gray-800"><?php echo (int)$sa_count_submitted; ?></p>
                     </div>
                     <div class="bg-blue-500 p-3 rounded-full">
                         <i class="fas fa-clock text-white text-2xl"></i>
@@ -223,7 +243,7 @@ session_write_close();
                 <div class="flex items-center justify-between">
                     <div>
                         <p class="text-sm text-gray-600 mb-1">Telah Divalidasi</p>
-                        <p class="text-3xl font-bold text-gray-800">12</p>
+                        <p class="text-3xl font-bold text-gray-800"><?php echo (int)$sa_count_verified; ?></p>
                     </div>
                     <div class="bg-green-500 p-3 rounded-full">
                         <i class="fas fa-check-circle text-white text-2xl"></i>
@@ -235,7 +255,7 @@ session_write_close();
                 <div class="flex items-center justify-between">
                     <div>
                         <p class="text-sm text-gray-600 mb-1">Perlu Revisi</p>
-                        <p class="text-3xl font-bold text-gray-800">3</p>
+                        <p class="text-3xl font-bold text-gray-800"><?php echo (int)$sa_count_rejected; ?></p>
                     </div>
                     <div class="bg-yellow-500 p-3 rounded-full">
                         <i class="fas fa-exclamation-triangle text-white text-2xl"></i>
@@ -255,11 +275,46 @@ session_write_close();
                     <thead class="bg-gray-50">
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kegiatan</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Proyek</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dibuat Oleh</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tanggal</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" onclick="sortTable('kegiatan')" title="Klik untuk sort">
+                                <div class="flex items-center">
+                                    Kegiatan
+                                    <span class="ml-2 text-gray-400">
+                                        <i class="fas fa-sort sort-icon" id="sort-kegiatan"></i>
+                                    </span>
+                                </div>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" onclick="filterByColumn('project')" title="Klik untuk filter">
+                                <div class="flex items-center justify-between">
+                                    Proyek
+                                    <span class="ml-2 text-gray-400">
+                                        <i class="fas fa-filter filter-icon"></i>
+                                    </span>
+                                </div>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" onclick="filterByColumn('creator')" title="Klik untuk filter">
+                                <div class="flex items-center justify-between">
+                                    Dibuat Oleh
+                                    <span class="ml-2 text-gray-400">
+                                        <i class="fas fa-filter filter-icon"></i>
+                                    </span>
+                                </div>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" onclick="showDateFilter()" title="Klik untuk filter tanggal">
+                                <div class="flex items-center">
+                                    Tanggal
+                                    <span class="ml-2 text-gray-400">
+                                        <i class="fas fa-sort sort-icon" id="sort-date"></i>
+                                    </span>
+                                </div>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" onclick="filterByColumn('status')" title="Klik untuk filter">
+                                <div class="flex items-center justify-between">
+                                    Status
+                                    <span class="ml-2 text-gray-400">
+                                        <i class="fas fa-filter filter-icon"></i>
+                                    </span>
+                                </div>
+                            </th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
                         </tr>
                     </thead>
@@ -268,7 +323,12 @@ session_write_close();
                         $no = 1;
                         while ($report = $reports->fetch_assoc()): 
                         ?>
-                        <tr class="hover:bg-gray-50">
+                        <tr class="hover:bg-gray-50 report-row" 
+                            data-project="<?php echo htmlspecialchars($report['kode_projek']); ?>"
+                            data-status="<?php echo htmlspecialchars($report['status_lap']); ?>"
+                            data-creator="<?php echo htmlspecialchars($report['creator_name']); ?>"
+                            data-kegiatan="<?php echo strtolower(htmlspecialchars($report['nama_kegiatan'])); ?>"
+                            data-date="<?php echo $report['tanggal_laporan']; ?>">
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><?php echo $no++; ?></td>
                             <td class="px-6 py-4 text-sm text-gray-900"><?php echo $report['nama_kegiatan']; ?></td>
                             <td class="px-6 py-4 text-sm text-gray-900"><?php echo $report['kode_projek']; ?></td>
@@ -347,6 +407,364 @@ session_write_close();
                 e.stopPropagation();
             });
         }
+
+        // ====== CLICKABLE COLUMN HEADER FEATURES ======
+
+        // Track sort state
+        let sortState = {
+            kegiatan: 'none', // none, asc, desc
+            date: 'none'
+        };
+
+        // Track active filter state
+        let activeFilters = {
+            project: '',
+            creator: '',
+            status: ''
+        };
+
+        // Sort Table by Column
+        function sortTable(column) {
+            const tbody = document.querySelector('tbody');
+            const rows = Array.from(document.querySelectorAll('.report-row'));
+            
+            // Determine sort direction
+            let direction = sortState[column] === 'asc' ? 'desc' : 'asc';
+            sortState[column] = direction;
+            
+            // Sort rows
+            rows.sort((a, b) => {
+                let aVal, bVal;
+                
+                if (column === 'kegiatan') {
+                    aVal = a.getAttribute('data-kegiatan');
+                    bVal = b.getAttribute('data-kegiatan');
+                } else if (column === 'date') {
+                    aVal = new Date(a.getAttribute('data-date'));
+                    bVal = new Date(b.getAttribute('data-date'));
+                }
+                
+                if (direction === 'asc') {
+                    return aVal > bVal ? 1 : -1;
+                } else {
+                    return aVal < bVal ? 1 : -1;
+                }
+            });
+            
+            // Re-append rows in sorted order
+            rows.forEach((row, index) => {
+                tbody.appendChild(row);
+                // Update row number
+                const noCell = row.querySelector('td:first-child');
+                if (noCell) noCell.textContent = index + 1;
+            });
+            
+            // Update sort icon
+            const icon = document.getElementById('sort-' + column);
+            if (icon) {
+                icon.className = direction === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
+            }
+            
+            // Reset other sort icons
+            Object.keys(sortState).forEach(key => {
+                if (key !== column) {
+                    sortState[key] = 'none';
+                    const otherIcon = document.getElementById('sort-' + key);
+                    if (otherIcon) otherIcon.className = 'fas fa-sort';
+                }
+            });
+        }
+
+        // Filter by Column Click (Show unique values)
+        function filterByColumn(column) {
+            const rows = document.querySelectorAll('.report-row');
+            const uniqueValues = new Set();
+            
+            // Collect unique values
+            rows.forEach(row => {
+                const value = row.getAttribute('data-' + column);
+                if (value) uniqueValues.add(value);
+            });
+            
+            // Create filter dropdown menu
+            const menu = document.createElement('div');
+            menu.id = 'columnFilterMenu';
+            menu.className = 'absolute bg-white border border-gray-300 rounded-lg shadow-lg z-50 mt-2 max-h-64 overflow-y-auto';
+            menu.style.minWidth = '200px';
+            
+            let menuHTML = `
+                <div class="p-2 border-b border-gray-200 bg-gray-50">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-gray-700">Filter ${getColumnName(column)}</span>
+                        <button onclick="closeColumnFilter()" class="text-gray-400 hover:text-gray-600">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="p-2">
+                    <label class="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                        <input type="radio" name="filter_${column}" value="" onchange="applyColumnFilter('${column}', '')" checked class="mr-2">
+                        <span class="text-sm">(Semua)</span>
+                    </label>
+            `;
+
+                    // Add unique values as options
+                    Array.from(uniqueValues).sort().forEach(value => {
+                        const displayValue = column === 'status' ? getStatusText(value) : value;
+                        menuHTML += `
+                            <label class="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                                <input type="radio" name="filter_${column}" value="${value}" onchange="applyColumnFilter('${column}', this.value)" class="mr-2">
+                                <span class="text-sm">${displayValue}</span>
+                            </label>
+                        `;
+                    });
+
+                    menuHTML += '</div>';
+            menu.innerHTML = menuHTML;
+            
+            // Remove existing menu if any
+            const existingMenu = document.getElementById('columnFilterMenu');
+            if (existingMenu) existingMenu.remove();
+            
+            // Position menu below the clicked header
+            const event = window.event;
+            const target = event.target.closest('th');
+            const rect = target.getBoundingClientRect();
+            
+            menu.style.position = 'fixed';
+            menu.style.left = rect.left + 'px';
+            menu.style.top = (rect.bottom + 5) + 'px';
+            
+            document.body.appendChild(menu);
+
+            // Ensure radio button states reflect active filters when menu opens
+            syncRadioButtons();
+            
+            // Close menu when clicking outside
+            setTimeout(() => {
+                document.addEventListener('click', function closeMenu(e) {
+                    if (!menu.contains(e.target) && !e.target.closest('th')) {
+                        menu.remove();
+                        document.removeEventListener('click', closeMenu);
+                    }
+                });
+            }, 100);
+        }
+
+        // Date filter menu for Tanggal column
+        function showDateFilter() {
+            const existingMenu = document.getElementById('columnFilterMenu');
+            if (existingMenu) existingMenu.remove();
+
+            const menu = document.createElement('div');
+            menu.id = 'columnFilterMenu';
+            menu.className = 'absolute bg-white border border-gray-300 rounded-lg shadow-lg z-50 mt-2 p-3 w-72';
+
+            menu.innerHTML = `
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-gray-700">Filter Tanggal</span>
+                    <button onclick="closeColumnFilter()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-xs text-gray-600 mb-1">Bulan</label>
+                        <input type="month" id="dfMonth" class="w-full px-2 py-1 border border-gray-300 rounded" onchange="syncMonthToRange()">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-xs text-gray-600 mb-1">Dari</label>
+                            <input type="date" id="dfFrom" class="w-full px-2 py-1 border border-gray-300 rounded">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-600 mb-1">Sampai</label>
+                            <input type="date" id="dfTo" class="w-full px-2 py-1 border border-gray-300 rounded">
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-2 pt-2 border-t border-gray-200">
+                        <button class="px-3 py-1 text-sm bg-gray-100 rounded" onclick="resetDateFilter()">Reset</button>
+                        <button class="px-3 py-1 text-sm bg-blue-600 text-white rounded" onclick="applyDateRangeFilter()">Terapkan</button>
+                    </div>
+                </div>
+            `;
+
+            const event = window.event;
+            const target = event.target.closest('th');
+            const rect = target.getBoundingClientRect();
+            menu.style.position = 'fixed';
+            menu.style.left = rect.left + 'px';
+            menu.style.top = (rect.bottom + 5) + 'px';
+
+            document.body.appendChild(menu);
+            setTimeout(() => {
+                document.addEventListener('click', function closeMenu(e) {
+                    if (!menu.contains(e.target) && !e.target.closest('th')) {
+                        menu.remove();
+                        document.removeEventListener('click', closeMenu);
+                    }
+                });
+            }, 50);
+        }
+
+        function syncMonthToRange() {
+            const m = document.getElementById('dfMonth').value; // yyyy-mm
+            if (!m) return;
+            const [year, month] = m.split('-').map(Number);
+            const first = new Date(year, month - 1, 1);
+            const last = new Date(year, month, 0);
+            document.getElementById('dfFrom').value = first.toISOString().slice(0,10);
+            document.getElementById('dfTo').value = last.toISOString().slice(0,10);
+        }
+
+        function applyDateRangeFilter() {
+            const fromVal = document.getElementById('dfFrom').value;
+            const toVal = document.getElementById('dfTo').value;
+            const fromDate = fromVal ? new Date(fromVal) : null;
+            const toDate = toVal ? new Date(toVal + 'T23:59:59') : null;
+
+            document.querySelectorAll('.report-row').forEach(row => {
+                const rowDate = new Date(row.getAttribute('data-date'));
+                let show = true;
+                if (fromDate && rowDate < fromDate) show = false;
+                if (toDate && rowDate > toDate) show = false;
+                row.style.display = show ? '' : 'none';
+            });
+            closeColumnFilter();
+        }
+
+        function resetDateFilter() {
+            document.getElementById('dfMonth').value = '';
+            document.getElementById('dfFrom').value = '';
+            document.getElementById('dfTo').value = '';
+            document.querySelectorAll('.report-row').forEach(row => row.style.display = '');
+        }
+
+        // Apply column filter
+        function applyColumnFilter(column, value) {
+            // Update active filter state
+            activeFilters[column] = value || '';
+
+            // First, show all rows
+            document.querySelectorAll('.report-row').forEach(row => {
+                row.style.display = '';
+            });
+
+            // Then apply the current filter if it's not "all"
+            if (value && value.trim() !== '') {
+                const rows = document.querySelectorAll('.report-row');
+                const target = value.toString().trim().toLowerCase();
+                rows.forEach(row => {
+                    const rowValue = (row.getAttribute('data-' + column) || '').toString().trim().toLowerCase();
+                    if (rowValue !== target) {
+                        row.style.display = 'none';
+                    }
+                });
+            }
+
+            // Update visual indicators
+            updateFilterIndicators();
+
+            closeColumnFilter();
+        }
+
+        // Reset all filters
+        function resetAllFilters() {
+            // Clear active filters state
+            Object.keys(activeFilters).forEach(key => {
+                activeFilters[key] = '';
+            });
+
+            // Show all rows
+            document.querySelectorAll('.report-row').forEach(row => {
+                row.style.display = '';
+            });
+
+            // Update visual indicators
+            updateFilterIndicators();
+        }
+
+        // Update visual indicators on table headers
+        function updateFilterIndicators() {
+            // Remove existing indicators
+            document.querySelectorAll('.filter-indicator').forEach(indicator => {
+                indicator.remove();
+            });
+            document.querySelectorAll('th[onclick*="filterByColumn"]').forEach(header => {
+                header.classList.remove('filter-active');
+            });
+
+            // Add indicators for active filters
+            Object.keys(activeFilters).forEach(column => {
+                const value = activeFilters[column];
+                if (value && value.trim() !== '') {
+                    const header = document.querySelector(`th[onclick*="filterByColumn('${column}')"]`);
+                    if (header) {
+                        header.classList.add('filter-active');
+                    }
+                }
+            });
+
+            // Sync radio buttons
+            syncRadioButtons();
+        }
+
+        // Sync radio buttons with active filters
+        function syncRadioButtons() {
+            Object.keys(activeFilters).forEach(column => {
+                const value = activeFilters[column];
+                const radioButtons = document.querySelectorAll(`input[name="filter_${column}"]`);
+
+                radioButtons.forEach(radio => {
+                    if (radio.value === value) {
+                        radio.checked = true;
+                    } else if (value === '' && radio.value === '') {
+                        radio.checked = true;
+                    } else {
+                        radio.checked = false;
+                    }
+                });
+            });
+
+            // Update header classes based on active filters
+            document.querySelectorAll('th[onclick*="filterByColumn"]').forEach(header => {
+                header.classList.remove('filter-active');
+            });
+
+            Object.keys(activeFilters).forEach(column => {
+                const value = activeFilters[column];
+                if (value && value.trim() !== '') {
+                    const header = document.querySelector(`th[onclick*="filterByColumn('${column}')"]`);
+                    if (header) header.classList.add('filter-active');
+                }
+            });
+        }
+
+        // Close column filter menu
+        function closeColumnFilter() {
+            const menu = document.getElementById('columnFilterMenu');
+            if (menu) menu.remove();
+        }
+
+        // Helper: Get column name in Indonesian
+        function getColumnName(column) {
+            const names = {
+                'project': 'Proyek',
+                'creator': 'Dibuat Oleh',
+                'status': 'Status'
+            };
+            return names[column] || column;
+        }
+
+        // Helper: Get status text
+        function getStatusText(status) {
+            if (status === 'submitted') return 'Menunggu Validasi';
+            if (status === 'verified') return 'Tervalidasi';
+            return status;
+        }
+
+        // Initialize filter indicators on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            updateFilterIndicators();
+        });
     </script>
     
     <!-- Real-time Notifications -->

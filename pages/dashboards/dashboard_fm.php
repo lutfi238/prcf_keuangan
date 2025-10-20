@@ -66,6 +66,15 @@ $reports = $conn->query("SELECT lh.*, u.nama as creator_name
     WHERE lh.status_lap = 'verified' 
     ORDER BY lh.created_at DESC");
 
+// Get all projects for filter
+$projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE status_proyek != 'cancelled' ORDER BY nama_proyek ASC");
+$project_list = [];
+if ($projects) {
+    while ($proj = $projects->fetch_assoc()) {
+        $project_list[] = $proj;
+    }
+}
+
 // Get notifications (pending proposals + pending reports)
 $notif_proposals = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status = 'submitted'")->fetch_assoc()['count'];
 $notif_reports = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'verified'")->fetch_assoc()['count'];
@@ -322,20 +331,58 @@ session_write_close();
         <div id="proposalsContent" class="tab-content">
             <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
                 <div class="p-6 border-b border-gray-200">
-                    <h3 class="text-lg font-bold text-gray-800">Proposal yang Perlu Direview</h3>
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-lg font-bold text-gray-800">Proposal yang Perlu Direview</h3>
+                        
+                    </div>
                 </div>
                 
                 <div class="overflow-x-auto">
                     <table class="w-full">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">No</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Judul</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">PJ</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Proyek</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tanggal</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" onclick="sortProposalTable('judul')" title="Klik untuk sort">
+                                    <div class="flex items-center">
+                                        Judul
+                                        <span class="ml-2 text-gray-400">
+                                            <i class="fas fa-sort sort-icon" id="sort-proposal-judul"></i>
+                                        </span>
+                                    </div>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" onclick="filterProposalByColumn('pj')" title="Klik untuk filter">
+                                    <div class="flex items-center justify-between">
+                                        PJ
+                                        <span class="ml-2 text-gray-400">
+                                            <i class="fas fa-filter filter-icon"></i>
+                                        </span>
+                                    </div>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" onclick="filterProposalByColumn('project')" title="Klik untuk filter">
+                                    <div class="flex items-center justify-between">
+                                        Proyek
+                                        <span class="ml-2 text-gray-400">
+                                            <i class="fas fa-filter filter-icon"></i>
+                                        </span>
+                                    </div>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" onclick="showDateFilterFM('proposals')" title="Klik untuk filter tanggal">
+                                    <div class="flex items-center">
+                                        Tanggal
+                                        <span class="ml-2 text-gray-400">
+                                            <i class="fas fa-sort sort-icon" id="sort-proposal-date"></i>
+                                        </span>
+                                    </div>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" onclick="filterProposalByColumn('status')" title="Klik untuk filter">
+                                    <div class="flex items-center justify-between">
+                                        Status
+                                        <span class="ml-2 text-gray-400">
+                                            <i class="fas fa-filter filter-icon"></i>
+                                        </span>
+                                    </div>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
@@ -343,8 +390,13 @@ session_write_close();
                             $no = 1;
                             while ($proposal = $proposals->fetch_assoc()): 
                             ?>
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo $no++; ?></td>
+                            <tr class="hover:bg-gray-50 proposal-row" 
+                                data-project="<?php echo htmlspecialchars($proposal['kode_proyek']); ?>"
+                                data-status="<?php echo htmlspecialchars($proposal['status']); ?>"
+                                data-pj="<?php echo htmlspecialchars($proposal['pj']); ?>"
+                                data-judul="<?php echo strtolower(htmlspecialchars($proposal['judul_proposal'])); ?>"
+                                data-date="<?php echo $proposal['date']; ?>">
+                                <td class="px-6 py-4 text-sm text-gray-900 row-number"><?php echo $no++; ?></td>
                                 <td class="px-6 py-4 text-sm text-gray-900"><?php echo $proposal['judul_proposal']; ?></td>
                                 <td class="px-6 py-4 text-sm text-gray-900"><?php echo $proposal['pj']; ?></td>
                                 <td class="px-6 py-4 text-sm text-gray-900"><?php echo $proposal['kode_proyek']; ?></td>
@@ -380,20 +432,51 @@ session_write_close();
         <div id="reportsContent" class="tab-content hidden">
             <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
                 <div class="p-6 border-b border-gray-200">
-                    <h3 class="text-lg font-bold text-gray-800">Laporan Keuangan yang Perlu Diapprove</h3>
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-lg font-bold text-gray-800">Laporan Keuangan yang Perlu Diapprove</h3>
+                        
+                    </div>
                 </div>
                 
                 <div class="overflow-x-auto">
                     <table class="w-full">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">No</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kegiatan</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Proyek</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dibuat Oleh</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tanggal</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" onclick="sortReportTable('kegiatan')" title="Klik untuk sort">
+                                    <div class="flex items-center">
+                                        Kegiatan
+                                        <span class="ml-2 text-gray-400">
+                                            <i class="fas fa-sort sort-icon" id="sort-report-kegiatan"></i>
+                                        </span>
+                                    </div>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" onclick="filterReportByColumn('project')" title="Klik untuk filter">
+                                    <div class="flex items-center justify-between">
+                                        Proyek
+                                        <span class="ml-2 text-gray-400">
+                                            <i class="fas fa-filter filter-icon"></i>
+                                        </span>
+                                    </div>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" onclick="filterReportByColumn('creator')" title="Klik untuk filter">
+                                    <div class="flex items-center justify-between">
+                                        Dibuat Oleh
+                                        <span class="ml-2 text-gray-400">
+                                            <i class="fas fa-filter filter-icon"></i>
+                                        </span>
+                                    </div>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" onclick="showDateFilterFM('reports')" title="Klik untuk filter tanggal">
+                                    <div class="flex items-center">
+                                        Tanggal
+                                        <span class="ml-2 text-gray-400">
+                                            <i class="fas fa-sort sort-icon" id="sort-report-date"></i>
+                                        </span>
+                                    </div>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
@@ -401,8 +484,12 @@ session_write_close();
                             $no = 1;
                             while ($report = $reports->fetch_assoc()): 
                             ?>
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo $no++; ?></td>
+                            <tr class="hover:bg-gray-50 report-row" 
+                                data-project="<?php echo htmlspecialchars($report['kode_projek']); ?>"
+                                data-creator="<?php echo htmlspecialchars($report['creator_name']); ?>"
+                                data-kegiatan="<?php echo strtolower(htmlspecialchars($report['nama_kegiatan'])); ?>"
+                                data-date="<?php echo $report['tanggal_laporan']; ?>">
+                                <td class="px-6 py-4 text-sm text-gray-900 row-number"><?php echo $no++; ?></td>
                                 <td class="px-6 py-4 text-sm text-gray-900"><?php echo $report['nama_kegiatan']; ?></td>
                                 <td class="px-6 py-4 text-sm text-gray-900"><?php echo $report['kode_projek']; ?></td>
                                 <td class="px-6 py-4 text-sm text-gray-900"><?php echo $report['creator_name']; ?></td>
@@ -494,6 +581,527 @@ session_write_close();
             notifButtonEl.addEventListener('click', function(e) {
                 e.stopPropagation();
             });
+        }
+
+        // Track active filter state for proposals
+        let activeProposalFilters = {
+            project: '',
+            pj: '',
+            status: ''
+        };
+
+        // Track active filter state for reports
+        let activeReportFilters = {
+            project: '',
+            creator: ''
+        };
+
+        // Project filter functions
+        function filterProposals() {
+            const selectedProject = document.getElementById('filterProposalProject').value;
+            const proposalRows = document.querySelectorAll('.proposal-row');
+
+            proposalRows.forEach(row => {
+                if (selectedProject === '' || row.getAttribute('data-project') === selectedProject) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+
+        function filterReports() {
+            const selectedProject = document.getElementById('filterReportProject').value;
+            const reportRows = document.querySelectorAll('.report-row');
+            
+            reportRows.forEach(row => {
+                if (selectedProject === '' || row.getAttribute('data-project') === selectedProject) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+
+        // ====== CLICKABLE COLUMN HEADER FEATURES FOR PROPOSALS ======
+        let proposalSortState = { judul: 'none', date: 'none' };
+
+        function sortProposalTable(column) {
+            const tbody = document.querySelector('#proposalsContent tbody');
+            const rows = Array.from(document.querySelectorAll('.proposal-row'));
+            
+            let direction = proposalSortState[column] === 'asc' ? 'desc' : 'asc';
+            proposalSortState[column] = direction;
+            
+            rows.sort((a, b) => {
+                let aVal, bVal;
+                if (column === 'judul') {
+                    aVal = a.getAttribute('data-judul');
+                    bVal = b.getAttribute('data-judul');
+                } else if (column === 'date') {
+                    aVal = new Date(a.getAttribute('data-date'));
+                    bVal = new Date(b.getAttribute('data-date'));
+                }
+                
+                if (direction === 'asc') {
+                    return aVal > bVal ? 1 : -1;
+                } else {
+                    return aVal < bVal ? 1 : -1;
+                }
+            });
+            
+            rows.forEach((row, index) => {
+                tbody.appendChild(row);
+                const noCell = row.querySelector('.row-number');
+                if (noCell) noCell.textContent = index + 1;
+            });
+            
+            const icon = document.getElementById('sort-proposal-' + column);
+            if (icon) {
+                icon.className = direction === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
+            }
+            
+            Object.keys(proposalSortState).forEach(key => {
+                if (key !== column) {
+                    proposalSortState[key] = 'none';
+                    const otherIcon = document.getElementById('sort-proposal-' + key);
+                    if (otherIcon) otherIcon.className = 'fas fa-sort';
+                }
+            });
+        }
+
+        function filterProposalByColumn(column) {
+            const rows = document.querySelectorAll('.proposal-row');
+            const uniqueValues = new Set();
+            
+            rows.forEach(row => {
+                const value = row.getAttribute('data-' + column);
+                if (value) uniqueValues.add(value);
+            });
+            
+            const menu = document.createElement('div');
+            menu.id = 'columnFilterMenu';
+            menu.className = 'absolute bg-white border border-gray-300 rounded-lg shadow-lg z-50 mt-2 max-h-64 overflow-y-auto';
+            menu.style.minWidth = '200px';
+            
+            let menuHTML = `
+                <div class="p-2 border-b border-gray-200 bg-gray-50">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-gray-700">Filter ${getColumnNameProposal(column)}</span>
+                        <button onclick="closeColumnFilter()" class="text-gray-400 hover:text-gray-600">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="p-2">
+                    <label class="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                        <input type="radio" name="filter_${column}" value="" onchange="applyProposalFilter('${column}', '')" checked class="mr-2">
+                        <span class="text-sm">(Semua)</span>
+                    </label>
+            `;
+
+            Array.from(uniqueValues).sort().forEach(value => {
+                const displayValue = column === 'status' ? getProposalStatusText(value) : value;
+                menuHTML += `
+                    <label class="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                        <input type="radio" name="filter_${column}" value="${value}" onchange="applyProposalFilter('${column}', this.value)" class="mr-2">
+                        <span class="text-sm">${displayValue}</span>
+                    </label>
+                `;
+            });
+            
+            menuHTML += '</div>';
+            menu.innerHTML = menuHTML;
+            
+            const existingMenu = document.getElementById('columnFilterMenu');
+            if (existingMenu) existingMenu.remove();
+            
+            const event = window.event;
+            const target = event.target.closest('th');
+            const rect = target.getBoundingClientRect();
+            
+            menu.style.position = 'fixed';
+            menu.style.left = rect.left + 'px';
+            menu.style.top = (rect.bottom + 5) + 'px';
+            
+            document.body.appendChild(menu);
+
+            // Ensure radio buttons reflect active proposal filters when menu opens
+            syncProposalRadioButtons();
+            
+            setTimeout(() => {
+                document.addEventListener('click', function closeMenu(e) {
+                    if (!menu.contains(e.target) && !e.target.closest('th')) {
+                        menu.remove();
+                        document.removeEventListener('click', closeMenu);
+                    }
+                });
+            }, 100);
+        }
+
+        function applyProposalFilter(column, value) {
+            // Update active filter state
+            activeProposalFilters[column] = value || '';
+
+            // First, show all proposal rows
+            document.querySelectorAll('.proposal-row').forEach(row => {
+                row.style.display = '';
+            });
+
+            // Then apply the current filter if it's not "all"
+            if (value && value.trim() !== '') {
+                const rows = document.querySelectorAll('.proposal-row');
+                const target = value.toString().trim().toLowerCase();
+                rows.forEach(row => {
+                    const rowValue = (row.getAttribute('data-' + column) || '').toString().trim().toLowerCase();
+                    if (rowValue !== target) {
+                        row.style.display = 'none';
+                    }
+                });
+            }
+
+            // Update visual indicators
+            updateProposalFilterIndicators();
+
+            closeColumnFilter();
+        }
+
+        function getColumnNameProposal(column) {
+            const names = { 'project': 'Proyek', 'pj': 'PJ', 'status': 'Status' };
+            return names[column] || column;
+        }
+
+        function getProposalStatusText(status) {
+            if (status === 'submitted') return 'Menunggu Review';
+            if (status === 'approved') return 'Disetujui';
+            return status;
+        }
+
+        // ====== CLICKABLE COLUMN HEADER FEATURES FOR REPORTS ======
+        let reportSortState = { kegiatan: 'none', date: 'none' };
+
+        function sortReportTable(column) {
+            const tbody = document.querySelector('#reportsContent tbody');
+            const rows = Array.from(document.querySelectorAll('.report-row'));
+            
+            let direction = reportSortState[column] === 'asc' ? 'desc' : 'asc';
+            reportSortState[column] = direction;
+            
+            rows.sort((a, b) => {
+                let aVal, bVal;
+                if (column === 'kegiatan') {
+                    aVal = a.getAttribute('data-kegiatan');
+                    bVal = b.getAttribute('data-kegiatan');
+                } else if (column === 'date') {
+                    aVal = new Date(a.getAttribute('data-date'));
+                    bVal = new Date(b.getAttribute('data-date'));
+                }
+                
+                if (direction === 'asc') {
+                    return aVal > bVal ? 1 : -1;
+                } else {
+                    return aVal < bVal ? 1 : -1;
+                }
+            });
+            
+            rows.forEach((row, index) => {
+                tbody.appendChild(row);
+                const noCell = row.querySelector('.row-number');
+                if (noCell) noCell.textContent = index + 1;
+            });
+            
+            const icon = document.getElementById('sort-report-' + column);
+            if (icon) {
+                icon.className = direction === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
+            }
+            
+            Object.keys(reportSortState).forEach(key => {
+                if (key !== column) {
+                    reportSortState[key] = 'none';
+                    const otherIcon = document.getElementById('sort-report-' + key);
+                    if (otherIcon) otherIcon.className = 'fas fa-sort';
+                }
+            });
+        }
+
+        function filterReportByColumn(column) {
+            const rows = document.querySelectorAll('.report-row');
+            const uniqueValues = new Set();
+            
+            rows.forEach(row => {
+                const value = row.getAttribute('data-' + column);
+                if (value) uniqueValues.add(value);
+            });
+            
+            const menu = document.createElement('div');
+            menu.id = 'columnFilterMenu';
+            menu.className = 'absolute bg-white border border-gray-300 rounded-lg shadow-lg z-50 mt-2 max-h-64 overflow-y-auto';
+            menu.style.minWidth = '200px';
+            
+            let menuHTML = `
+                <div class="p-2 border-b border-gray-200 bg-gray-50">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-gray-700">Filter ${getColumnNameReport(column)}</span>
+                        <button onclick="closeColumnFilter()" class="text-gray-400 hover:text-gray-600">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="p-2">
+                    <label class="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                        <input type="radio" name="filter_${column}" value="" onchange="applyReportFilter('${column}', '')" checked class="mr-2">
+                        <span class="text-sm">(Semua)</span>
+                    </label>
+            `;
+
+            Array.from(uniqueValues).sort().forEach(value => {
+                menuHTML += `
+                    <label class="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                        <input type="radio" name="filter_${column}" value="${value}" onchange="applyReportFilter('${column}', this.value)" class="mr-2">
+                        <span class="text-sm">${value}</span>
+                    </label>
+                `;
+            });
+            
+            menuHTML += '</div>';
+            menu.innerHTML = menuHTML;
+            
+            const existingMenu = document.getElementById('columnFilterMenu');
+            if (existingMenu) existingMenu.remove();
+            
+            const event = window.event;
+            const target = event.target.closest('th');
+            const rect = target.getBoundingClientRect();
+            
+            menu.style.position = 'fixed';
+            menu.style.left = rect.left + 'px';
+            menu.style.top = (rect.bottom + 5) + 'px';
+            
+            document.body.appendChild(menu);
+
+            // Ensure radio buttons reflect active report filters when menu opens
+            syncReportRadioButtons();
+            
+            setTimeout(() => {
+                document.addEventListener('click', function closeMenu(e) {
+                    if (!menu.contains(e.target) && !e.target.closest('th')) {
+                        menu.remove();
+                        document.removeEventListener('click', closeMenu);
+                    }
+                });
+            }, 100);
+        }
+
+        function applyReportFilter(column, value) {
+            // Update active filter state
+            activeReportFilters[column] = value || '';
+
+            // First, show all report rows
+            document.querySelectorAll('.report-row').forEach(row => {
+                row.style.display = '';
+            });
+
+            // Then apply the current filter if it's not "all"
+            if (value && value.trim() !== '') {
+                const rows = document.querySelectorAll('.report-row');
+                const target = value.toString().trim().toLowerCase();
+                rows.forEach(row => {
+                    const rowValue = (row.getAttribute('data-' + column) || '').toString().trim().toLowerCase();
+                    if (rowValue !== target) {
+                        row.style.display = 'none';
+                    }
+                });
+            }
+
+            // Update visual indicators
+            updateReportFilterIndicators();
+
+            closeColumnFilter();
+        }
+
+        function getColumnNameReport(column) {
+            const names = { 'project': 'Proyek', 'creator': 'Dibuat Oleh' };
+            return names[column] || column;
+        }
+
+        // Update visual indicators on table headers for proposals
+        function updateProposalFilterIndicators() {
+            // Remove existing indicators
+            document.querySelectorAll('.filter-indicator').forEach(indicator => {
+                indicator.remove();
+            });
+
+            // Add indicators for active filters in proposals tab
+            Object.keys(activeProposalFilters).forEach(column => {
+                const value = activeProposalFilters[column];
+                if (value && value.trim() !== '') {
+                    const header = document.querySelector(`#proposalsContent th[onclick*="filterProposalByColumn('${column}')"]`);
+                    if (header) {
+                        // Filter is active, but no visual indicator
+                    }
+                }
+            });
+
+            // Sync radio buttons for proposals
+            syncProposalRadioButtons();
+        }
+
+        // Update visual indicators on table headers for reports
+        function updateReportFilterIndicators() {
+            // Remove existing indicators
+            document.querySelectorAll('.filter-indicator').forEach(indicator => {
+                indicator.remove();
+            });
+
+            // Add indicators for active filters in reports tab
+            Object.keys(activeReportFilters).forEach(column => {
+                const value = activeReportFilters[column];
+                if (value && value.trim() !== '') {
+                    const header = document.querySelector(`#reportsContent th[onclick*="filterReportByColumn('${column}')"]`);
+                    if (header) {
+                        // Filter is active, but no visual indicator
+                    }
+                }
+            });
+
+            // Sync radio buttons for reports
+            syncReportRadioButtons();
+        }
+
+        // Sync radio buttons with active filters for proposals
+        function syncProposalRadioButtons() {
+            Object.keys(activeProposalFilters).forEach(column => {
+                const value = activeProposalFilters[column];
+                const radioButtons = document.querySelectorAll(`#proposalsContent input[name="filter_${column}"]`);
+
+                radioButtons.forEach(radio => {
+                    if (radio.value === value) {
+                        radio.checked = true;
+                    } else if (value === '' && radio.value === '') {
+                        radio.checked = true;
+                    } else {
+                        radio.checked = false;
+                    }
+                });
+            });
+        }
+
+        // Sync radio buttons with active filters for reports
+        function syncReportRadioButtons() {
+            Object.keys(activeReportFilters).forEach(column => {
+                const value = activeReportFilters[column];
+                const radioButtons = document.querySelectorAll(`#reportsContent input[name="filter_${column}"]`);
+
+                radioButtons.forEach(radio => {
+                    if (radio.value === value) {
+                        radio.checked = true;
+                    } else if (value === '' && radio.value === '') {
+                        radio.checked = true;
+                    } else {
+                        radio.checked = false;
+                    }
+                });
+            });
+        }
+
+        // Initialize filter indicators on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            updateProposalFilterIndicators();
+            updateReportFilterIndicators();
+        });
+
+        function closeColumnFilter() {
+            const menu = document.getElementById('columnFilterMenu');
+            if (menu) menu.remove();
+        }
+
+        // Date filter for FM (proposals/reports)
+        function showDateFilterFM(context) {
+            const existingMenu = document.getElementById('columnFilterMenu');
+            if (existingMenu) existingMenu.remove();
+
+            const menu = document.createElement('div');
+            menu.id = 'columnFilterMenu';
+            menu.className = 'absolute bg-white border border-gray-300 rounded-lg shadow-lg z-50 mt-2 p-3 w-72';
+            menu.innerHTML = `
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-gray-700">Filter Tanggal</span>
+                    <button onclick="closeColumnFilter()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-xs text-gray-600 mb-1">Bulan</label>
+                        <input type="month" id="dfMonthFM" class="w-full px-2 py-1 border border-gray-300 rounded" onchange="syncMonthToRangeFM()">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-xs text-gray-600 mb-1">Dari</label>
+                            <input type="date" id="dfFromFM" class="w-full px-2 py-1 border border-gray-300 rounded">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-600 mb-1">Sampai</label>
+                            <input type="date" id="dfToFM" class="w-full px-2 py-1 border border-gray-300 rounded">
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-2 pt-2 border-t border-gray-200">
+                        <button class="px-3 py-1 text-sm bg-gray-100 rounded" onclick="resetDateFilterFM('${context}')">Reset</button>
+                        <button class="px-3 py-1 text-sm bg-blue-600 text-white rounded" onclick="applyDateRangeFilterFM('${context}')">Terapkan</button>
+                    </div>
+                </div>
+            `;
+
+            const event = window.event;
+            const target = event.target.closest('th');
+            const rect = target.getBoundingClientRect();
+            menu.style.position = 'fixed';
+            menu.style.left = rect.left + 'px';
+            menu.style.top = (rect.bottom + 5) + 'px';
+            document.body.appendChild(menu);
+
+            setTimeout(() => {
+                document.addEventListener('click', function closeMenu(e) {
+                    if (!menu.contains(e.target) && !e.target.closest('th')) {
+                        menu.remove();
+                        document.removeEventListener('click', closeMenu);
+                    }
+                });
+            }, 50);
+        }
+
+        function syncMonthToRangeFM() {
+            const m = document.getElementById('dfMonthFM').value;
+            if (!m) return;
+            const [year, month] = m.split('-').map(Number);
+            const first = new Date(year, month - 1, 1);
+            const last = new Date(year, month, 0);
+            document.getElementById('dfFromFM').value = first.toISOString().slice(0,10);
+            document.getElementById('dfToFM').value = last.toISOString().slice(0,10);
+        }
+
+        function applyDateRangeFilterFM(context) {
+            const fromVal = document.getElementById('dfFromFM').value;
+            const toVal = document.getElementById('dfToFM').value;
+            const fromDate = fromVal ? new Date(fromVal) : null;
+            const toDate = toVal ? new Date(toVal + 'T23:59:59') : null;
+            const selector = context === 'proposals' ? '.proposal-row' : '.report-row';
+
+            document.querySelectorAll(selector).forEach(row => {
+                // proposals use data-date, reports use data-date as well
+                const rowDate = new Date(row.getAttribute('data-date'));
+                let show = true;
+                if (fromDate && rowDate < fromDate) show = false;
+                if (toDate && rowDate > toDate) show = false;
+                row.style.display = show ? '' : 'none';
+            });
+            closeColumnFilter();
+        }
+
+        function resetDateFilterFM(context) {
+            document.getElementById('dfMonthFM').value = '';
+            document.getElementById('dfFromFM').value = '';
+            document.getElementById('dfToFM').value = '';
+            const selector = context === 'proposals' ? '.proposal-row' : '.report-row';
+            document.querySelectorAll(selector).forEach(row => row.style.display = '');
         }
     </script>
     

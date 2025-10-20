@@ -69,6 +69,15 @@ $reports = $conn->query("SELECT lh.*, u.nama as creator_name,
     WHERE lh.status_lap IN ('verified', 'approved') 
     ORDER BY lh.created_at DESC");
 
+// Get all projects for filter
+$projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE status_proyek != 'cancelled' ORDER BY nama_proyek ASC");
+$project_list = [];
+if ($projects) {
+    while ($proj = $projects->fetch_assoc()) {
+        $project_list[] = $proj;
+    }
+}
+
 // Get notifications for Direktur (proposals waiting for stage 2 approval)
 $notif_proposals = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status = 'approved_fm'")->fetch_assoc()['count'];
 $notif_reports = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'approved' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['count'];
@@ -139,10 +148,16 @@ if (isset($_GET['success'])) {
 
 // Get statistics for dashboard cards
 $total_proyek = $conn->query("SELECT COUNT(*) as count FROM proyek WHERE status_proyek != 'cancelled'")->fetch_assoc()['count'];
-$proposal_masuk = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status = 'approved_fm'")->fetch_assoc()['count'];
-$laporan_approved = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'approved'")->fetch_assoc()['count'];
-$pending_review = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status = 'approved_fm'")->fetch_assoc()['count'] + 
-                  $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE approved_by IS NOT NULL AND approved_by > 0 AND status_lap != 'approved'")->fetch_assoc()['count'];
+
+// Proposal stats (for Director)
+$proposal_total = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status IN ('approved_fm','approved')")->fetch_assoc()['count'];
+$proposal_pending_dir = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status = 'approved_fm'")->fetch_assoc()['count'];
+$proposal_approved_final = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status = 'approved'")->fetch_assoc()['count'];
+
+// Reports stats (for Director)
+$reports_verified = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'verified'")->fetch_assoc()['count'];
+$reports_approved = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'approved'")->fetch_assoc()['count'];
+$reports_pending_dir = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE approved_by IS NOT NULL AND approved_by > 0 AND status_lap != 'approved'")->fetch_assoc()['count'];
 
 // Close session writing to ensure session is fully saved before HTML output
 // This prevents session conflicts when user clicks notification links
@@ -264,7 +279,7 @@ session_write_close();
         </div>
 
         <!-- Stats Overview -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8" id="statsCards">
             <div class="bg-gradient-to-br from-purple-50 to-purple-100 p-6 rounded-lg border border-purple-200">
                 <div class="flex items-center justify-between">
                     <div>
@@ -277,11 +292,11 @@ session_write_close();
                 </div>
             </div>
 
-            <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-lg border border-blue-200">
+            <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-lg border border-blue-200" data-prop-label="Proposal Masuk" data-prop-value="<?php echo $proposal_total; ?>" data-rep-label="Laporan Diverifikasi" data-rep-value="<?php echo $reports_verified; ?>">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-600 mb-1">Proposal Masuk</p>
-                        <p class="text-3xl font-bold text-gray-800"><?php echo $proposal_masuk; ?></p>
+                        <p class="text-sm text-gray-600 mb-1 js-card-label">Proposal Masuk</p>
+                        <p class="text-3xl font-bold text-gray-800 js-card-value"><?php echo $proposal_total; ?></p>
                     </div>
                     <div class="bg-blue-500 p-3 rounded-full">
                         <i class="fas fa-file-alt text-white text-2xl"></i>
@@ -289,11 +304,11 @@ session_write_close();
                 </div>
             </div>
 
-            <div class="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-lg border border-green-200">
+            <div class="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-lg border border-green-200" data-prop-label="Approved Final" data-prop-value="<?php echo $proposal_approved_final; ?>" data-rep-label="Laporan Approved" data-rep-value="<?php echo $reports_approved; ?>">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-600 mb-1">Laporan Approved</p>
-                        <p class="text-3xl font-bold text-gray-800"><?php echo $laporan_approved; ?></p>
+                        <p class="text-sm text-gray-600 mb-1 js-card-label">Approved Final</p>
+                        <p class="text-3xl font-bold text-gray-800 js-card-value"><?php echo $proposal_approved_final; ?></p>
                     </div>
                     <div class="bg-green-500 p-3 rounded-full">
                         <i class="fas fa-check-circle text-white text-2xl"></i>
@@ -301,11 +316,11 @@ session_write_close();
                 </div>
             </div>
 
-            <div class="bg-gradient-to-br from-yellow-50 to-yellow-100 p-6 rounded-lg border border-yellow-200">
+            <div class="bg-gradient-to-br from-yellow-50 to-yellow-100 p-6 rounded-lg border border-yellow-200" data-prop-label="Pending Review (DIR)" data-prop-value="<?php echo ($proposal_pending_dir); ?>" data-rep-label="Pending Review (DIR)" data-rep-value="<?php echo ($reports_pending_dir); ?>">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-600 mb-1">Pending Review</p>
-                        <p class="text-3xl font-bold text-gray-800"><?php echo $pending_review; ?></p>
+                        <p class="text-sm text-gray-600 mb-1 js-card-label">Pending Review (DIR)</p>
+                        <p class="text-3xl font-bold text-gray-800 js-card-value"><?php echo ($proposal_pending_dir); ?></p>
                     </div>
                     <div class="bg-yellow-500 p-3 rounded-full">
                         <i class="fas fa-clock text-white text-2xl"></i>
@@ -334,20 +349,58 @@ session_write_close();
         <div id="proposalsContent" class="tab-content">
             <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
                 <div class="p-6 border-b border-gray-200">
-                    <h3 class="text-lg font-bold text-gray-800">Proposal untuk Approval</h3>
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-lg font-bold text-gray-800">Proposal untuk Approval</h3>
+                        
+                    </div>
                 </div>
                 
                 <div class="overflow-x-auto">
                     <table class="w-full">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">No</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Judul</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">PJ</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Proyek</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tanggal</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" onclick="sortProposalTable('judul')" title="Klik untuk sort">
+                                    <div class="flex items-center">
+                                        Judul
+                                        <span class="ml-2 text-gray-400">
+                                            <i class="fas fa-sort sort-icon" id="sort-proposal-judul"></i>
+                                        </span>
+                                    </div>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" onclick="filterProposalByColumn('pj')" title="Klik untuk filter">
+                                    <div class="flex items-center justify-between">
+                                        PJ
+                                        <span class="ml-2 text-gray-400">
+                                            <i class="fas fa-filter filter-icon"></i>
+                                        </span>
+                                    </div>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" onclick="filterProposalByColumn('project')" title="Klik untuk filter">
+                                    <div class="flex items-center justify-between">
+                                        Proyek
+                                        <span class="ml-2 text-gray-400">
+                                            <i class="fas fa-filter filter-icon"></i>
+                                        </span>
+                                    </div>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" onclick="showDateFilterDIR('proposals')" title="Klik untuk filter tanggal">
+                                    <div class="flex items-center">
+                                        Tanggal
+                                        <span class="ml-2 text-gray-400">
+                                            <i class="fas fa-sort sort-icon" id="sort-proposal-date"></i>
+                                        </span>
+                                    </div>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" onclick="filterProposalByColumn('status')" title="Klik untuk filter">
+                                    <div class="flex items-center justify-between">
+                                        Status
+                                        <span class="ml-2 text-gray-400">
+                                            <i class="fas fa-filter filter-icon"></i>
+                                        </span>
+                                    </div>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
@@ -355,8 +408,13 @@ session_write_close();
                             $no = 1;
                             while ($proposal = $proposals->fetch_assoc()): 
                             ?>
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo $no++; ?></td>
+                            <tr class="hover:bg-gray-50 proposal-row" 
+                                data-project="<?php echo htmlspecialchars($proposal['kode_proyek']); ?>"
+                                data-status="<?php echo htmlspecialchars($proposal['status']); ?>"
+                                data-pj="<?php echo htmlspecialchars($proposal['pj']); ?>"
+                                data-judul="<?php echo strtolower(htmlspecialchars($proposal['judul_proposal'])); ?>"
+                                data-date="<?php echo $proposal['date']; ?>">
+                                <td class="px-6 py-4 text-sm text-gray-900 row-number"><?php echo $no++; ?></td>
                                 <td class="px-6 py-4 text-sm text-gray-900"><?php echo $proposal['judul_proposal']; ?></td>
                                 <td class="px-6 py-4 text-sm text-gray-900"><?php echo $proposal['pj']; ?></td>
                                 <td class="px-6 py-4 text-sm text-gray-900"><?php echo $proposal['kode_proyek']; ?></td>
@@ -379,12 +437,12 @@ session_write_close();
                                     <?php endif; ?>
                                 </td>
                                 <td class="px-6 py-4 text-sm">
-                                    <?php if ($proposal['status'] === 'approved_fm'): ?>
+                                <?php if ($proposal['status'] === 'approved_fm'): ?>
                                         <a href="../proposals/approve_proposal.php?id=<?php echo $proposal['id_proposal']; ?>" 
                                             class="text-purple-600 hover:text-purple-900 font-medium">
                                             <i class="fas fa-clipboard-check mr-1"></i> Approve Stage 2
                                         </a>
-                                    <?php else: ?>
+                                <?php else: ?>
                                         <a href="../proposals/review_proposal_dir.php?id=<?php echo $proposal['id_proposal']; ?>" 
                                             class="text-gray-600 hover:text-gray-900">
                                             <i class="fas fa-eye mr-1"></i> View
@@ -403,20 +461,51 @@ session_write_close();
         <div id="reportsContent" class="tab-content hidden">
             <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
                 <div class="p-6 border-b border-gray-200">
-                    <h3 class="text-lg font-bold text-gray-800">Laporan Keuangan untuk Approval</h3>
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-lg font-bold text-gray-800">Laporan Keuangan untuk Approval</h3>
+                        
+                    </div>
                 </div>
                 
                 <div class="overflow-x-auto">
                     <table class="w-full">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">No</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kegiatan</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Proyek</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dibuat Oleh</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tanggal</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status Approval</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" onclick="sortReportTable('kegiatan')" title="Klik untuk sort">
+                                    <div class="flex items-center">
+                                        Kegiatan
+                                        <span class="ml-2 text-gray-400">
+                                            <i class="fas fa-sort sort-icon" id="sort-report-kegiatan"></i>
+                                        </span>
+                                    </div>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" onclick="filterReportByColumn('project')" title="Klik untuk filter">
+                                    <div class="flex items-center justify-between">
+                                        Proyek
+                                        <span class="ml-2 text-gray-400">
+                                            <i class="fas fa-filter filter-icon"></i>
+                                        </span>
+                                    </div>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" onclick="filterReportByColumn('creator')" title="Klik untuk filter">
+                                    <div class="flex items-center justify-between">
+                                        Dibuat Oleh
+                                        <span class="ml-2 text-gray-400">
+                                            <i class="fas fa-filter filter-icon"></i>
+                                        </span>
+                                    </div>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" onclick="showDateFilterDIR('reports')" title="Klik untuk filter tanggal">
+                                    <div class="flex items-center">
+                                        Tanggal
+                                        <span class="ml-2 text-gray-400">
+                                            <i class="fas fa-sort sort-icon" id="sort-report-date"></i>
+                                        </span>
+                                    </div>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status Approval</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
@@ -424,8 +513,12 @@ session_write_close();
                             $no = 1;
                             while ($report = $reports->fetch_assoc()): 
                             ?>
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo $no++; ?></td>
+                            <tr class="hover:bg-gray-50 report-row" 
+                                data-project="<?php echo htmlspecialchars($report['kode_projek']); ?>"
+                                data-creator="<?php echo htmlspecialchars($report['creator_name']); ?>"
+                                data-kegiatan="<?php echo strtolower(htmlspecialchars($report['nama_kegiatan'])); ?>"
+                                data-date="<?php echo $report['tanggal_laporan']; ?>">
+                                <td class="px-6 py-4 text-sm text-gray-900 row-number"><?php echo $no++; ?></td>
                                 <td class="px-6 py-4 text-sm text-gray-900"><?php echo $report['nama_kegiatan']; ?></td>
                                 <td class="px-6 py-4 text-sm text-gray-900"><?php echo $report['kode_projek']; ?></td>
                                 <td class="px-6 py-4 text-sm text-gray-900"><?php echo $report['creator_name']; ?></td>
@@ -471,6 +564,23 @@ session_write_close();
     </main>
 
     <script>
+        // Switch stats when tab changes (Proposal <-> Laporan)
+        function updateStatsForTab(tab) {
+            const cards = document.querySelectorAll('#statsCards > div');
+            cards.forEach((card, idx) => {
+                if (idx === 0) return; // total project static
+                const labelEl = card.querySelector('.js-card-label');
+                const valueEl = card.querySelector('.js-card-value');
+                if (!labelEl || !valueEl) return;
+                if (tab === 'proposals') {
+                    labelEl.textContent = card.getAttribute('data-prop-label');
+                    valueEl.textContent = card.getAttribute('data-prop-value');
+                } else {
+                    labelEl.textContent = card.getAttribute('data-rep-label');
+                    valueEl.textContent = card.getAttribute('data-rep-value');
+                }
+            });
+        }
         function showTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(content => {
                 content.classList.add('hidden');
@@ -486,6 +596,9 @@ session_write_close();
             const activeButton = document.getElementById('tab' + tabName.charAt(0).toUpperCase() + tabName.slice(1));
             activeButton.classList.remove('border-transparent', 'text-gray-500');
             activeButton.classList.add('border-purple-500', 'text-purple-600');
+
+            // Update stats numbers/labels to match selected tab
+            updateStatsForTab(tabName);
         }
 
         function toggleNotifications() {
@@ -526,6 +639,533 @@ session_write_close();
         document.querySelector('.notification-bell-button').addEventListener('click', function(e) {
             e.stopPropagation();
         });
+
+        // Track active filter state for proposals
+        let activeProposalFilters = {
+            project: '',
+            pj: '',
+            status: ''
+        };
+
+        // Track active filter state for reports
+        let activeReportFilters = {
+            project: '',
+            creator: ''
+        };
+
+        // Project filter functions
+        function filterProposals() {
+            const selectedProject = document.getElementById('filterProposalProject').value;
+            const proposalRows = document.querySelectorAll('.proposal-row');
+
+            proposalRows.forEach(row => {
+                if (selectedProject === '' || row.getAttribute('data-project') === selectedProject) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+
+        function filterReports() {
+            const selectedProject = document.getElementById('filterReportProject').value;
+            const reportRows = document.querySelectorAll('.report-row');
+            
+            reportRows.forEach(row => {
+                if (selectedProject === '' || row.getAttribute('data-project') === selectedProject) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+
+        // ====== CLICKABLE COLUMN HEADER FEATURES FOR PROPOSALS ======
+        let proposalSortState = { judul: 'none', date: 'none' };
+
+        function sortProposalTable(column) {
+            const tbody = document.querySelector('#proposalsContent tbody');
+            const rows = Array.from(document.querySelectorAll('.proposal-row'));
+            
+            let direction = proposalSortState[column] === 'asc' ? 'desc' : 'asc';
+            proposalSortState[column] = direction;
+            
+            rows.sort((a, b) => {
+                let aVal, bVal;
+                if (column === 'judul') {
+                    aVal = a.getAttribute('data-judul');
+                    bVal = b.getAttribute('data-judul');
+                } else if (column === 'date') {
+                    aVal = new Date(a.getAttribute('data-date'));
+                    bVal = new Date(b.getAttribute('data-date'));
+                }
+                
+                if (direction === 'asc') {
+                    return aVal > bVal ? 1 : -1;
+                } else {
+                    return aVal < bVal ? 1 : -1;
+                }
+            });
+            
+            rows.forEach((row, index) => {
+                tbody.appendChild(row);
+                const noCell = row.querySelector('.row-number');
+                if (noCell) noCell.textContent = index + 1;
+            });
+            
+            const icon = document.getElementById('sort-proposal-' + column);
+            if (icon) {
+                icon.className = direction === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
+            }
+            
+            Object.keys(proposalSortState).forEach(key => {
+                if (key !== column) {
+                    proposalSortState[key] = 'none';
+                    const otherIcon = document.getElementById('sort-proposal-' + key);
+                    if (otherIcon) otherIcon.className = 'fas fa-sort';
+                }
+            });
+        }
+
+        function filterProposalByColumn(column) {
+            const rows = document.querySelectorAll('.proposal-row');
+            const uniqueValues = new Set();
+            
+            rows.forEach(row => {
+                const value = row.getAttribute('data-' + column);
+                if (value) uniqueValues.add(value);
+            });
+            
+            const menu = document.createElement('div');
+            menu.id = 'columnFilterMenu';
+            menu.className = 'absolute bg-white border border-gray-300 rounded-lg shadow-lg z-50 mt-2 max-h-64 overflow-y-auto';
+            menu.style.minWidth = '200px';
+            
+            let menuHTML = `
+                <div class="p-2 border-b border-gray-200 bg-gray-50">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-gray-700">Filter ${getColumnNameProposal(column)}</span>
+                        <button onclick="closeColumnFilter()" class="text-gray-400 hover:text-gray-600">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="p-2">
+                    <label class="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                        <input type="radio" name="filter_${column}" value="" onchange="applyProposalFilter('${column}', '')" checked class="mr-2">
+                        <span class="text-sm">(Semua)</span>
+                    </label>
+            `;
+
+            Array.from(uniqueValues).sort().forEach(value => {
+                const displayValue = column === 'status' ? getProposalStatusText(value) : value;
+                menuHTML += `
+                    <label class="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                        <input type="radio" name="filter_${column}" value="${value}" onchange="applyProposalFilter('${column}', this.value)" class="mr-2">
+                        <span class="text-sm">${displayValue}</span>
+                    </label>
+                `;
+            });
+            
+            menuHTML += '</div>';
+            menu.innerHTML = menuHTML;
+            
+            const existingMenu = document.getElementById('columnFilterMenu');
+            if (existingMenu) existingMenu.remove();
+            
+            const event = window.event;
+            const target = event.target.closest('th');
+            const rect = target.getBoundingClientRect();
+            
+            menu.style.position = 'fixed';
+            menu.style.left = rect.left + 'px';
+            menu.style.top = (rect.bottom + 5) + 'px';
+            
+            document.body.appendChild(menu);
+
+            // Ensure radio buttons reflect active proposal filters when menu opens
+            syncProposalRadioButtons();
+            
+            setTimeout(() => {
+                document.addEventListener('click', function closeMenu(e) {
+                    if (!menu.contains(e.target) && !e.target.closest('th')) {
+                        menu.remove();
+                        document.removeEventListener('click', closeMenu);
+                    }
+                });
+            }, 100);
+        }
+
+        function applyProposalFilter(column, value) {
+            // Update active filter state
+            activeProposalFilters[column] = value || '';
+
+            // First, show all proposal rows
+            document.querySelectorAll('.proposal-row').forEach(row => {
+                row.style.display = '';
+            });
+
+            // Then apply the current filter if it's not "all"
+            if (value && value.trim() !== '') {
+                const rows = document.querySelectorAll('.proposal-row');
+                const target = value.toString().trim().toLowerCase();
+                rows.forEach(row => {
+                    const rowValue = (row.getAttribute('data-' + column) || '').toString().trim().toLowerCase();
+                    if (rowValue !== target) {
+                        row.style.display = 'none';
+                    }
+                });
+            }
+
+            // Update visual indicators
+            updateProposalFilterIndicators();
+
+            closeColumnFilter();
+        }
+
+        function getColumnNameProposal(column) {
+            const names = { 'project': 'Proyek', 'pj': 'PJ', 'status': 'Status' };
+            return names[column] || column;
+        }
+
+        function getProposalStatusText(status) {
+            if (status === 'submitted') return 'Menunggu Approval FM';
+            if (status === 'approved_fm') return '1/2 Approved (FM)';
+            if (status === 'approved') return '2/2 Approved (Final)';
+            return status;
+        }
+
+        // ====== CLICKABLE COLUMN HEADER FEATURES FOR REPORTS ======
+        let reportSortState = { kegiatan: 'none', date: 'none' };
+
+        function sortReportTable(column) {
+            const tbody = document.querySelector('#reportsContent tbody');
+            const rows = Array.from(document.querySelectorAll('.report-row'));
+            
+            let direction = reportSortState[column] === 'asc' ? 'desc' : 'asc';
+            reportSortState[column] = direction;
+            
+            rows.sort((a, b) => {
+                let aVal, bVal;
+                if (column === 'kegiatan') {
+                    aVal = a.getAttribute('data-kegiatan');
+                    bVal = b.getAttribute('data-kegiatan');
+                } else if (column === 'date') {
+                    aVal = new Date(a.getAttribute('data-date'));
+                    bVal = new Date(b.getAttribute('data-date'));
+                }
+                
+                if (direction === 'asc') {
+                    return aVal > bVal ? 1 : -1;
+                } else {
+                    return aVal < bVal ? 1 : -1;
+                }
+            });
+            
+            rows.forEach((row, index) => {
+                tbody.appendChild(row);
+                const noCell = row.querySelector('.row-number');
+                if (noCell) noCell.textContent = index + 1;
+            });
+            
+            const icon = document.getElementById('sort-report-' + column);
+            if (icon) {
+                icon.className = direction === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
+            }
+            
+            Object.keys(reportSortState).forEach(key => {
+                if (key !== column) {
+                    reportSortState[key] = 'none';
+                    const otherIcon = document.getElementById('sort-report-' + key);
+                    if (otherIcon) otherIcon.className = 'fas fa-sort';
+                }
+            });
+        }
+
+        function filterReportByColumn(column) {
+            const rows = document.querySelectorAll('.report-row');
+            const uniqueValues = new Set();
+            
+            rows.forEach(row => {
+                const value = row.getAttribute('data-' + column);
+                if (value) uniqueValues.add(value);
+            });
+            
+            const menu = document.createElement('div');
+            menu.id = 'columnFilterMenu';
+            menu.className = 'absolute bg-white border border-gray-300 rounded-lg shadow-lg z-50 mt-2 max-h-64 overflow-y-auto';
+            menu.style.minWidth = '200px';
+            
+            let menuHTML = `
+                <div class="p-2 border-b border-gray-200 bg-gray-50">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-gray-700">Filter ${getColumnNameReport(column)}</span>
+                        <button onclick="closeColumnFilter()" class="text-gray-400 hover:text-gray-600">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="p-2">
+                    <label class="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                        <input type="radio" name="filter_${column}" value="" onchange="applyReportFilter('${column}', '')" checked class="mr-2">
+                        <span class="text-sm">(Semua)</span>
+                    </label>
+            `;
+
+            Array.from(uniqueValues).sort().forEach(value => {
+                menuHTML += `
+                    <label class="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                        <input type="radio" name="filter_${column}" value="${value}" onchange="applyReportFilter('${column}', this.value)" class="mr-2">
+                        <span class="text-sm">${value}</span>
+                    </label>
+                `;
+            });
+            
+            menuHTML += '</div>';
+            menu.innerHTML = menuHTML;
+            
+            const existingMenu = document.getElementById('columnFilterMenu');
+            if (existingMenu) existingMenu.remove();
+            
+            const event = window.event;
+            const target = event.target.closest('th');
+            const rect = target.getBoundingClientRect();
+            
+            menu.style.position = 'fixed';
+            menu.style.left = rect.left + 'px';
+            menu.style.top = (rect.bottom + 5) + 'px';
+            
+            document.body.appendChild(menu);
+
+            // Ensure radio buttons reflect active report filters when menu opens
+            syncReportRadioButtons();
+            
+            setTimeout(() => {
+                document.addEventListener('click', function closeMenu(e) {
+                    if (!menu.contains(e.target) && !e.target.closest('th')) {
+                        menu.remove();
+                        document.removeEventListener('click', closeMenu);
+                    }
+                });
+            }, 100);
+        }
+
+        function applyReportFilter(column, value) {
+            // Update active filter state
+            activeReportFilters[column] = value || '';
+
+            // First, show all report rows
+            document.querySelectorAll('.report-row').forEach(row => {
+                row.style.display = '';
+            });
+
+            // Then apply the current filter if it's not "all"
+            if (value && value.trim() !== '') {
+                const rows = document.querySelectorAll('.report-row');
+                const target = value.toString().trim().toLowerCase();
+                rows.forEach(row => {
+                    const rowValue = (row.getAttribute('data-' + column) || '').toString().trim().toLowerCase();
+                    if (rowValue !== target) {
+                        row.style.display = 'none';
+                    }
+                });
+            }
+
+            // Update visual indicators
+            updateReportFilterIndicators();
+
+            closeColumnFilter();
+        }
+
+        function getColumnNameReport(column) {
+            const names = { 'project': 'Proyek', 'creator': 'Dibuat Oleh' };
+            return names[column] || column;
+        }
+
+        // Update visual indicators on table headers for proposals
+        function updateProposalFilterIndicators() {
+            // Remove existing indicators
+            document.querySelectorAll('.filter-indicator').forEach(indicator => {
+                indicator.remove();
+            });
+            document.querySelectorAll('#proposalsContent th[onclick*="filterProposalByColumn"]').forEach(header => {
+                header.classList.remove('filter-active');
+            });
+
+            // Add indicators for active filters in proposals tab
+            Object.keys(activeProposalFilters).forEach(column => {
+                const value = activeProposalFilters[column];
+                if (value && value.trim() !== '') {
+                    const header = document.querySelector(`#proposalsContent th[onclick*="filterProposalByColumn('${column}')"]`);
+                    if (header) {
+                        header.classList.add('filter-active');
+                    }
+                }
+            });
+
+            // Sync radio buttons for proposals
+            syncProposalRadioButtons();
+        }
+
+        // Update visual indicators on table headers for reports
+        function updateReportFilterIndicators() {
+            // Remove existing indicators
+            document.querySelectorAll('.filter-indicator').forEach(indicator => {
+                indicator.remove();
+            });
+            document.querySelectorAll('#reportsContent th[onclick*="filterReportByColumn"]').forEach(header => {
+                header.classList.remove('filter-active');
+            });
+
+            // Add indicators for active filters in reports tab
+            Object.keys(activeReportFilters).forEach(column => {
+                const value = activeReportFilters[column];
+                if (value && value.trim() !== '') {
+                    const header = document.querySelector(`#reportsContent th[onclick*="filterReportByColumn('${column}')"]`);
+                    if (header) {
+                        header.classList.add('filter-active');
+                    }
+                }
+            });
+
+            // Sync radio buttons for reports
+            syncReportRadioButtons();
+        }
+
+        // Sync radio buttons with active filters for proposals
+        function syncProposalRadioButtons() {
+            Object.keys(activeProposalFilters).forEach(column => {
+                const value = activeProposalFilters[column];
+                const radioButtons = document.querySelectorAll(`#proposalsContent input[name="filter_${column}"]`);
+
+                radioButtons.forEach(radio => {
+                    if (radio.value === value) {
+                        radio.checked = true;
+                    } else if (value === '' && radio.value === '') {
+                        radio.checked = true;
+                    } else {
+                        radio.checked = false;
+                    }
+                });
+            });
+        }
+
+        // Sync radio buttons with active filters for reports
+        function syncReportRadioButtons() {
+            Object.keys(activeReportFilters).forEach(column => {
+                const value = activeReportFilters[column];
+                const radioButtons = document.querySelectorAll(`#reportsContent input[name="filter_${column}"]`);
+
+                radioButtons.forEach(radio => {
+                    if (radio.value === value) {
+                        radio.checked = true;
+                    } else if (value === '' && radio.value === '') {
+                        radio.checked = true;
+                    } else {
+                        radio.checked = false;
+                    }
+                });
+            });
+        }
+
+        // Initialize filter indicators on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            updateProposalFilterIndicators();
+            updateReportFilterIndicators();
+        });
+
+        function closeColumnFilter() {
+            const menu = document.getElementById('columnFilterMenu');
+            if (menu) menu.remove();
+        }
+
+        // Date filter for DIR (proposals/reports)
+        function showDateFilterDIR(context) {
+            const existingMenu = document.getElementById('columnFilterMenu');
+            if (existingMenu) existingMenu.remove();
+
+            const menu = document.createElement('div');
+            menu.id = 'columnFilterMenu';
+            menu.className = 'absolute bg-white border border-gray-300 rounded-lg shadow-lg z-50 mt-2 p-3 w-72';
+            menu.innerHTML = `
+                <div class=\"flex items-center justify-between mb-2\">
+                    <span class=\"text-sm font-medium text-gray-700\">Filter Tanggal</span>
+                    <button onclick=\"closeColumnFilter()\" class=\"text-gray-400 hover:text-gray-600\"><i class=\"fas fa-times\"></i></button>
+                </div>
+                <div class=\"space-y-3\">
+                    <div>
+                        <label class=\"block text-xs text-gray-600 mb-1\">Bulan</label>
+                        <input type=\"month\" id=\"dfMonthDIR\" class=\"w-full px-2 py-1 border border-gray-300 rounded\" onchange=\"syncMonthToRangeDIR()\">
+                    </div>
+                    <div class=\"grid grid-cols-2 gap-2\">
+                        <div>
+                            <label class=\"block text-xs text-gray-600 mb-1\">Dari</label>
+                            <input type=\"date\" id=\"dfFromDIR\" class=\"w-full px-2 py-1 border border-gray-300 rounded\">
+                        </div>
+                        <div>
+                            <label class=\"block text-xs text-gray-600 mb-1\">Sampai</label>
+                            <input type=\"date\" id=\"dfToDIR\" class=\"w-full px-2 py-1 border border-gray-300 rounded\">
+                        </div>
+                    </div>
+                    <div class=\"flex justify-end space-x-2 pt-2 border-t border-gray-200\">
+                        <button class=\"px-3 py-1 text-sm bg-gray-100 rounded\" onclick=\"resetDateFilterDIR('`+context+`')\">Reset</button>
+                        <button class=\"px-3 py-1 text-sm bg-blue-600 text-white rounded\" onclick=\"applyDateRangeFilterDIR('`+context+`')\">Terapkan</button>
+                    </div>
+                </div>
+            `;
+
+            const event = window.event;
+            const target = event.target.closest('th');
+            const rect = target.getBoundingClientRect();
+            menu.style.position = 'fixed';
+            menu.style.left = rect.left + 'px';
+            menu.style.top = (rect.bottom + 5) + 'px';
+            document.body.appendChild(menu);
+
+            setTimeout(() => {
+                document.addEventListener('click', function closeMenu(e) {
+                    if (!menu.contains(e.target) && !e.target.closest('th')) {
+                        menu.remove();
+                        document.removeEventListener('click', closeMenu);
+                    }
+                });
+            }, 50);
+        }
+
+        function syncMonthToRangeDIR() {
+            const m = document.getElementById('dfMonthDIR').value;
+            if (!m) return;
+            const [year, month] = m.split('-').map(Number);
+            const first = new Date(year, month - 1, 1);
+            const last = new Date(year, month, 0);
+            document.getElementById('dfFromDIR').value = first.toISOString().slice(0,10);
+            document.getElementById('dfToDIR').value = last.toISOString().slice(0,10);
+        }
+
+        function applyDateRangeFilterDIR(context) {
+            const fromVal = document.getElementById('dfFromDIR').value;
+            const toVal = document.getElementById('dfToDIR').value;
+            const fromDate = fromVal ? new Date(fromVal) : null;
+            const toDate = toVal ? new Date(toVal + 'T23:59:59') : null;
+            const selector = context === 'proposals' ? '.proposal-row' : '.report-row';
+
+            document.querySelectorAll(selector).forEach(row => {
+                const rowDate = new Date(row.getAttribute('data-date'));
+                let show = true;
+                if (fromDate && rowDate < fromDate) show = false;
+                if (toDate && rowDate > toDate) show = false;
+                row.style.display = show ? '' : 'none';
+            });
+            closeColumnFilter();
+        }
+
+        function resetDateFilterDIR(context) {
+            document.getElementById('dfMonthDIR').value = '';
+            document.getElementById('dfFromDIR').value = '';
+            document.getElementById('dfToDIR').value = '';
+            const selector = context === 'proposals' ? '.proposal-row' : '.report-row';
+            document.querySelectorAll(selector).forEach(row => row.style.display = '');
+        }
     </script>
     
     <!-- Real-time Notifications -->
