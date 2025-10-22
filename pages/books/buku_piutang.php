@@ -113,14 +113,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_detail'])) {
 // Handle create new piutang header
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_header'])) {
     $kode_proyek = $_POST['kode_proyek'];
-    $account_name = $_POST['account_name'];
-    $periode_mulai = $_POST['periode_mulai'];
-    $periode_selesai = $_POST['periode_selesai'];
+    $periode_bulan = $_POST['periode_bulan'];
+    $periode_tahun = $_POST['periode_tahun'];
+    $exrate = $_POST['exrate'] ?? 1.00;
     $beginning_balance_idr = $_POST['beginning_balance_idr'] ?? 0;
     $beginning_balance_usd = $_POST['beginning_balance_usd'] ?? 0;
     
-    $stmt = $conn->prepare("INSERT INTO buku_piutang_header (kode_proyek, account_name, periode_mulai, periode_selesai, beginning_balance_idr, beginning_balance_usd, ending_balance_idr, ending_balance_usd, created_by, status, tgl_pembuatan) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', CURDATE())");
-    $stmt->bind_param("ssssddddi", $kode_proyek, $account_name, $periode_mulai, $periode_selesai, $beginning_balance_idr, $beginning_balance_usd, $beginning_balance_idr, $beginning_balance_usd, $user_id);
+    // Automatic conversion based on exchange rate (same logic as buku_bank)
+    if ($exrate > 0) {
+        if ($beginning_balance_idr > 0 && $beginning_balance_usd == 0) {
+            $beginning_balance_usd = $beginning_balance_idr / $exrate;
+        } elseif ($beginning_balance_usd > 0 && $beginning_balance_idr == 0) {
+            $beginning_balance_idr = $beginning_balance_usd * $exrate;
+        }
+    }
+    
+    $stmt = $conn->prepare("INSERT INTO buku_piutang_header (kode_proyek, periode_bulan, periode_tahun, exrate, beginning_balance_idr, beginning_balance_usd, ending_balance_idr, ending_balance_usd, created_by, status, tgl_pembuatan) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', CURDATE())");
+    $stmt->bind_param("sssdddddi", $kode_proyek, $periode_bulan, $periode_tahun, $exrate, $beginning_balance_idr, $beginning_balance_usd, $beginning_balance_idr, $beginning_balance_usd, $user_id);
     
     if ($stmt->execute()) {
         // Redirect to prevent form resubmission (PRG pattern)
@@ -136,12 +145,12 @@ $query = "SELECT
     ph.*,
     p.nama_proyek,
     u.nama as creator_name,
-    YEAR(ph.periode_mulai) as tahun,
+    ph.periode_tahun as tahun,
     (SELECT COUNT(*) FROM buku_piutang_detail pd WHERE pd.id_piutang = ph.id_piutang) as total_transactions
 FROM buku_piutang_header ph
 LEFT JOIN proyek p ON ph.kode_proyek = p.kode_proyek
 LEFT JOIN user u ON ph.created_by = u.id_user
-ORDER BY ph.kode_proyek, ph.periode_mulai DESC";
+ORDER BY ph.kode_proyek, ph.periode_tahun DESC, ph.periode_bulan DESC";
 
 $all_headers = $conn->query($query);
 
@@ -186,7 +195,7 @@ while ($header = $all_headers->fetch_assoc()) {
 $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE status_proyek != 'cancelled'");
 
 // Get piutang headers for adding details
-$piutang_headers = $conn->query("SELECT ph.id_piutang, ph.kode_proyek, ph.account_name, ph.periode_mulai, ph.periode_selesai, p.nama_proyek 
+$piutang_headers = $conn->query("SELECT ph.id_piutang, ph.kode_proyek, p.nama_proyek, ph.periode_bulan, ph.periode_tahun 
     FROM buku_piutang_header ph 
     LEFT JOIN proyek p ON ph.kode_proyek = p.kode_proyek 
     ORDER BY ph.created_at DESC");
@@ -313,9 +322,13 @@ $piutang_headers = $conn->query("SELECT ph.id_piutang, ph.kode_proyek, ph.accoun
                             <?php 
                             $piutang_headers->data_seek(0);
                             while ($ph = $piutang_headers->fetch_assoc()): 
-                            ?>
+                            ?>  
                                 <option value="<?php echo $ph['id_piutang']; ?>">
-                                    <?php echo $ph['kode_proyek'] . ' - ' . $ph['account_name'] . ' (' . date('d/m/Y', strtotime($ph['periode_mulai'])) . ' - ' . date('d/m/Y', strtotime($ph['periode_selesai'])) . ')'; ?>
+                                    <?php 
+                                    $month_names = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+                                    $bulan_display = $month_names[(int)$ph['periode_bulan']];
+                                    echo $ph['kode_proyek'] . ' - ' . $ph['nama_proyek'] . ' (' . $bulan_display . ' ' . $ph['periode_tahun'] . ')'; 
+                                    ?>
                                 </option>
                             <?php endwhile; ?>
                         </select>
@@ -445,14 +458,14 @@ $piutang_headers = $conn->query("SELECT ph.id_piutang, ph.kode_proyek, ph.accoun
                         <label class="block text-gray-700 text-sm font-semibold mb-2">
                             <i class="fas fa-project-diagram text-green-500 mr-1"></i> Kode Proyek *
                         </label>
-                        <select name="kode_proyek" required 
+                        <select name="kode_proyek" id="kode_proyek" required onchange="updateProjectName()"
                             class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent">
                             <option value="">Pilih Proyek</option>
                             <?php 
                             $projects->data_seek(0);
                             while ($project = $projects->fetch_assoc()): 
                             ?>
-                                <option value="<?php echo $project['kode_proyek']; ?>">
+                                <option value="<?php echo $project['kode_proyek']; ?>" data-nama-proyek="<?php echo htmlspecialchars($project['nama_proyek']); ?>">
                                     <?php echo $project['kode_proyek'] . ' - ' . $project['nama_proyek']; ?>
                                 </option>
                             <?php endwhile; ?>
@@ -461,42 +474,70 @@ $piutang_headers = $conn->query("SELECT ph.id_piutang, ph.kode_proyek, ph.accoun
 
                     <div>
                         <label class="block text-gray-700 text-sm font-semibold mb-2">
-                            <i class="fas fa-user-tag text-green-500 mr-1"></i> Nama Akun *
+                            <i class="fas fa-folder text-green-500 mr-1"></i> Nama Proyek
                         </label>
-                        <input type="text" name="account_name" required placeholder="Contoh: Piutang Donor UNICEF"
+                        <input type="text" id="nama_proyek_display" readonly 
+                            placeholder="Otomatis terisi saat memilih proyek"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 cursor-not-allowed">
+                        <p class="text-xs text-gray-500 mt-1"><i class="fas fa-info-circle mr-1"></i>Otomatis terisi berdasarkan proyek yang dipilih</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-gray-700 text-sm font-semibold mb-2">
+                            <i class="fas fa-calendar text-green-500 mr-1"></i> Bulan Periode *
+                        </label>
+                        <select name="periode_bulan" required 
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent">
+                            <option value="">Pilih Bulan</option>
+                            <option value="01">Januari</option>
+                            <option value="02">Februari</option>
+                            <option value="03">Maret</option>
+                            <option value="04">April</option>
+                            <option value="05">Mei</option>
+                            <option value="06">Juni</option>
+                            <option value="07">Juli</option>
+                            <option value="08">Agustus</option>
+                            <option value="09">September</option>
+                            <option value="10">Oktober</option>
+                            <option value="11">November</option>
+                            <option value="12">Desember</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-gray-700 text-sm font-semibold mb-2">
+                            <i class="fas fa-calendar-alt text-green-500 mr-1"></i> Tahun Periode *
+                        </label>
+                        <input type="text" name="periode_tahun" required maxlength="4" pattern="[0-9]{4}" 
+                            placeholder="<?php echo date('Y'); ?>"
                             class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent">
                     </div>
 
                     <div>
                         <label class="block text-gray-700 text-sm font-semibold mb-2">
-                            <i class="fas fa-calendar-plus text-green-500 mr-1"></i> Periode Mulai *
+                            <i class="fas fa-exchange-alt text-green-500 mr-1"></i> Kurs (Exchange Rate) *
                         </label>
-                        <input type="date" name="periode_mulai" required 
+                        <input type="number" name="exrate" id="exrate_piutang" step="0.01" value="1.00" min="0.01" required 
                             class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent">
-                    </div>
-
-                    <div>
-                        <label class="block text-gray-700 text-sm font-semibold mb-2">
-                            <i class="fas fa-calendar-check text-green-500 mr-1"></i> Periode Selesai *
-                        </label>
-                        <input type="date" name="periode_selesai" required 
-                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent">
+                        <p class="text-xs text-gray-500 mt-1"><i class="fas fa-info-circle mr-1"></i>1 USD = ... IDR (untuk konversi otomatis)</p>
                     </div>
 
                     <div>
                         <label class="block text-gray-700 text-sm font-semibold mb-2">
                             <i class="fas fa-money-bill-wave text-green-500 mr-1"></i> Saldo Awal IDR
                         </label>
-                        <input type="number" name="beginning_balance_idr" step="0.01" value="0" 
+                        <input type="number" name="beginning_balance_idr" id="beginning_balance_idr" step="0.01" value="0" 
                             class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent">
+                        <p class="text-xs text-gray-500 mt-1"><i class="fas fa-info-circle mr-1"></i>Isi salah satu, yang lain otomatis dikonversi</p>
                     </div>
 
                     <div>
                         <label class="block text-gray-700 text-sm font-semibold mb-2">
                             <i class="fas fa-dollar-sign text-green-500 mr-1"></i> Saldo Awal USD
                         </label>
-                        <input type="number" name="beginning_balance_usd" step="0.01" value="0" 
+                        <input type="number" name="beginning_balance_usd" id="beginning_balance_usd" step="0.01" value="0" 
                             class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent">
+                        <p class="text-xs text-gray-500 mt-1"><i class="fas fa-info-circle mr-1"></i>Isi salah satu, yang lain otomatis dikonversi</p>
                     </div>
                 </div>
 
@@ -585,10 +626,14 @@ $piutang_headers = $conn->query("SELECT ph.id_piutang, ph.kode_proyek, ph.accoun
                                                                     <div class="flex items-center space-x-3 mb-2">
                                                                         <h4 class="font-bold text-white text-lg">
                                                                             <i class="fas fa-file-invoice-dollar mr-2"></i>
-                                                                            <?php echo $header['account_name']; ?>
+                                                                            <?php echo $header['nama_proyek']; ?>
                                                                         </h4>
                                                                         <span class="bg-cyan-700 text-white text-xs px-3 py-1 rounded-full">
-                                                                            <?php echo date('d/m/Y', strtotime($header['periode_mulai'])); ?> - <?php echo date('d/m/Y', strtotime($header['periode_selesai'])); ?>
+                                                                            <?php 
+                                                                            $month_names = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+                                                                            $bulan_display = $month_names[(int)$header['periode_bulan']];
+                                                                            echo $bulan_display . ' ' . $header['periode_tahun']; 
+                                                                            ?>
                                                                         </span>
                                                                         <span class="bg-white text-cyan-600 text-xs px-3 py-1 rounded-full font-semibold">
                                                                             <?php echo count($details); ?> transaksi
@@ -808,6 +853,7 @@ $piutang_headers = $conn->query("SELECT ph.id_piutang, ph.kode_proyek, ph.accoun
         // Initialize conversion on page load
         document.addEventListener('DOMContentLoaded', function() {
             convertCurrency();
+            setupInitialBalanceConversion();
             
             // Auto-hide success message after 5 seconds and clean URL
             const successMsg = document.getElementById('successMessage');
@@ -829,6 +875,64 @@ $piutang_headers = $conn->query("SELECT ph.id_piutang, ph.kode_proyek, ph.accoun
                 }, 5000);
             }
         });
+        
+        // Auto-convert initial balance between IDR and USD for Create Header Form
+        function setupInitialBalanceConversion() {
+            const exrateInput = document.getElementById('exrate_piutang');
+            const beginningBalanceIdrInput = document.getElementById('beginning_balance_idr');
+            const beginningBalanceUsdInput = document.getElementById('beginning_balance_usd');
+            
+            if (!exrateInput || !beginningBalanceIdrInput || !beginningBalanceUsdInput) {
+                return; // Elements not found, exit gracefully
+            }
+            
+            // When IDR is entered, convert to USD
+            beginningBalanceIdrInput.addEventListener('input', function() {
+                const exrate = parseFloat(exrateInput.value) || 1;
+                const idrValue = parseFloat(this.value) || 0;
+                
+                if (idrValue > 0 && exrate > 0) {
+                    beginningBalanceUsdInput.value = (idrValue / exrate).toFixed(2);
+                }
+            });
+            
+            // When USD is entered, convert to IDR
+            beginningBalanceUsdInput.addEventListener('input', function() {
+                const exrate = parseFloat(exrateInput.value) || 1;
+                const usdValue = parseFloat(this.value) || 0;
+                
+                if (usdValue > 0 && exrate > 0) {
+                    beginningBalanceIdrInput.value = (usdValue * exrate).toFixed(2);
+                }
+            });
+            
+            // When exchange rate changes, recalculate conversion
+            exrateInput.addEventListener('input', function() {
+                const exrate = parseFloat(this.value) || 1;
+                const idrValue = parseFloat(beginningBalanceIdrInput.value) || 0;
+                const usdValue = parseFloat(beginningBalanceUsdInput.value) || 0;
+                
+                // Recalculate based on which field has value
+                if (idrValue > 0 && exrate > 0) {
+                    beginningBalanceUsdInput.value = (idrValue / exrate).toFixed(2);
+                } else if (usdValue > 0 && exrate > 0) {
+                    beginningBalanceIdrInput.value = (usdValue * exrate).toFixed(2);
+                }
+            });
+        }
+        
+        // Update project name when project is selected
+        function updateProjectName() {
+            const projectSelect = document.getElementById('kode_proyek');
+            const projectNameDisplay = document.getElementById('nama_proyek_display');
+            
+            if (projectSelect && projectNameDisplay) {
+                const selectedOption = projectSelect.options[projectSelect.selectedIndex];
+                const namaProyek = selectedOption.getAttribute('data-nama-proyek') || '';
+                
+                projectNameDisplay.value = namaProyek;
+            }
+        }
         
         // Close success message manually
         function closeSuccessMessage() {

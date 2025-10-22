@@ -83,17 +83,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_header'])) {
     $account_name = $_POST['account_name'];
     $bank_name = $_POST['bank_name'];
     $account_number = $_POST['account_number'];
+    $exrate = $_POST['exrate'] ?? 1.00; // Exchange rate
     $currency = $_POST['currency'];
     $periode_bulan = $_POST['periode_bulan'];
     $periode_tahun = $_POST['periode_tahun'];
     $saldo_awal_idr = $_POST['saldo_awal_idr'] ?? 0;
     $saldo_awal_usd = $_POST['saldo_awal_usd'] ?? 0;
     
+    // Automatic conversion based on which field was filled
+    // If one is zero and the other is filled, calculate the conversion
+    if ($exrate > 0) {
+        if ($saldo_awal_idr > 0 && $saldo_awal_usd == 0) {
+            // Convert IDR to USD
+            $saldo_awal_usd = $saldo_awal_idr / $exrate;
+        } elseif ($saldo_awal_usd > 0 && $saldo_awal_idr == 0) {
+            // Convert USD to IDR
+            $saldo_awal_idr = $saldo_awal_usd * $exrate;
+        }
+    }
+    
     // Generate unique ID for header (format: BH-YYYYMMDD-HHMMSS-RAND)
     $id_bank_header = 'BH-' . date('Ymd-His') . '-' . substr(uniqid(), -4);
     
-    $stmt = $conn->prepare("INSERT INTO buku_bank_header (id_bank_header, kode_proyek, account_name, bank_name, account_number, currency, periode_bulan, periode_tahun, saldo_awal_idr, saldo_awal_usd, saldo_akhir_idr, saldo_akhir_usd, current_period_change_idr, current_period_change_usd, prepared_by, status_laporan, tanggal_pembuatan) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, 'draft', CURDATE())");
-    $stmt->bind_param("ssssssssdddds", $id_bank_header, $kode_proyek, $account_name, $bank_name, $account_number, $currency, $periode_bulan, $periode_tahun, $saldo_awal_idr, $saldo_awal_usd, $saldo_awal_idr, $saldo_awal_usd, $user_name);
+    $stmt = $conn->prepare("INSERT INTO buku_bank_header (id_bank_header, kode_proyek, account_name, bank_name, account_number, exrate, currency, periode_bulan, periode_tahun, saldo_awal_idr, saldo_awal_usd, saldo_akhir_idr, saldo_akhir_usd, current_period_change_idr, current_period_change_usd, prepared_by, status_laporan, tanggal_pembuatan) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, 'draft', CURDATE())");
+    $stmt->bind_param("sssssdssddddds", $id_bank_header, $kode_proyek, $account_name, $bank_name, $account_number, $exrate, $currency, $periode_bulan, $periode_tahun, $saldo_awal_idr, $saldo_awal_usd, $saldo_awal_idr, $saldo_awal_usd, $user_name);
     
     if ($stmt->execute()) {
         // Redirect to prevent form resubmission (PRG pattern)
@@ -228,6 +241,26 @@ $bank_headers = $conn->query("SELECT bh.id_bank_header, bh.kode_proyek, bh.accou
     FROM buku_bank_header bh 
     LEFT JOIN proyek p ON bh.kode_proyek = p.kode_proyek 
     ORDER BY bh.tanggal_pembuatan DESC");
+
+// Get distinct bank details per project for autocomplete
+$bank_details_query = "SELECT DISTINCT kode_proyek, bank_name, account_name, account_number 
+    FROM buku_bank_header 
+    ORDER BY kode_proyek, bank_name, account_name";
+$bank_details_result = $conn->query($bank_details_query);
+
+// Organize bank details by project
+$bank_details_by_project = [];
+while ($detail = $bank_details_result->fetch_assoc()) {
+    $project_code = $detail['kode_proyek'];
+    if (!isset($bank_details_by_project[$project_code])) {
+        $bank_details_by_project[$project_code] = [];
+    }
+    $bank_details_by_project[$project_code][] = [
+        'bank_name' => $detail['bank_name'],
+        'account_name' => $detail['account_name'],
+        'account_number' => $detail['account_number']
+    ];
+}
 
 // Month names
 $month_names = [
@@ -503,7 +536,7 @@ $month_names = [
             </button>
         </div>
 
-            <form method="POST" class="space-y-6">
+            <form method="POST" class="space-y-6" id="createHeaderForm" onsubmit="return handleFormSubmit(event)">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label class="block text-gray-700 text-sm font-semibold mb-2">
@@ -527,24 +560,42 @@ $month_names = [
                         <label class="block text-gray-700 text-sm font-semibold mb-2">
                             <i class="fas fa-user-tag text-green-500 mr-1"></i> Nama Akun *
                         </label>
-                        <input type="text" name="account_name" required placeholder="Contoh: Rekening Operasional"
+                        <select name="account_name" id="account_name" required 
                             class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent">
+                            <option value="">Pilih Nama Akun</option>
+                            <option value="__custom__">+ Tambah Akun Baru (Ketik Manual)</option>
+                            <!-- Options will be populated dynamically based on selected project -->
+                        </select>
+                        <input type="text" name="account_name_custom" id="account_name_custom" style="display:none;" placeholder="Ketik nama akun baru"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent mt-2">
                     </div>
 
                     <div>
                         <label class="block text-gray-700 text-sm font-semibold mb-2">
                             <i class="fas fa-building-columns text-green-500 mr-1"></i> Nama Bank *
                         </label>
-                        <input type="text" name="bank_name" required placeholder="Contoh: Bank Mandiri"
+                        <select name="bank_name" id="bank_name" required 
                             class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent">
+                            <option value="">Pilih Nama Bank</option>
+                            <option value="__custom__">+ Tambah Bank Baru (Ketik Manual)</option>
+                            <!-- Options will be populated dynamically based on selected project -->
+                        </select>
+                        <input type="text" name="bank_name_custom" id="bank_name_custom" style="display:none;" placeholder="Ketik nama bank baru"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent mt-2">
                     </div>
 
                     <div>
                         <label class="block text-gray-700 text-sm font-semibold mb-2">
                             <i class="fas fa-credit-card text-green-500 mr-1"></i> Nomor Rekening *
                         </label>
-                        <input type="text" name="account_number" required placeholder="Contoh: 1234567890"
+                        <select name="account_number" id="account_number" required 
                             class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent">
+                            <option value="">Pilih Nomor Rekening</option>
+                            <option value="__custom__">+ Tambah Rekening Baru (Ketik Manual)</option>
+                            <!-- Options will be populated dynamically based on selected project -->
+                        </select>
+                        <input type="text" name="account_number_custom" id="account_number_custom" style="display:none;" placeholder="Ketik nomor rekening baru"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent mt-2">
                     </div>
 
                     <div>
@@ -556,6 +607,15 @@ $month_names = [
                             <option value="IDR">IDR</option>
                             <option value="USD">USD</option>
                         </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-gray-700 text-sm font-semibold mb-2">
+                            <i class="fas fa-exchange-alt text-green-500 mr-1"></i> Kurs (Exchange Rate) *
+                        </label>
+                        <input type="number" name="exrate" id="exrate" step="0.01" value="1.00" min="0.01" required 
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent">
+                        <p class="text-xs text-gray-500 mt-1"><i class="fas fa-info-circle mr-1"></i>1 USD = ... IDR (untuk konversi otomatis)</p>
                     </div>
 
                     <div>
@@ -584,16 +644,18 @@ $month_names = [
                         <label class="block text-gray-700 text-sm font-semibold mb-2">
                             <i class="fas fa-money-bill-wave text-green-500 mr-1"></i> Saldo Awal IDR
                         </label>
-                        <input type="number" name="saldo_awal_idr" step="0.01" value="0" 
+                        <input type="number" name="saldo_awal_idr" id="saldo_awal_idr" step="0.01" value="0" 
                             class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent">
+                        <p class="text-xs text-gray-500 mt-1"><i class="fas fa-info-circle mr-1"></i>Isi salah satu, yang lain otomatis dikonversi</p>
                     </div>
 
                     <div>
                         <label class="block text-gray-700 text-sm font-semibold mb-2">
                             <i class="fas fa-dollar-sign text-green-500 mr-1"></i> Saldo Awal USD
                         </label>
-                        <input type="number" name="saldo_awal_usd" step="0.01" value="0" 
+                        <input type="number" name="saldo_awal_usd" id="saldo_awal_usd" step="0.01" value="0" 
                             class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent">
+                        <p class="text-xs text-gray-500 mt-1"><i class="fas fa-info-circle mr-1"></i>Isi salah satu, yang lain otomatis dikonversi</p>
                     </div>
                 </div>
 
@@ -857,6 +919,9 @@ $month_names = [
     </main>
 
     <script>
+        // Bank details data by project (from PHP)
+        const bankDetailsByProject = <?php echo json_encode($bank_details_by_project); ?>;
+
         function toggleCreateForm() {
             const form = document.getElementById('createForm');
             form.classList.toggle('hidden');
@@ -881,6 +946,161 @@ $month_names = [
             
             content.classList.toggle('active');
             icon.classList.toggle('active');
+        }
+
+        // Update bank details autocomplete when project is selected
+        function updateBankDetailsOptions() {
+            const projectSelect = document.querySelector('select[name="kode_proyek"]');
+            const selectedProject = projectSelect.value;
+            
+            // Get select elements
+            const bankNameSelect = document.getElementById('bank_name');
+            const accountNameSelect = document.getElementById('account_name');
+            const accountNumberSelect = document.getElementById('account_number');
+            
+            // Clear existing options (keep first two: placeholder and custom option)
+            bankNameSelect.innerHTML = '<option value="">Pilih Nama Bank</option><option value="__custom__">+ Tambah Bank Baru (Ketik Manual)</option>';
+            accountNameSelect.innerHTML = '<option value="">Pilih Nama Akun</option><option value="__custom__">+ Tambah Akun Baru (Ketik Manual)</option>';
+            accountNumberSelect.innerHTML = '<option value="">Pilih Nomor Rekening</option><option value="__custom__">+ Tambah Rekening Baru (Ketik Manual)</option>';
+            
+            if (selectedProject && bankDetailsByProject[selectedProject]) {
+                const details = bankDetailsByProject[selectedProject];
+                
+                // Use Set to avoid duplicates
+                const bankNames = new Set();
+                const accountNames = new Set();
+                const accountNumbers = new Set();
+                
+                details.forEach(detail => {
+                    bankNames.add(detail.bank_name);
+                    accountNames.add(detail.account_name);
+                    accountNumbers.add(detail.account_number);
+                });
+                
+                // Populate select dropdowns
+                bankNames.forEach(name => {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    bankNameSelect.appendChild(option);
+                });
+                
+                accountNames.forEach(name => {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    accountNameSelect.appendChild(option);
+                });
+                
+                accountNumbers.forEach(number => {
+                    const option = document.createElement('option');
+                    option.value = number;
+                    option.textContent = number;
+                    accountNumberSelect.appendChild(option);
+                });
+            }
+        }
+
+        // Auto-fill related bank details when user selects from dropdown
+        function setupBankDetailsAutoFill() {
+            const projectSelect = document.querySelector('select[name="kode_proyek"]');
+            const bankNameSelect = document.getElementById('bank_name');
+            const accountNameSelect = document.getElementById('account_name');
+            const accountNumberSelect = document.getElementById('account_number');
+            
+            const bankNameCustom = document.getElementById('bank_name_custom');
+            const accountNameCustom = document.getElementById('account_name_custom');
+            const accountNumberCustom = document.getElementById('account_number_custom');
+            
+            // Handle custom input toggle for bank name
+            bankNameSelect.addEventListener('change', function() {
+                if (this.value === '__custom__') {
+                    bankNameCustom.style.display = 'block';
+                    bankNameCustom.required = true;
+                    this.required = false;
+                } else {
+                    bankNameCustom.style.display = 'none';
+                    bankNameCustom.required = false;
+                    this.required = true;
+                    
+                    // Auto-fill matching details
+                    const selectedProject = projectSelect.value;
+                    const selectedBankName = this.value;
+                    
+                    if (selectedProject && selectedBankName && bankDetailsByProject[selectedProject]) {
+                        const matchingDetails = bankDetailsByProject[selectedProject].filter(
+                            detail => detail.bank_name === selectedBankName
+                        );
+                        
+                        // If only one match, auto-fill
+                        if (matchingDetails.length === 1) {
+                            accountNameSelect.value = matchingDetails[0].account_name;
+                            accountNumberSelect.value = matchingDetails[0].account_number;
+                        }
+                    }
+                }
+            });
+            
+            // Handle custom input toggle for account name
+            accountNameSelect.addEventListener('change', function() {
+                if (this.value === '__custom__') {
+                    accountNameCustom.style.display = 'block';
+                    accountNameCustom.required = true;
+                    this.required = false;
+                } else {
+                    accountNameCustom.style.display = 'none';
+                    accountNameCustom.required = false;
+                    this.required = true;
+                    
+                    // Auto-fill matching details
+                    const selectedProject = projectSelect.value;
+                    const selectedAccountName = this.value;
+                    
+                    if (selectedProject && selectedAccountName && bankDetailsByProject[selectedProject]) {
+                        const matchingDetails = bankDetailsByProject[selectedProject].filter(
+                            detail => detail.account_name === selectedAccountName
+                        );
+                        
+                        // If only one match, auto-fill
+                        if (matchingDetails.length === 1) {
+                            bankNameSelect.value = matchingDetails[0].bank_name;
+                            accountNumberSelect.value = matchingDetails[0].account_number;
+                        }
+                    }
+                }
+            });
+            
+            // Handle custom input toggle for account number
+            accountNumberSelect.addEventListener('change', function() {
+                if (this.value === '__custom__') {
+                    accountNumberCustom.style.display = 'block';
+                    accountNumberCustom.required = true;
+                    this.required = false;
+                } else {
+                    accountNumberCustom.style.display = 'none';
+                    accountNumberCustom.required = false;
+                    this.required = true;
+                    
+                    // Auto-fill matching details
+                    const selectedProject = projectSelect.value;
+                    const selectedAccountNumber = this.value;
+                    
+                    if (selectedProject && selectedAccountNumber && bankDetailsByProject[selectedProject]) {
+                        const matchingDetails = bankDetailsByProject[selectedProject].filter(
+                            detail => detail.account_number === selectedAccountNumber
+                        );
+                        
+                        // If only one match, auto-fill
+                        if (matchingDetails.length === 1) {
+                            bankNameSelect.value = matchingDetails[0].bank_name;
+                            accountNameSelect.value = matchingDetails[0].account_name;
+                        }
+                    }
+                }
+            });
+            
+            // Listen to project change
+            projectSelect.addEventListener('change', updateBankDetailsOptions);
         }
 
         // Auto-convert currency based on exchange rate
@@ -941,6 +1161,8 @@ $month_names = [
         // Initialize conversion on page load
         document.addEventListener('DOMContentLoaded', function() {
             convertCurrency();
+            setupBankDetailsAutoFill();
+            setupInitialBalanceConversion();
             
             // Auto-hide success message after 5 seconds and clean URL
             const successMsg = document.getElementById('successMessage');
@@ -962,6 +1184,104 @@ $month_names = [
                 }, 5000);
             }
         });
+        
+        // Handle form submission to use custom inputs when needed
+        function handleFormSubmit(event) {
+            const bankNameSelect = document.getElementById('bank_name');
+            const accountNameSelect = document.getElementById('account_name');
+            const accountNumberSelect = document.getElementById('account_number');
+            
+            const bankNameCustom = document.getElementById('bank_name_custom');
+            const accountNameCustom = document.getElementById('account_name_custom');
+            const accountNumberCustom = document.getElementById('account_number_custom');
+            
+            // Replace select values with custom input values if custom option is selected
+            if (bankNameSelect.value === '__custom__') {
+                if (!bankNameCustom.value.trim()) {
+                    alert('Silakan masukkan nama bank!');
+                    bankNameCustom.focus();
+                    return false;
+                }
+                // Create hidden input with the custom value
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.name = 'bank_name';
+                hiddenInput.value = bankNameCustom.value.trim();
+                event.target.appendChild(hiddenInput);
+                bankNameSelect.removeAttribute('name'); // Remove name from select to avoid conflict
+            }
+            
+            if (accountNameSelect.value === '__custom__') {
+                if (!accountNameCustom.value.trim()) {
+                    alert('Silakan masukkan nama akun!');
+                    accountNameCustom.focus();
+                    return false;
+                }
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.name = 'account_name';
+                hiddenInput.value = accountNameCustom.value.trim();
+                event.target.appendChild(hiddenInput);
+                accountNameSelect.removeAttribute('name');
+            }
+            
+            if (accountNumberSelect.value === '__custom__') {
+                if (!accountNumberCustom.value.trim()) {
+                    alert('Silakan masukkan nomor rekening!');
+                    accountNumberCustom.focus();
+                    return false;
+                }
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.name = 'account_number';
+                hiddenInput.value = accountNumberCustom.value.trim();
+                event.target.appendChild(hiddenInput);
+                accountNumberSelect.removeAttribute('name');
+            }
+            
+            return true;
+        }
+
+        // Auto-convert initial balance between IDR and USD
+        function setupInitialBalanceConversion() {
+            const exrateInput = document.getElementById('exrate');
+            const saldoIdrInput = document.getElementById('saldo_awal_idr');
+            const saldoUsdInput = document.getElementById('saldo_awal_usd');
+            
+            // When IDR is entered, convert to USD
+            saldoIdrInput.addEventListener('input', function() {
+                const exrate = parseFloat(exrateInput.value) || 1;
+                const idrValue = parseFloat(this.value) || 0;
+                
+                if (idrValue > 0 && exrate > 0) {
+                    saldoUsdInput.value = (idrValue / exrate).toFixed(2);
+                }
+            });
+            
+            // When USD is entered, convert to IDR
+            saldoUsdInput.addEventListener('input', function() {
+                const exrate = parseFloat(exrateInput.value) || 1;
+                const usdValue = parseFloat(this.value) || 0;
+                
+                if (usdValue > 0 && exrate > 0) {
+                    saldoIdrInput.value = (usdValue * exrate).toFixed(2);
+                }
+            });
+            
+            // When exchange rate changes, recalculate conversion
+            exrateInput.addEventListener('input', function() {
+                const exrate = parseFloat(this.value) || 1;
+                const idrValue = parseFloat(saldoIdrInput.value) || 0;
+                const usdValue = parseFloat(saldoUsdInput.value) || 0;
+                
+                // Recalculate based on which field has value
+                if (idrValue > 0 && exrate > 0) {
+                    saldoUsdInput.value = (idrValue / exrate).toFixed(2);
+                } else if (usdValue > 0 && exrate > 0) {
+                    saldoIdrInput.value = (usdValue * exrate).toFixed(2);
+                }
+            });
+        }
         
         // Close success message manually
         function closeSuccessMessage() {
