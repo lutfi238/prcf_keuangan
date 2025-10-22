@@ -20,59 +20,137 @@ $user_name = $_SESSION['user_name'];
 $user_id = $_SESSION['user_id'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_report'])) {
-    $kode_projek = $_POST['kode_projek'];
-    $id_proposal = $_POST['id_proposal']; // Changed from nama_projek to id_proposal
-    $nama_kegiatan = $_POST['nama_kegiatan'];
-    $pelaksana = $_POST['pelaksana'];
-    $tanggal_pelaksanaan = $_POST['tanggal_pelaksanaan'];
-    $tanggal_laporan = $_POST['tanggal_laporan'];
-    $mata_uang = $_POST['mata_uang'];
-    $exrate = $_POST['exrate'];
-    
-    // Get proposal title for nama_projek
-    $proposal_stmt = $conn->prepare("SELECT judul_proposal FROM proposal WHERE id_proposal = ?");
-    $proposal_stmt->bind_param("i", $id_proposal);
-    $proposal_stmt->execute();
-    $proposal_data = $proposal_stmt->get_result()->fetch_assoc();
-    $nama_projek = $proposal_data['judul_proposal'];
-    
-    // Insert header
-    $stmt = $conn->prepare("INSERT INTO laporan_keuangan_header (kode_projek, nama_projek, nama_kegiatan, pelaksana, tanggal_pelaksanaan, tanggal_laporan, mata_uang, exrate, created_by, status_lap, id_proposal) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?)");
-    $stmt->bind_param("sssssssdii", $kode_projek, $nama_projek, $nama_kegiatan, $pelaksana, $tanggal_pelaksanaan, $tanggal_laporan, $mata_uang, $exrate, $user_id, $id_proposal);
-    
-    if ($stmt->execute()) {
+    $conn->begin_transaction();
+
+    try {
+        $kode_projek = $_POST['kode_projek'];
+        $id_proposal = $_POST['id_proposal']; // Changed from nama_projek to id_proposal
+        $nama_kegiatan = $_POST['nama_kegiatan'];
+        $pelaksana = $_POST['pelaksana'];
+        $tanggal_pelaksanaan = $_POST['tanggal_pelaksanaan'];
+        $tanggal_laporan = $_POST['tanggal_laporan'];
+        $mata_uang = $_POST['mata_uang'];
+        $exrate = $_POST['exrate'];
+
+        // Get proposal title for nama_projek
+        $proposal_stmt = $conn->prepare("SELECT judul_proposal FROM proposal WHERE id_proposal = ?");
+        $proposal_stmt->bind_param("i", $id_proposal);
+        $proposal_stmt->execute();
+        $proposal_data = $proposal_stmt->get_result()->fetch_assoc();
+        $nama_projek = $proposal_data['judul_proposal'] ?? '';
+
+        if (empty($nama_projek)) {
+            throw new Exception('Proposal tidak ditemukan.');
+        }
+
+        // Insert header (no id_proposal column in header table)
+        $stmt = $conn->prepare("INSERT INTO laporan_keuangan_header (kode_projek, nama_projek, nama_kegiatan, pelaksana, tanggal_pelaksanaan, tanggal_laporan, mata_uang, exrate, created_by, status_lap) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted')");
+        if (!$stmt) {
+            throw new Exception('Gagal menyiapkan header laporan: ' . $conn->error);
+        }
+        $stmt->bind_param("sssssssdi", $kode_projek, $nama_projek, $nama_kegiatan, $pelaksana, $tanggal_pelaksanaan, $tanggal_laporan, $mata_uang, $exrate, $user_id);
+
+        if (!$stmt->execute()) {
+            throw new Exception('Gagal menyimpan header laporan.');
+        }
+
         $id_laporan_keu = $conn->insert_id;
-        
+
         // Insert details
         if (isset($_POST['items']) && is_array($_POST['items'])) {
-            $stmt_detail = $conn->prepare("INSERT INTO laporan_keuangan_detail (id_laporan_keu, invoice_no, invoice_date, item_desc, recipient, place_code, exp_code, unit_total, unit_cost, requested, actual, balance, explanation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            
-            foreach ($_POST['items'] as $item) {
-                $balance = $item['requested'] - $item['actual'];
-                $stmt_detail->bind_param("issssssidddds", 
+            $stmt_detail = $conn->prepare("INSERT INTO laporan_keuangan_detail (id_laporan_keu, invoice_no, invoice_date, item_desc, recipient, place_code, exp_code, unit_total, unit_cost, requested, actual, balance, explanation, file_nota) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+
+            if (!$stmt_detail) {
+                throw new Exception('Gagal menyiapkan statement detail laporan.');
+            }
+
+            $upload_dir = '../../uploads/receipts/';
+            if (!file_exists($upload_dir) && !mkdir($upload_dir, 0777, true)) {
+                throw new Exception('Gagal membuat folder penyimpanan nota.');
+            }
+
+            $allowed_extensions = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'tif', 'webp'];
+            $max_size = 5 * 1024 * 1024; // 5MB
+
+            foreach ($_POST['items'] as $index => $item) {
+                $invoice_no = trim($item['invoice_no'] ?? '');
+                $invoice_date = trim($item['invoice_date'] ?? '');
+                $item_desc = trim($item['item_desc'] ?? '');
+                $recipient = trim($item['recipient'] ?? '');
+                $place_code = trim($item['place_code'] ?? '');
+                $exp_code = trim($item['exp_code'] ?? '');
+                $unit_total = (int) ($item['unit_total'] ?? 0);
+                $unit_cost = (float) ($item['unit_cost'] ?? 0);
+                $requested = (float) ($item['requested'] ?? 0);
+                $actual = (float) ($item['actual'] ?? 0);
+                $balance = $requested - $actual;
+                $explanation = trim($item['explanation'] ?? '');
+                $file_path = null;
+
+                if (!empty($_FILES['items']['name'][$index]['file_nota'])) {
+                    $file_error = $_FILES['items']['error'][$index]['file_nota'];
+                    $file_size = $_FILES['items']['size'][$index]['file_nota'];
+                    $file_tmp = $_FILES['items']['tmp_name'][$index]['file_nota'];
+                    $original_name = $_FILES['items']['name'][$index]['file_nota'];
+                    $extension = strtolower(pathinfo($original_name, PATHINFO_EXTENSION));
+
+                    if ($file_error !== UPLOAD_ERR_OK) {
+                        throw new Exception('Gagal mengunggah file nota: ' . $original_name);
+                    }
+
+                    if ($file_size > $max_size) {
+                        throw new Exception('Ukuran file nota melebihi 5MB: ' . $original_name);
+                    }
+
+                    if (!in_array($extension, $allowed_extensions, true)) {
+                        throw new Exception('Format file nota tidak didukung: ' . $original_name);
+                    }
+
+                    $safe_name = preg_replace('/[^A-Za-z0-9_\-]/', '_', pathinfo($original_name, PATHINFO_FILENAME));
+                    $filename = time() . '_' . $index . '_' . ($safe_name ?: 'nota');
+                    if ($extension) {
+                        $filename .= '.' . $extension;
+                    }
+                    $destination = $upload_dir . $filename;
+
+                    if (!move_uploaded_file($file_tmp, $destination)) {
+                        throw new Exception('Gagal menyimpan file nota: ' . $original_name);
+                    }
+
+                    $file_path = $destination;
+                }
+
+                $stmt_detail->bind_param(
+                    "issssssiddddss",
                     $id_laporan_keu,
-                    $item['invoice_no'],
-                    $item['invoice_date'],
-                    $item['item_desc'],
-                    $item['recipient'],
-                    $item['place_code'],
-                    $item['exp_code'],
-                    $item['unit_total'],
-                    $item['unit_cost'],
-                    $item['requested'],
-                    $item['actual'],
+                    $invoice_no,
+                    $invoice_date,
+                    $item_desc,
+                    $recipient,
+                    $place_code,
+                    $exp_code,
+                    $unit_total,
+                    $unit_cost,
+                    $requested,
+                    $actual,
                     $balance,
-                    $item['explanation']
+                    $explanation,
+                    $file_path
                 );
-                $stmt_detail->execute();
+
+                if (!$stmt_detail->execute()) {
+                    throw new Exception('Gagal menyimpan detail laporan.');
+                }
             }
         }
-        
+
+        $conn->commit();
+
         // Send notification to Staff Accounting
         $sa_stmt = $conn->prepare("SELECT email, nama FROM user WHERE role = 'Staff Accountant'");
         $sa_stmt->execute();
         $sa_result = $sa_stmt->get_result();
-        
+
         while ($sa = $sa_result->fetch_assoc()) {
             send_notification_email(
                 $sa['email'],
@@ -80,12 +158,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_report'])) {
                 'Laporan keuangan untuk kegiatan "' . $nama_kegiatan . '" telah dikirimkan oleh ' . $user_name . '. Mohon segera divalidasi.'
             );
         }
-        
+
         // Redirect to dashboard with success message (auto-update data)
         header('Location: ../dashboards/dashboard_pm.php?success=report_created');
         exit();
-    } else {
-        $error = 'Gagal mengirimkan laporan keuangan';
+    } catch (Exception $e) {
+        $conn->rollback();
+        $error = 'Gagal mengirimkan laporan keuangan: ' . $e->getMessage();
     }
 }
 
@@ -135,7 +214,7 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
                 <p class="text-gray-600">PRCFI - Pusat Riset dan Pengembangan</p>
             </div>
 
-            <form method="POST" id="reportForm" class="space-y-6">
+            <form method="POST" id="reportForm" enctype="multipart/form-data" class="space-y-6">
                 <!-- Informasi Umum -->
                 <div class="space-y-4">
                     <h3 class="text-lg font-bold text-gray-800 border-b pb-2">INFORMASI UMUM</h3>
@@ -213,7 +292,10 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
                 <!-- Detail Pengeluaran -->
                 <div class="space-y-4">
                     <div class="flex justify-between items-center border-b pb-2">
-                        <h3 class="text-lg font-bold text-gray-800">RINCIAN PENGELUARAN</h3>
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-800">RINCIAN PENGELUARAN</h3>
+                            <p class="text-xs text-gray-500 mt-1">Unggah nota/kwitansi dalam format PDF atau gambar (maksimal 5MB) untuk setiap item jika tersedia.</p>
+                        </div>
                         <button type="button" onclick="addItem()" 
                             class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition duration-200 text-sm">
                             <i class="fas fa-plus mr-1"></i> Tambah Item
@@ -238,6 +320,16 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
             </form>
         </div>
     </main>
+
+    <!-- Modal Preview Image -->
+    <div id="receiptPreviewModal" class="fixed z-50 inset-0 bg-black/60 hidden justify-center items-center">
+        <div class="flex flex-col items-center">
+            <button onclick="closePreviewModal()" class="mb-2 block self-end mr-2 text-white p-2 rounded-full bg-black/60 hover:bg-black/80 focus:outline-none">
+                <i class="fas fa-times text-lg"></i>
+            </button>
+            <img id="modalReceiptPreview" src="" alt="Preview Nota" class="max-h-[90vh] max-w-[95vw] rounded shadow-lg bg-white" />
+        </div>
+    </div>
 
     <script>
         let itemCount = 0;
@@ -284,9 +376,9 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
             itemCount++;
             const container = document.getElementById('itemsContainer');
             const itemDiv = document.createElement('div');
-            itemDiv.className = 'border border-gray-200 rounded-lg p-4 bg-gray-50';
+            itemDiv.className = 'border border-gray-200 rounded-lg p-4 bg-gray-50 space-y-4';
             itemDiv.innerHTML = `
-                <div class="flex justify-between items-center mb-4">
+                <div class="flex justify-between items-center">
                     <h4 class="font-medium text-gray-800">Item #${itemCount}</h4>
                     <button type="button" onclick="removeItem(this)" class="text-red-500 hover:text-red-700">
                         <i class="fas fa-trash"></i>
@@ -349,12 +441,192 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"></textarea>
                     </div>
                 </div>
+                <div>
+                    <label class="block text-gray-700 text-sm font-medium mb-2">Upload Nota/Kwitansi</label>
+                    <div class="flex items-center space-x-4">
+                        <input type="file" name="items[${itemCount}][file_nota]" accept=".pdf,.jpg,.jpeg,.png,.gif,.bmp,.tiff,.tif,.webp"
+                            class="w-full text-sm text-gray-600" onchange="handleFileChange(this)" />
+                        <button type="button" title="Preview Nota" onclick="previewNota(this)" class="eye-preview-button hidden ml-2 rounded-full p-2 bg-gray-200 hover:bg-blue-500 hover:text-white text-gray-500 transition">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button type="button" onclick="removeReceipt(this)" class="receipt-remove hidden ml-2 px-3 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600">
+                            <i class="fas fa-trash-alt mr-1"></i>
+                        </button>
+                    </div>
+                    <div class="receipt-placeholder text-xs text-gray-400 mt-1">Belum ada file</div>
+                </div>
             `;
             container.appendChild(itemDiv);
         }
 
         function removeItem(button) {
-            button.closest('.border').remove();
+            const card = button.closest('.border');
+            if (card) {
+                card.remove();
+            }
+        }
+
+        function handleFileChange(input) {
+            const card = input.closest('.border');
+            if (!card) return;
+
+            const placeholder = card.querySelector('.receipt-placeholder');
+            const removeButton = card.querySelector('.receipt-remove');
+            const previewButton = card.querySelector('.eye-preview-button');
+
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                const reader = new FileReader();
+
+                // Only show eye for image or supported pdf
+                let canPreview = false;
+                if (file.type.startsWith('image/')) {
+                    canPreview = true;
+                } else if (file.type === "application/pdf") {
+                    canPreview = true;
+                }
+
+                reader.onload = function (e) {
+                    if (placeholder) {
+                        placeholder.textContent = file.name;
+                        placeholder.classList.remove('text-gray-400');
+                        placeholder.classList.add('text-gray-600');
+                    }
+                    if (removeButton) {
+                        removeButton.classList.remove('hidden');
+                    }
+                    if (previewButton) {
+                        if (canPreview) {
+                            previewButton.classList.remove('hidden');
+                            previewButton.dataset.previewType = file.type.startsWith('image/') ? 'image' : (file.type === 'application/pdf' ? 'pdf' : '');
+                            previewButton.dataset.fileUrl = e.target.result;
+                        } else {
+                            previewButton.classList.add('hidden');
+                            previewButton.dataset.fileUrl = '';
+                            previewButton.dataset.previewType = '';
+                        }
+                    }
+                };
+
+                // Actually load for preview
+                if (file.type.startsWith('image/') || file.type === 'application/pdf') {
+                    if (file.type.startsWith('image/')) {
+                        reader.readAsDataURL(file);
+                    } else if (file.type === 'application/pdf') {
+                        // For PDF, DataURL preview in <embed>
+                        reader.readAsDataURL(file);
+                    }
+                } else {
+                    if (placeholder) {
+                        placeholder.textContent = file.name + " (tidak bisa preview)";
+                        placeholder.classList.remove('text-gray-400');
+                        placeholder.classList.add('text-gray-600');
+                    }
+                    if (removeButton) {
+                        removeButton.classList.remove('hidden');
+                    }
+                    if (previewButton) {
+                        previewButton.classList.add('hidden');
+                        previewButton.dataset.fileUrl = '';
+                        previewButton.dataset.previewType = '';
+                    }
+                }
+
+            } else {
+                if (placeholder) {
+                    placeholder.textContent = 'Belum ada file';
+                    placeholder.classList.remove('text-gray-600');
+                    placeholder.classList.add('text-gray-400');
+                }
+                if (removeButton) {
+                    removeButton.classList.add('hidden');
+                }
+                if (previewButton) {
+                    previewButton.classList.add('hidden');
+                    previewButton.dataset.fileUrl = '';
+                    previewButton.dataset.previewType = '';
+                }
+            }
+        }
+
+        function removeReceipt(button) {
+            const card = button.closest('.border');
+            if (!card) return;
+
+            const fileInput = card.querySelector('input[type="file"]');
+            const placeholder = card.querySelector('.receipt-placeholder');
+            const previewButton = card.querySelector('.eye-preview-button');
+
+            if (fileInput) {
+                fileInput.value = '';
+            }
+            if (placeholder) {
+                placeholder.textContent = 'Belum ada file';
+                placeholder.classList.remove('text-gray-600');
+                placeholder.classList.add('text-gray-400');
+            }
+            if (previewButton) {
+                previewButton.classList.add('hidden');
+                previewButton.dataset.fileUrl = '';
+                previewButton.dataset.previewType = '';
+            }
+            button.classList.add('hidden');
+        }
+
+        function previewNota(btn) {
+            // This button is eye icon beside file
+            const fileUrl = btn.dataset.fileUrl;
+            const type = btn.dataset.previewType;
+
+            if (!fileUrl) return;
+
+            const modal = document.getElementById('receiptPreviewModal');
+            const modalImg = document.getElementById('modalReceiptPreview');
+            
+            // For PDF, show pdf in embed or object
+            if (type === 'image') {
+                modalImg.src = fileUrl;
+                modalImg.classList.remove('hidden');
+                modalImg.style.display = "block";
+                modalImg.style.maxHeight = "90vh";
+            } else if (type === 'pdf') {
+                // Render pdf as <embed>
+                modalImg.src = '';
+                modalImg.style.display = "none";
+                // Show embed PDF directly
+                if (!document.getElementById('modalPdfEmbed')) {
+                    const embed = document.createElement('embed');
+                    embed.id = 'modalPdfEmbed';
+                    embed.type = 'application/pdf';
+                    embed.style.maxHeight = '90vh';
+                    embed.style.maxWidth = '95vw';
+                    embed.className = "rounded shadow-lg bg-white";
+                    document.getElementById('receiptPreviewModal').querySelector('.flex.flex-col').appendChild(embed);
+                }
+                const pdfEmbed = document.getElementById('modalPdfEmbed');
+                pdfEmbed.src = fileUrl;
+                pdfEmbed.style.display = "block";
+            }
+            // Hide all other pdf viewers if needed
+            if (type !== 'pdf' && document.getElementById('modalPdfEmbed')) {
+                document.getElementById('modalPdfEmbed').style.display = "none";
+            }
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closePreviewModal() {
+            const modal = document.getElementById('receiptPreviewModal');
+            if (!modal) return;
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            // Clear image and pdf src
+            const modalImg = document.getElementById('modalReceiptPreview');
+            if (modalImg) modalImg.src = '';
+            if (document.getElementById('modalPdfEmbed')) {
+                document.getElementById('modalPdfEmbed').src = '';
+                document.getElementById('modalPdfEmbed').style.display = "none";
+            }
         }
 
         // Add first item on page load

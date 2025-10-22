@@ -192,6 +192,7 @@ $items = $details->get_result();
                                 <th class="border border-gray-300 px-2 py-2 text-right font-semibold">Actual</th>
                                 <th class="border border-gray-300 px-2 py-2 text-right font-semibold">Balance</th>
                                 <th class="border border-gray-300 px-2 py-2 text-left font-semibold">Explanation</th>
+                                <th class="border border-gray-300 px-2 py-2 text-center font-semibold">Nota</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -221,6 +222,22 @@ $items = $details->get_result();
                                     <?php echo number_format($item['balance'], 2); ?>
                                 </td>
                                 <td class="border border-gray-300 px-2 py-2"><?php echo htmlspecialchars($item['explanation'] ?? '-'); ?></td>
+                                <td class="border border-gray-300 px-2 py-2 text-center">
+                                    <?php if (!empty($item['file_nota'])): ?>
+                                        <?php $isImage = preg_match('/\.(jpg|jpeg|png|gif|bmp|webp|tif|tiff)$/i', $item['file_nota']); ?>
+                                        <?php if ($isImage): ?>
+                                            <a href="<?php echo htmlspecialchars($item['file_nota']); ?>" target="_blank" class="inline-flex items-center px-3 py-1 bg-blue-500 text-white rounded-full text-xs hover:bg-blue-600">
+                                                <i class="fas fa-image mr-1"></i> Preview
+                                            </a>
+                                        <?php else: ?>
+                                            <a href="<?php echo htmlspecialchars($item['file_nota']); ?>" target="_blank" class="inline-flex items-center px-3 py-1 bg-blue-500 text-white rounded-full text-xs hover:bg-blue-600">
+                                                <i class="fas fa-file-pdf mr-1"></i> Unduh
+                                            </a>
+                                        <?php endif; ?>
+                                    <?php else: ?>
+                                        <span class="text-xs text-gray-400">-</span>
+                                    <?php endif; ?>
+                                </td>
                             </tr>
                             <?php endwhile; ?>
                             <tr class="bg-gray-100 font-bold">

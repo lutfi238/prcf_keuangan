@@ -1,5 +1,11 @@
 <?php
 session_start();
+
+// Prevent browser caching
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Cache-Control: post-check=0, pre-check=0", false);
+header("Pragma: no-cache");
+
 require_once '../../includes/config.php';
 require_once '../../includes/maintenance_config.php';
 
@@ -19,6 +25,91 @@ if ($_SESSION['user_role'] !== 'Finance Manager') {
 $user_name = $_SESSION['user_name'];
 $user_id = $_SESSION['user_id'];
 
+// Handle delete header
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_header'])) {
+    $id_piutang = $_POST['id_piutang'];
+    
+    $stmt = $conn->prepare("DELETE FROM buku_piutang_header WHERE id_piutang = ?");
+    $stmt->bind_param("i", $id_piutang);
+    
+    if ($stmt->execute()) {
+        header('Location: buku_piutang.php?success=header_deleted');
+        exit();
+    } else {
+        $error = 'Gagal menghapus header: ' . $conn->error;
+    }
+}
+
+// Handle success messages from URL
+$success = '';
+if (isset($_GET['success'])) {
+    switch ($_GET['success']) {
+        case 'header_created':
+            $success = 'Header buku piutang berhasil dibuat!';
+            break;
+        case 'detail_added':
+            $success = 'Transaksi piutang berhasil ditambahkan!';
+            break;
+        case 'header_deleted':
+            $success = 'Header berhasil dihapus!';
+            break;
+    }
+}
+
+// Handle add piutang detail entry
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_detail'])) {
+    $id_piutang = $_POST['id_piutang'];
+    $tgl_trx = $_POST['tgl_trx'];
+    $reff = $_POST['reff'];
+    $description = $_POST['description'];
+    $recipient = $_POST['recipient'];
+    $p_code = $_POST['p_code'];
+    $exp_code = $_POST['exp_code'];
+    $nominal_code = $_POST['nominal_code'];
+    $exrate = $_POST['exrate'];
+    $debit_idr = $_POST['debit_idr'] ?? 0;
+    $debit_usd = $_POST['debit_usd'] ?? 0;
+    $credit_idr = $_POST['credit_idr'] ?? 0;
+    $credit_usd = $_POST['credit_usd'] ?? 0;
+    
+    // Get last balance for this header
+    $balance_stmt = $conn->prepare("SELECT balance_idr, balance_usd FROM buku_piutang_detail WHERE id_piutang = ? ORDER BY id_detail_piutang DESC LIMIT 1");
+    $balance_stmt->bind_param("i", $id_piutang);
+    $balance_stmt->execute();
+    $balance_result = $balance_stmt->get_result();
+    
+    if ($balance_result->num_rows > 0) {
+        $last_balance = $balance_result->fetch_assoc();
+        $balance_idr = $last_balance['balance_idr'] + $debit_idr - $credit_idr;
+        $balance_usd = $last_balance['balance_usd'] + $debit_usd - $credit_usd;
+    } else {
+        // Get beginning balance from header
+        $header_stmt = $conn->prepare("SELECT beginning_balance_idr, beginning_balance_usd FROM buku_piutang_header WHERE id_piutang = ?");
+        $header_stmt->bind_param("i", $id_piutang);
+        $header_stmt->execute();
+        $header_result = $header_stmt->get_result();
+        $header = $header_result->fetch_assoc();
+        $balance_idr = $header['beginning_balance_idr'] + $debit_idr - $credit_idr;
+        $balance_usd = $header['beginning_balance_usd'] + $debit_usd - $credit_usd;
+    }
+    
+    $stmt = $conn->prepare("INSERT INTO buku_piutang_detail (id_piutang, tgl_trx, reff, description, recipient, p_code, exp_code, nominal_code, exrate, debit_idr, debit_usd, credit_idr, credit_usd, balance_idr, balance_usd) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("isssssssddddddd", $id_piutang, $tgl_trx, $reff, $description, $recipient, $p_code, $exp_code, $nominal_code, $exrate, $debit_idr, $debit_usd, $credit_idr, $credit_usd, $balance_idr, $balance_usd);
+    
+    if ($stmt->execute()) {
+        // Update ending balance in header
+        $update_stmt = $conn->prepare("UPDATE buku_piutang_header SET ending_balance_idr = ?, ending_balance_usd = ? WHERE id_piutang = ?");
+        $update_stmt->bind_param("ddi", $balance_idr, $balance_usd, $id_piutang);
+        $update_stmt->execute();
+        
+        // Redirect to prevent form resubmission (PRG pattern)
+        header('Location: buku_piutang.php?success=detail_added');
+        exit();
+    } else {
+        $error = 'Gagal menambahkan transaksi piutang: ' . $conn->error;
+    }
+}
+
 // Handle create new piutang header
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_header'])) {
     $kode_proyek = $_POST['kode_proyek'];
@@ -32,79 +123,335 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_header'])) {
     $stmt->bind_param("ssssddddi", $kode_proyek, $account_name, $periode_mulai, $periode_selesai, $beginning_balance_idr, $beginning_balance_usd, $beginning_balance_idr, $beginning_balance_usd, $user_id);
     
     if ($stmt->execute()) {
-        $success = 'Buku piutang berhasil dibuat!';
+        // Redirect to prevent form resubmission (PRG pattern)
+        header('Location: buku_piutang.php?success=header_created');
+        exit();
     } else {
-        $error = 'Gagal membuat buku piutang';
+        $error = 'Gagal membuat header buku piutang: ' . $conn->error;
     }
 }
 
-// Get piutang headers
-$headers = $conn->query("SELECT ph.*, u.nama as creator_name, p.nama_proyek 
+// Get hierarchical data: Project > Year > Period (Header) > Details
+$query = "SELECT 
+    ph.*,
+    p.nama_proyek,
+    u.nama as creator_name,
+    YEAR(ph.periode_mulai) as tahun,
+    (SELECT COUNT(*) FROM buku_piutang_detail pd WHERE pd.id_piutang = ph.id_piutang) as total_transactions
+FROM buku_piutang_header ph
+LEFT JOIN proyek p ON ph.kode_proyek = p.kode_proyek
+LEFT JOIN user u ON ph.created_by = u.id_user
+ORDER BY ph.kode_proyek, ph.periode_mulai DESC";
+
+$all_headers = $conn->query($query);
+
+// Organize data hierarchically
+$hierarchical_data = [];
+while ($header = $all_headers->fetch_assoc()) {
+    $project_code = $header['kode_proyek'];
+    $year = $header['tahun'];
+    
+    if (!isset($hierarchical_data[$project_code])) {
+        $hierarchical_data[$project_code] = [
+            'nama_proyek' => $header['nama_proyek'],
+            'years' => []
+        ];
+    }
+    
+    if (!isset($hierarchical_data[$project_code]['years'][$year])) {
+        $hierarchical_data[$project_code]['years'][$year] = [
+            'headers' => []
+        ];
+    }
+    
+    // Get all details for this header
+    $details_query = "SELECT * FROM buku_piutang_detail WHERE id_piutang = ? ORDER BY tgl_trx DESC, id_detail_piutang DESC";
+    $details_stmt = $conn->prepare($details_query);
+    $details_stmt->bind_param("i", $header['id_piutang']);
+    $details_stmt->execute();
+    $details_result = $details_stmt->get_result();
+    
+    $details = [];
+    while ($detail = $details_result->fetch_assoc()) {
+        $details[] = $detail;
+    }
+    
+    $hierarchical_data[$project_code]['years'][$year]['headers'][] = [
+        'header' => $header,
+        'details' => $details
+    ];
+}
+
+// Get projects for form
+$projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE status_proyek != 'cancelled'");
+
+// Get piutang headers for adding details
+$piutang_headers = $conn->query("SELECT ph.id_piutang, ph.kode_proyek, ph.account_name, ph.periode_mulai, ph.periode_selesai, p.nama_proyek 
     FROM buku_piutang_header ph 
-    LEFT JOIN user u ON ph.created_by = u.id_user 
     LEFT JOIN proyek p ON ph.kode_proyek = p.kode_proyek 
     ORDER BY ph.created_at DESC");
-
-// Get projects
-$projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE status_proyek != 'cancelled'");
 ?>
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Buku Piutang - PRCFI</title>
+    <title>Buku Piutang - PRCF Keuangan</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .accordion-content.active {
+            max-height: 10000px;
+            transition: max-height 0.5s ease-in;
+        }
+        .rotate-icon {
+            transition: transform 0.3s ease;
+        }
+        .rotate-icon.active {
+            transform: rotate(90deg);
+        }
+    </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
-    <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <div class="flex items-center space-x-4">
-                    <a href="dashboard_fm.php" class="text-gray-600 hover:text-gray-800">
-                        <i class="fas fa-arrow-left"></i>
+                    <a href="../dashboards/dashboard_fm.php" class="text-gray-600 hover:text-gray-800 transition duration-200">
+                        <i class="fas fa-arrow-left text-xl"></i>
                     </a>
-                    <h1 class="text-xl font-bold text-gray-800">Buku Piutang</h1>
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-800">
+                            <i class="fas fa-file-invoice-dollar text-green-600 mr-2"></i>Buku Piutang
+                        </h1>
+                        <p class="text-xs text-gray-500">Kelola piutang per periode</p>
+                    </div>
                 </div>
-                <span class="text-gray-700 font-medium"><?php echo $user_name; ?></span>
+                <span class="text-gray-700 font-medium">
+                    <i class="fas fa-user-circle mr-2 text-gray-500"></i><?php echo $user_name; ?>
+                </span>
             </div>
         </div>
     </header>
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <?php if (isset($success)): ?>
-            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
-                <?php echo $success; ?>
+        <?php if (isset($success) && $success): ?>
+            <div id="successMessage" class="bg-green-50 border-l-4 border-green-500 text-green-800 px-6 py-4 rounded-lg mb-6 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <i class="fas fa-check-circle mr-3 text-xl"></i>
+                        <span class="font-medium"><?php echo $success; ?></span>
+                    </div>
+                    <button onclick="closeSuccessMessage()" class="text-green-700 hover:text-green-900">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
             </div>
         <?php endif; ?>
 
-        <?php if (isset($error)): ?>
-            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
-                <?php echo $error; ?>
+        <?php if (isset($error) && $error): ?>
+            <div id="errorMessage" class="bg-red-50 border-l-4 border-red-500 text-red-800 px-6 py-4 rounded-lg mb-6 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <i class="fas fa-exclamation-circle mr-3 text-xl"></i>
+                        <span class="font-medium"><?php echo $error; ?></span>
+                    </div>
+                    <button onclick="closeErrorMessage()" class="text-red-700 hover:text-red-900">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
             </div>
         <?php endif; ?>
 
         <!-- Action Bar -->
-        <div class="flex justify-end mb-6">
-            <button onclick="toggleCreateForm()" 
-                class="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition duration-200 font-medium">
-                <i class="fas fa-plus mr-2"></i> Buat Buku Piutang Baru
-            </button>
+        <div class="flex justify-between items-center mb-6">
+            <div class="flex items-center space-x-4">
+                <div class="bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200">
+                    <span class="text-sm text-gray-600">Total Proyek:</span>
+                    <span class="ml-2 text-lg font-bold text-green-600"><?php echo count($hierarchical_data); ?></span>
+                </div>
+            </div>
+
+            <div class="flex space-x-3">
+                <button onclick="toggleAddDetailForm()" 
+                    class="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition duration-200 font-medium shadow-md hover:shadow-lg">
+                    <i class="fas fa-plus mr-2"></i> Tambah Transaksi
+                </button>
+                <button onclick="toggleCreateForm()" 
+                    class="px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition duration-200 font-medium shadow-md hover:shadow-lg">
+                    <i class="fas fa-folder-plus mr-2"></i> Buat Header Periode Baru
+                </button>
+            </div>
         </div>
 
-        <!-- Create Form -->
-        <div id="createForm" class="hidden mb-6 bg-white rounded-lg shadow-lg p-6 border border-gray-200">
-            <h3 class="text-lg font-bold text-gray-800 mb-4">Buat Buku Piutang Baru</h3>
+        <!-- Add Detail Form -->
+        <div id="addDetailForm" class="hidden mb-8 bg-white rounded-xl shadow-lg p-8 border border-gray-200">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold text-gray-800">
+                    <i class="fas fa-plus-circle text-blue-600 mr-2"></i>
+                    Tambah Transaksi Piutang
+                </h3>
+                <button onclick="toggleAddDetailForm()" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
             
-            <form method="POST" class="space-y-4">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form method="POST" class="space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="md:col-span-2">
+                        <label class="block text-gray-700 text-sm font-semibold mb-2">
+                            <i class="fas fa-file-alt text-blue-500 mr-1"></i> Pilih Periode (Header) *
+                        </label>
+                        <select name="id_piutang" required 
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
+                            <option value="">Pilih Periode Piutang</option>
+                            <?php 
+                            $piutang_headers->data_seek(0);
+                            while ($ph = $piutang_headers->fetch_assoc()): 
+                            ?>
+                                <option value="<?php echo $ph['id_piutang']; ?>">
+                                    <?php echo $ph['kode_proyek'] . ' - ' . $ph['account_name'] . ' (' . date('d/m/Y', strtotime($ph['periode_mulai'])) . ' - ' . date('d/m/Y', strtotime($ph['periode_selesai'])) . ')'; ?>
+                                </option>
+                            <?php endwhile; ?>
+                        </select>
+                    </div>
+
                     <div>
-                        <label class="block text-gray-700 text-sm font-medium mb-2">Kode Proyek *</label>
+                        <label class="block text-gray-700 text-sm font-semibold mb-2">
+                            <i class="fas fa-calendar text-blue-500 mr-1"></i> Tanggal Transaksi *
+                        </label>
+                        <input type="date" name="tgl_trx" required value="<?php echo date('Y-m-d'); ?>"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
+                    </div>
+
+                    <div>
+                        <label class="block text-gray-700 text-sm font-semibold mb-2">
+                            <i class="fas fa-hashtag text-blue-500 mr-1"></i> Referensi
+                        </label>
+                        <input type="text" name="reff" 
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
+                    </div>
+
+                    <div class="md:col-span-2">
+                        <label class="block text-gray-700 text-sm font-semibold mb-2">
+                            <i class="fas fa-align-left text-blue-500 mr-1"></i> Deskripsi *
+                        </label>
+                        <textarea name="description" rows="2" required
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"></textarea>
+                    </div>
+
+                    <div>
+                        <label class="block text-gray-700 text-sm font-semibold mb-2">
+                            <i class="fas fa-user text-blue-500 mr-1"></i> Penerima
+                        </label>
+                        <input type="text" name="recipient" 
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
+                    </div>
+
+                    <div>
+                        <label class="block text-gray-700 text-sm font-semibold mb-2">Project Code</label>
+                        <input type="text" name="p_code" 
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
+                    </div>
+
+                    <div>
+                        <label class="block text-gray-700 text-sm font-semibold mb-2">Exp Code</label>
+                        <input type="text" name="exp_code" 
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
+                    </div>
+
+                    <div>
+                        <label class="block text-gray-700 text-sm font-semibold mb-2">Nominal Code</label>
+                        <input type="text" name="nominal_code" 
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
+                    </div>
+
+                    <div>
+                        <label class="block text-gray-700 text-sm font-semibold mb-2">Exchange Rate *</label>
+                        <input type="number" name="exrate" step="0.01" value="1.00" required 
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
+                    </div>
+
+                    <div>
+                        <label class="block text-gray-700 text-sm font-semibold mb-2">
+                            <i class="fas fa-arrow-up text-green-500 mr-1"></i> Debit IDR
+                            <span class="text-xs text-gray-500 font-normal">(auto-convert ke USD)</span>
+                        </label>
+                        <input type="number" name="debit_idr" step="0.01" value="0" placeholder="Isi salah satu, yang lain otomatis"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
+                    </div>
+
+                    <div>
+                        <label class="block text-gray-700 text-sm font-semibold mb-2">
+                            <i class="fas fa-arrow-up text-green-500 mr-1"></i> Debit USD
+                            <span class="text-xs text-gray-500 font-normal">(auto-convert ke IDR)</span>
+                        </label>
+                        <input type="number" name="debit_usd" step="0.01" value="0" placeholder="Isi salah satu, yang lain otomatis"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
+                    </div>
+
+                    <div>
+                        <label class="block text-gray-700 text-sm font-semibold mb-2">
+                            <i class="fas fa-arrow-down text-red-500 mr-1"></i> Credit IDR
+                            <span class="text-xs text-gray-500 font-normal">(auto-convert ke USD)</span>
+                        </label>
+                        <input type="number" name="credit_idr" step="0.01" value="0" placeholder="Isi salah satu, yang lain otomatis"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
+                    </div>
+
+                    <div>
+                        <label class="block text-gray-700 text-sm font-semibold mb-2">
+                            <i class="fas fa-arrow-down text-red-500 mr-1"></i> Credit USD
+                            <span class="text-xs text-gray-500 font-normal">(auto-convert ke IDR)</span>
+                        </label>
+                        <input type="number" name="credit_usd" step="0.01" value="0" placeholder="Isi salah satu, yang lain otomatis"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
+                    </div>
+                </div>
+
+                <div class="flex justify-end space-x-4 pt-6 border-t border-gray-200">
+                    <button type="button" onclick="toggleAddDetailForm()"
+                        class="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition duration-200 font-medium">
+                        <i class="fas fa-times mr-2"></i> Batal
+                    </button>
+                    <button type="submit" name="add_detail"
+                        class="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition duration-200 font-medium shadow-md">
+                        <i class="fas fa-save mr-2"></i> Simpan Transaksi
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Create Header Form -->
+        <div id="createForm" class="hidden mb-8 bg-white rounded-xl shadow-lg p-8 border border-gray-200">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold text-gray-800">
+                    <i class="fas fa-folder-plus text-green-600 mr-2"></i>
+                    Buat Header Periode Piutang Baru
+                </h3>
+                <button onclick="toggleCreateForm()" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <form method="POST" class="space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-gray-700 text-sm font-semibold mb-2">
+                            <i class="fas fa-project-diagram text-green-500 mr-1"></i> Kode Proyek *
+                        </label>
                         <select name="kode_proyek" required 
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400">
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent">
                             <option value="">Pilih Proyek</option>
-                            <?php while ($project = $projects->fetch_assoc()): ?>
+                            <?php 
+                            $projects->data_seek(0);
+                            while ($project = $projects->fetch_assoc()): 
+                            ?>
                                 <option value="<?php echo $project['kode_proyek']; ?>">
                                     <?php echo $project['kode_proyek'] . ' - ' . $project['nama_proyek']; ?>
                                 </option>
@@ -113,131 +460,266 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
                     </div>
 
                     <div>
-                        <label class="block text-gray-700 text-sm font-medium mb-2">Nama Akun *</label>
-                        <input type="text" name="account_name" required 
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400">
+                        <label class="block text-gray-700 text-sm font-semibold mb-2">
+                            <i class="fas fa-user-tag text-green-500 mr-1"></i> Nama Akun *
+                        </label>
+                        <input type="text" name="account_name" required placeholder="Contoh: Piutang Donor UNICEF"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent">
                     </div>
 
                     <div>
-                        <label class="block text-gray-700 text-sm font-medium mb-2">Periode Mulai *</label>
+                        <label class="block text-gray-700 text-sm font-semibold mb-2">
+                            <i class="fas fa-calendar-plus text-green-500 mr-1"></i> Periode Mulai *
+                        </label>
                         <input type="date" name="periode_mulai" required 
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400">
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent">
                     </div>
 
                     <div>
-                        <label class="block text-gray-700 text-sm font-medium mb-2">Periode Selesai *</label>
+                        <label class="block text-gray-700 text-sm font-semibold mb-2">
+                            <i class="fas fa-calendar-check text-green-500 mr-1"></i> Periode Selesai *
+                        </label>
                         <input type="date" name="periode_selesai" required 
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400">
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent">
                     </div>
 
                     <div>
-                        <label class="block text-gray-700 text-sm font-medium mb-2">Saldo Awal IDR</label>
+                        <label class="block text-gray-700 text-sm font-semibold mb-2">
+                            <i class="fas fa-money-bill-wave text-green-500 mr-1"></i> Saldo Awal IDR
+                        </label>
                         <input type="number" name="beginning_balance_idr" step="0.01" value="0" 
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400">
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent">
                     </div>
 
                     <div>
-                        <label class="block text-gray-700 text-sm font-medium mb-2">Saldo Awal USD</label>
+                        <label class="block text-gray-700 text-sm font-semibold mb-2">
+                            <i class="fas fa-dollar-sign text-green-500 mr-1"></i> Saldo Awal USD
+                        </label>
                         <input type="number" name="beginning_balance_usd" step="0.01" value="0" 
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400">
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent">
                     </div>
                 </div>
 
-                <div class="flex justify-end space-x-3 pt-4">
+                <div class="flex justify-end space-x-4 pt-6 border-t border-gray-200">
                     <button type="button" onclick="toggleCreateForm()"
-                        class="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition duration-200 font-medium">
-                        Batal
+                        class="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition duration-200 font-medium">
+                        <i class="fas fa-times mr-2"></i> Batal
                     </button>
                     <button type="submit" name="create_header"
-                        class="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition duration-200 font-medium">
-                        <i class="fas fa-save mr-2"></i> Buat Buku Piutang
+                        class="px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition duration-200 font-medium shadow-md">
+                        <i class="fas fa-save mr-2"></i> Buat Header
                     </button>
                 </div>
             </form>
         </div>
 
-        <!-- Piutang List -->
-        <div class="grid grid-cols-1 gap-6">
-            <?php while ($header = $headers->fetch_assoc()): ?>
-            <div class="bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden">
-                <div class="p-6 border-b border-gray-200 bg-gradient-to-r from-green-50 to-white">
-                    <div class="flex justify-between items-start">
-                        <div class="flex-1">
-                            <h3 class="text-lg font-bold text-gray-800 mb-2"><?php echo $header['account_name']; ?></h3>
-                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                <div>
-                                    <p class="text-gray-600">Proyek</p>
-                                    <p class="font-medium text-gray-800"><?php echo $header['kode_proyek']; ?></p>
+        <!-- Hierarchical Piutang Display -->
+        <div class="space-y-6">
+            <?php if (empty($hierarchical_data)): ?>
+                <div class="bg-white rounded-xl shadow-md p-12 text-center border border-gray-200">
+                    <i class="fas fa-inbox text-gray-300 text-6xl mb-4"></i>
+                    <h3 class="text-xl font-semibold text-gray-600 mb-2">Belum Ada Data</h3>
+                    <p class="text-gray-500">Buat header periode dan tambahkan transaksi untuk memulai pencatatan buku piutang</p>
+                </div>
+            <?php else: ?>
+                <?php foreach ($hierarchical_data as $project_code => $project_data): ?>
+                    <!-- Level 1: PROJECT -->
+                    <div class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+                        <div class="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4 cursor-pointer hover:from-green-700 hover:to-green-800 transition duration-200"
+                             onclick="toggleAccordion('project-<?php echo $project_code; ?>')">
+                            <div class="flex justify-between items-center">
+                                <div class="flex items-center space-x-4">
+                                    <i class="fas fa-chevron-right rotate-icon text-white text-xl" id="icon-project-<?php echo $project_code; ?>"></i>
+                                    <div>
+                                        <h2 class="text-xl font-bold text-white">
+                                            <i class="fas fa-folder-open mr-2"></i><?php echo $project_code; ?>
+                                        </h2>
+                                        <p class="text-green-100 text-sm"><?php echo $project_data['nama_proyek']; ?></p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <p class="text-gray-600">Periode</p>
-                                    <p class="font-medium text-gray-800">
-                                        <?php echo date('d/m/Y', strtotime($header['periode_mulai'])); ?> - 
-                                        <?php echo date('d/m/Y', strtotime($header['periode_selesai'])); ?>
-                                    </p>
-                                </div>
-                                <div>
-                                    <p class="text-gray-600">Saldo Awal IDR</p>
-                                    <p class="font-medium text-gray-800">Rp <?php echo number_format($header['beginning_balance_idr'], 2); ?></p>
-                                </div>
-                                <div>
-                                    <p class="text-gray-600">Saldo Akhir IDR</p>
-                                    <p class="font-medium text-green-600">Rp <?php echo number_format($header['ending_balance_idr'], 2); ?></p>
+                                <div class="text-white text-right">
+                                    <p class="text-xs text-green-100 mb-1">Total Periode</p>
+                                    <p class="text-2xl font-bold"><?php echo count($project_data['years']); ?> Tahun</p>
                                 </div>
                             </div>
                         </div>
-                        <div class="ml-4">
-                            <span class="px-3 py-1 text-xs font-semibold rounded-full 
+
+                        <!-- Years Container -->
+                        <div id="project-<?php echo $project_code; ?>" class="accordion-content bg-gray-50">
+                            <div class="p-6 space-y-4">
                                 <?php 
-                                echo match($header['status']) {
-                                    'draft' => 'bg-gray-100 text-gray-800',
-                                    'submitted' => 'bg-yellow-100 text-yellow-800',
-                                    'approved' => 'bg-green-100 text-green-800',
-                                    default => 'bg-blue-100 text-blue-800'
-                                };
-                                ?>">
-                                <?php echo strtoupper($header['status']); ?>
-                            </span>
+                                krsort($project_data['years']); // Sort years descending
+                                foreach ($project_data['years'] as $year => $year_data): 
+                                ?>
+                                    <!-- Level 2: YEAR -->
+                                    <div class="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
+                                        <div class="bg-gradient-to-r from-teal-500 to-teal-600 px-6 py-3 cursor-pointer hover:from-teal-600 hover:to-teal-700 transition duration-200"
+                                             onclick="toggleAccordion('year-<?php echo $project_code . '-' . $year; ?>')">
+                                            <div class="flex justify-between items-center">
+                                                <div class="flex items-center space-x-3">
+                                                    <i class="fas fa-chevron-right rotate-icon text-white" id="icon-year-<?php echo $project_code . '-' . $year; ?>"></i>
+                                                    <h3 class="text-lg font-bold text-white">
+                                                        <i class="fas fa-calendar-alt mr-2"></i>Tahun <?php echo $year; ?>
+                                                    </h3>
+                                                </div>
+                                                <div class="text-white text-sm">
+                                                    <span class="bg-teal-700 px-3 py-1 rounded-full">
+                                                        <?php echo count($year_data['headers']); ?> Periode
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Headers Container -->
+                                        <div id="year-<?php echo $project_code . '-' . $year; ?>" class="accordion-content bg-gray-50">
+                                            <div class="p-4 space-y-3">
+                                                <?php foreach ($year_data['headers'] as $data): 
+                                                    $header = $data['header'];
+                                                    $details = $data['details'];
+                                                ?>
+                                                    <!-- Level 3: HEADER (Per Period) -->
+                                                    <div class="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
+                                                        <div class="bg-gradient-to-r from-cyan-500 to-cyan-600 px-5 py-4">
+                                                            <div class="flex justify-between items-start">
+                                                                <div class="flex-1">
+                                                                    <div class="flex items-center space-x-3 mb-2">
+                                                                        <h4 class="font-bold text-white text-lg">
+                                                                            <i class="fas fa-file-invoice-dollar mr-2"></i>
+                                                                            <?php echo $header['account_name']; ?>
+                                                                        </h4>
+                                                                        <span class="bg-cyan-700 text-white text-xs px-3 py-1 rounded-full">
+                                                                            <?php echo date('d/m/Y', strtotime($header['periode_mulai'])); ?> - <?php echo date('d/m/Y', strtotime($header['periode_selesai'])); ?>
+                                                                        </span>
+                                                                        <span class="bg-white text-cyan-600 text-xs px-3 py-1 rounded-full font-semibold">
+                                                                            <?php echo count($details); ?> transaksi
+                                                                        </span>
+                                                                    </div>
+                                                                    <div class="text-white text-sm">
+                                                                        <p class="text-cyan-100 text-xs">Dibuat oleh: <?php echo $header['creator_name'] ?: 'System'; ?></p>
+                                                                    </div>
+                                                                </div>
+                                                                <button onclick="toggleAccordion('header-<?php echo $header['id_piutang']; ?>')" 
+                                                                    class="ml-4 bg-cyan-700 hover:bg-cyan-800 text-white px-4 py-2 rounded-lg text-sm transition duration-200">
+                                                                    <i class="fas fa-chevron-down rotate-icon" id="icon-header-<?php echo $header['id_piutang']; ?>"></i>
+                                                                    <span class="ml-2">Detail</span>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+
+                                                        <!-- Summary Bar -->
+                                                        <div class="bg-gradient-to-r from-cyan-50 to-cyan-100 px-5 py-3 border-b border-cyan-200">
+                                                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                                                <div>
+                                                                    <p class="text-cyan-700 font-semibold text-xs mb-1">Saldo Awal</p>
+                                                                    <p class="text-cyan-900 font-bold">
+                                                                        Rp <?php echo number_format($header['beginning_balance_idr'], 2); ?> / 
+                                                                        $ <?php echo number_format($header['beginning_balance_usd'], 2); ?>
+                                                                    </p>
+                                                                </div>
+                                                                <div>
+                                                                    <p class="text-cyan-700 font-semibold text-xs mb-1">Saldo Akhir</p>
+                                                                    <p class="text-blue-600 font-bold text-lg">
+                                                                        Rp <?php echo number_format($header['ending_balance_idr'], 2); ?> / 
+                                                                        $ <?php echo number_format($header['ending_balance_usd'], 2); ?>
+                                                                    </p>
+                                                                </div>
+                                                                <div>
+                                                                    <p class="text-cyan-700 font-semibold text-xs mb-1">Status</p>
+                                                                    <span class="inline-block px-3 py-1 text-xs font-bold rounded-full 
+                                                                        <?php 
+                                                                        echo match($header['status']) {
+                                                                            'draft' => 'bg-gray-200 text-gray-800',
+                                                                            'submitted' => 'bg-yellow-200 text-yellow-800',
+                                                                            'approved' => 'bg-green-200 text-green-800',
+                                                                            'rejected' => 'bg-red-200 text-red-800',
+                                                                            default => 'bg-blue-200 text-blue-800'
+                                                                        };
+                                                                        ?>">
+                                                                        <?php echo strtoupper($header['status']); ?>
+                                                                    </span>
+                                                                </div>
+                                                                <div class="flex items-center justify-end">
+                                                                    <form method="POST" onsubmit="return confirm('Yakin ingin menghapus header ini? Semua detail transaksi akan ikut terhapus!');" class="inline">
+                                                                        <input type="hidden" name="id_piutang" value="<?php echo $header['id_piutang']; ?>">
+                                                                        <button type="submit" name="delete_header" 
+                                                                            class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition duration-200 text-xs font-semibold flex items-center">
+                                                                            <i class="fas fa-trash mr-1"></i> Hapus
+                                                                        </button>
+                                                                    </form>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <!-- Details Table -->
+                                                        <div id="header-<?php echo $header['id_piutang']; ?>" class="accordion-content">
+                                                            <?php if (empty($details)): ?>
+                                                                <div class="p-8 text-center text-gray-500">
+                                                                    <i class="fas fa-inbox text-4xl mb-3"></i>
+                                                                    <p>Belum ada transaksi. Klik "Tambah Transaksi" untuk menambah.</p>
+                                                                </div>
+                                                            <?php else: ?>
+                                                                <div class="overflow-x-auto">
+                                                                    <table class="w-full text-sm">
+                                                                        <thead class="bg-gray-100 border-b-2 border-gray-200">
+                                                                            <tr>
+                                                                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700">Tanggal</th>
+                                                                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700">Deskripsi</th>
+                                                                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700">Penerima</th>
+                                                                                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-700">Debit IDR</th>
+                                                                                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-700">Credit IDR</th>
+                                                                                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-700">Balance IDR</th>
+                                                                                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-700">Debit USD</th>
+                                                                                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-700">Credit USD</th>
+                                                                                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-700">Balance USD</th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody class="divide-y divide-gray-200 bg-white">
+                                                                            <?php foreach ($details as $detail): ?>
+                                                                            <tr class="hover:bg-gray-50 transition duration-150">
+                                                                                <td class="px-4 py-3">
+                                                                                    <div class="text-gray-700 font-medium"><?php echo date('d/m/Y', strtotime($detail['tgl_trx'])); ?></div>
+                                                                                    <?php if ($detail['reff']): ?>
+                                                                                        <div class="text-xs text-gray-500">Ref: <?php echo $detail['reff']; ?></div>
+                                                                                    <?php endif; ?>
+                                                                                </td>
+                                                                                <td class="px-4 py-3 text-gray-700"><?php echo $detail['description']; ?></td>
+                                                                                <td class="px-4 py-3 text-gray-700"><?php echo $detail['recipient'] ?: '-'; ?></td>
+                                                                                <td class="px-4 py-3 text-right <?php echo $detail['debit_idr'] > 0 ? 'text-green-600 font-semibold' : 'text-gray-400'; ?>">
+                                                                                    <?php echo $detail['debit_idr'] > 0 ? 'Rp ' . number_format($detail['debit_idr'], 2) : '-'; ?>
+                                                                                </td>
+                                                                                <td class="px-4 py-3 text-right <?php echo $detail['credit_idr'] > 0 ? 'text-red-600 font-semibold' : 'text-gray-400'; ?>">
+                                                                                    <?php echo $detail['credit_idr'] > 0 ? 'Rp ' . number_format($detail['credit_idr'], 2) : '-'; ?>
+                                                                                </td>
+                                                                                <td class="px-4 py-3 text-right font-bold text-green-600">
+                                                                                    Rp <?php echo number_format($detail['balance_idr'], 2); ?>
+                                                                                </td>
+                                                                                <td class="px-4 py-3 text-right <?php echo $detail['debit_usd'] > 0 ? 'text-green-600 font-semibold' : 'text-gray-400'; ?>">
+                                                                                    <?php echo $detail['debit_usd'] > 0 ? '$ ' . number_format($detail['debit_usd'], 2) : '-'; ?>
+                                                                                </td>
+                                                                                <td class="px-4 py-3 text-right <?php echo $detail['credit_usd'] > 0 ? 'text-red-600 font-semibold' : 'text-gray-400'; ?>">
+                                                                                    <?php echo $detail['credit_usd'] > 0 ? '$ ' . number_format($detail['credit_usd'], 2) : '-'; ?>
+                                                                                </td>
+                                                                                <td class="px-4 py-3 text-right font-bold text-green-600">
+                                                                                    $ <?php echo number_format($detail['balance_usd'], 2); ?>
+                                                                                </td>
+                                                                            </tr>
+                                                                            <?php endforeach; ?>
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                    </div>
+                                                <?php endforeach; ?>
+                                            </div>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
                         </div>
                     </div>
-                </div>
-
-                <div class="p-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <h4 class="font-medium text-gray-800">Detail Transaksi</h4>
-                        <a href="under_construction.php?feature=Lihat%20Detail%20Buku%20Piutang" 
-                            class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition duration-200 text-sm">
-                            <i class="fas fa-eye mr-2"></i> Lihat Detail
-                        </a>
-                    </div>
-
-                    <?php
-                    // Get transaction count
-                    $detail_stmt = $conn->prepare("SELECT COUNT(*) as count FROM buku_piutang_detail WHERE id_piutang = ?");
-                    $detail_stmt->bind_param("i", $header['id_piutang']);
-                    $detail_stmt->execute();
-                    $detail_count = $detail_stmt->get_result()->fetch_assoc()['count'];
-                    
-                    // Get unliquidated count
-                    $unliq_stmt = $conn->prepare("SELECT COUNT(*) as count FROM buku_piutang_unliquidated WHERE id_piutang = ? AND status = 'pending'");
-                    $unliq_stmt->bind_param("i", $header['id_piutang']);
-                    $unliq_stmt->execute();
-                    $unliq_count = $unliq_stmt->get_result()->fetch_assoc()['count'];
-                    ?>
-
-                    <div class="grid grid-cols-2 gap-4 text-sm">
-                        <div class="p-3 bg-blue-50 rounded-lg">
-                            <p class="text-gray-600 mb-1">Total Transaksi</p>
-                            <p class="text-2xl font-bold text-blue-600"><?php echo $detail_count; ?></p>
-                        </div>
-                        <div class="p-3 bg-yellow-50 rounded-lg">
-                            <p class="text-gray-600 mb-1">Unliquidated</p>
-                            <p class="text-2xl font-bold text-yellow-600"><?php echo $unliq_count; ?></p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <?php endwhile; ?>
+                <?php endforeach; ?>
+            <?php endif; ?>
         </div>
     </main>
 
@@ -245,6 +727,131 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
         function toggleCreateForm() {
             const form = document.getElementById('createForm');
             form.classList.toggle('hidden');
+            if (!form.classList.contains('hidden')) {
+                form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                document.getElementById('addDetailForm').classList.add('hidden');
+            }
+        }
+
+        function toggleAddDetailForm() {
+            const form = document.getElementById('addDetailForm');
+            form.classList.toggle('hidden');
+            if (!form.classList.contains('hidden')) {
+                form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                document.getElementById('createForm').classList.add('hidden');
+            }
+        }
+
+        function toggleAccordion(id) {
+            const content = document.getElementById(id);
+            const icon = document.getElementById('icon-' + id);
+            
+            content.classList.toggle('active');
+            icon.classList.toggle('active');
+        }
+
+        // Auto-convert currency based on exchange rate
+        function convertCurrency() {
+            const exrate = parseFloat(document.querySelector('input[name="exrate"]').value) || 1;
+            
+            // Get all input fields
+            const debitIdr = document.querySelector('input[name="debit_idr"]');
+            const debitUsd = document.querySelector('input[name="debit_usd"]');
+            const creditIdr = document.querySelector('input[name="credit_idr"]');
+            const creditUsd = document.querySelector('input[name="credit_usd"]');
+            
+            // Debit IDR -> USD conversion
+            debitIdr.addEventListener('input', function() {
+                if (this.value && exrate > 0) {
+                    debitUsd.value = (parseFloat(this.value) / exrate).toFixed(2);
+                }
+            });
+            
+            // Debit USD -> IDR conversion
+            debitUsd.addEventListener('input', function() {
+                if (this.value && exrate > 0) {
+                    debitIdr.value = (parseFloat(this.value) * exrate).toFixed(2);
+                }
+            });
+            
+            // Credit IDR -> USD conversion
+            creditIdr.addEventListener('input', function() {
+                if (this.value && exrate > 0) {
+                    creditUsd.value = (parseFloat(this.value) / exrate).toFixed(2);
+                }
+            });
+            
+            // Credit USD -> IDR conversion
+            creditUsd.addEventListener('input', function() {
+                if (this.value && exrate > 0) {
+                    creditIdr.value = (parseFloat(this.value) * exrate).toFixed(2);
+                }
+            });
+            
+            // Recalculate when exchange rate changes
+            document.querySelector('input[name="exrate"]').addEventListener('input', function() {
+                // Recalculate based on which field has value
+                if (debitIdr.value > 0) {
+                    debitUsd.value = (parseFloat(debitIdr.value) / parseFloat(this.value)).toFixed(2);
+                } else if (debitUsd.value > 0) {
+                    debitIdr.value = (parseFloat(debitUsd.value) * parseFloat(this.value)).toFixed(2);
+                }
+                
+                if (creditIdr.value > 0) {
+                    creditUsd.value = (parseFloat(creditIdr.value) / parseFloat(this.value)).toFixed(2);
+                } else if (creditUsd.value > 0) {
+                    creditIdr.value = (parseFloat(creditUsd.value) * parseFloat(this.value)).toFixed(2);
+                }
+            });
+        }
+        
+        // Initialize conversion on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            convertCurrency();
+            
+            // Auto-hide success message after 5 seconds and clean URL
+            const successMsg = document.getElementById('successMessage');
+            if (successMsg) {
+                // Clean URL immediately (remove ?success=... parameter)
+                if (window.location.search.includes('success=')) {
+                    const url = new URL(window.location);
+                    url.searchParams.delete('success');
+                    window.history.replaceState({}, document.title, url.pathname + url.search);
+                }
+                
+                // Auto-hide after 5 seconds
+                setTimeout(function() {
+                    successMsg.style.transition = 'opacity 0.5s ease-out';
+                    successMsg.style.opacity = '0';
+                    setTimeout(function() {
+                        successMsg.style.display = 'none';
+                    }, 500);
+                }, 5000);
+            }
+        });
+        
+        // Close success message manually
+        function closeSuccessMessage() {
+            const successMsg = document.getElementById('successMessage');
+            if (successMsg) {
+                successMsg.style.transition = 'opacity 0.3s ease-out';
+                successMsg.style.opacity = '0';
+                setTimeout(function() {
+                    successMsg.style.display = 'none';
+                }, 300);
+            }
+        }
+        
+        // Close error message manually
+        function closeErrorMessage() {
+            const errorMsg = document.getElementById('errorMessage');
+            if (errorMsg) {
+                errorMsg.style.transition = 'opacity 0.3s ease-out';
+                errorMsg.style.opacity = '0';
+                setTimeout(function() {
+                    errorMsg.style.display = 'none';
+                }, 300);
+            }
         }
     </script>
 </body>

@@ -27,7 +27,7 @@ $return_dashboard = match($user_role) {
     'Finance Manager' => '../dashboards/dashboard_fm.php',
     'Staff Accountant' => '../dashboards/dashboard_sa.php',
     'Direktur' => '../dashboards/dashboard_dir.php',
-    default => '../../index.php'
+    default => '../dashboards/dashboard_pm.php'
 };
 
 // Get report header
@@ -45,16 +45,14 @@ if (!$report) {
 }
 
 // Get report details
-$details_stmt = $conn->prepare("SELECT * FROM laporan_keuangan_detail WHERE id_laporan_keu = ? ORDER BY id_detail ASC");
-if ($details_stmt === false) {
-    // Table might not exist or there's a database issue
-    error_log("Database Error in view_report.php: Failed to prepare query for laporan_keuangan_detail. " . $conn->error);
-    // Create empty result set to prevent fatal error
-    $details = [];
-} else {
+$details_stmt = $conn->prepare("SELECT * FROM laporan_keuangan_detail WHERE id_laporan_keu = ? ORDER BY id_detail_keu ASC");
+if ($details_stmt) {
     $details_stmt->bind_param("i", $report_id);
     $details_stmt->execute();
     $details = $details_stmt->get_result();
+} else {
+    // Fallback to avoid fatal errors on bind_param if prepare fails
+    $details = $conn->query("SELECT * FROM laporan_keuangan_detail WHERE id_laporan_keu = " . (int)$report_id . " ORDER BY id_detail_keu ASC");
 }
 ?>
 <!DOCTYPE html>
@@ -167,25 +165,20 @@ if ($details_stmt === false) {
                                 <th class="border border-gray-200 px-3 py-2 text-right text-xs font-medium text-gray-700">Actual</th>
                                 <th class="border border-gray-200 px-3 py-2 text-right text-xs font-medium text-gray-700">Balance</th>
                                 <th class="border border-gray-200 px-3 py-2 text-left text-xs font-medium text-gray-700">Explanation</th>
+                                <th class="border border-gray-200 px-3 py-2 text-center text-xs font-medium text-gray-700">Nota</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php
+                            <?php 
                             $no = 1;
                             $total_requested = 0;
                             $total_actual = 0;
                             $total_balance = 0;
-
-                            // Handle both mysqli_result object and empty array
-                            if (is_array($details)) {
-                                // Empty array - no details available
-                                echo '<tr><td colspan="13" class="border border-gray-200 px-3 py-4 text-center text-gray-500">Tidak ada detail pengeluaran</td></tr>';
-                            } else {
-                                // mysqli_result object
-                                while ($detail = $details->fetch_assoc()):
-                                    $total_requested += $detail['requested'];
-                                    $total_actual += $detail['actual'];
-                                    $total_balance += $detail['balance'];
+                            
+                            while ($detail = $details->fetch_assoc()): 
+                                $total_requested += $detail['requested'];
+                                $total_actual += $detail['actual'];
+                                $total_balance += $detail['balance'];
                             ?>
                             <tr class="hover:bg-gray-50">
                                 <td class="border border-gray-200 px-3 py-2 text-sm"><?php echo $no++; ?></td>
@@ -203,8 +196,24 @@ if ($details_stmt === false) {
                                     <?php echo number_format($detail['balance'], 2); ?>
                                 </td>
                                 <td class="border border-gray-200 px-3 py-2 text-sm"><?php echo htmlspecialchars($detail['explanation']); ?></td>
+                                <td class="border border-gray-200 px-3 py-2 text-center text-sm">
+                                    <?php if (!empty($detail['file_nota'])): ?>
+                                        <?php $isImage = preg_match('/\.(jpg|jpeg|png|gif|bmp|webp|tif|tiff)$/i', $detail['file_nota']); ?>
+                                        <?php if ($isImage): ?>
+                                            <a href="<?php echo htmlspecialchars($detail['file_nota']); ?>" target="_blank" class="inline-flex items-center px-3 py-1 bg-blue-500 text-white rounded-full text-xs hover:bg-blue-600">
+                                                <i class="fas fa-image mr-1"></i> Preview
+                                            </a>
+                                        <?php else: ?>
+                                            <a href="<?php echo htmlspecialchars($detail['file_nota']); ?>" target="_blank" class="inline-flex items-center px-3 py-1 bg-blue-500 text-white rounded-full text-xs hover:bg-blue-600">
+                                                <i class="fas fa-file-pdf mr-1"></i> Unduh
+                                            </a>
+                                        <?php endif; ?>
+                                    <?php else: ?>
+                                        <span class="text-xs text-gray-400">-</span>
+                                    <?php endif; ?>
+                                </td>
                             </tr>
-                            <?php endwhile; } ?>
+                            <?php endwhile; ?>
                         </tbody>
                         <tfoot class="bg-gray-100 font-semibold">
                             <tr>
@@ -232,4 +241,3 @@ if ($details_stmt === false) {
     </main>
 </body>
 </html>
-
