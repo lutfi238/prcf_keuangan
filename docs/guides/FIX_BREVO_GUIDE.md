@@ -24,7 +24,7 @@ Unable to connect to tls://smtp-relay.brevo.com:587
 5. Test lagi!
 ```
 
-**Langsung test:** http://localhost/prcf_keuangan_dashboard/test_email.php
+**Langsung test:** http://localhost/prcf_keuangan/test_email.php
 
 ---
 
@@ -92,7 +92,7 @@ Jika tidak muncul:
 
 Buka browser:
 ```
-http://localhost/prcf_keuangan_dashboard/test_email.php
+http://localhost/prcf_keuangan/test_email.php
 ```
 
 Masukkan email Anda dan test!

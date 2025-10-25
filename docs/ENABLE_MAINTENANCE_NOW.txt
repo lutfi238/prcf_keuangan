@@ -77,7 +77,7 @@
 ║  ──────────                                                                 ║
 ║                                                                              ║
 ║  1. Buka browser                                                            ║
-║  2. Go to: http://localhost/prcf_keuangan_dashboard/login.php              ║
+║  2. Go to: http://localhost/prcf_keuangan/login.php              ║
 ║  3. ✅ Harusnya langsung redirect ke maintenance.php                        ║
 ║  4. ✅ Tampilan: Beautiful page dengan animation!                           ║
 ║                                                                              ║

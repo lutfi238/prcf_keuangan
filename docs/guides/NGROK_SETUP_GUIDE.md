@@ -69,7 +69,7 @@ Copy URL `https://xxxx-xx-xxx-xxx-xx.ngrok-free.app` dan share ke teman Anda!
 
 ### **URL untuk Teman:**
 ```
-https://xxxx-xx-xxx-xxx-xx.ngrok-free.app/prcf_keuangan_dashboard/
+https://xxxx-xx-xxx-xxx-xx.ngrok-free.app/prcf_keuangan/
 ```
 
 ### **Test Login:**
@@ -166,7 +166,7 @@ ngrok http 8080
 **Cek:**
 1. ✅ XAMPP Apache running?
 2. ✅ Ngrok tunnel masih aktif?
-3. ✅ URL yang dishare benar? (harus include `/prcf_keuangan_dashboard/`)
+3. ✅ URL yang dishare benar? (harus include `/prcf_keuangan/`)
 4. ✅ Firewall tidak block ngrok?
 
 ### **OTP Email tidak terkirim saat diakses dari ngrok**
@@ -209,7 +209,7 @@ ngrok http 8080
 
 5. **Copy & Share URL**
    ```
-   https://xxxx.ngrok-free.app/prcf_keuangan_dashboard/
+   https://xxxx.ngrok-free.app/prcf_keuangan/
    ```
 
 6. **Demo ke Teman!** 🎉

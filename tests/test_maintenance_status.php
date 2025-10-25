@@ -4,7 +4,7 @@
  * ========================
  * 
  * File ini untuk test apakah maintenance mode aktif atau tidak.
- * Buka di browser: http://localhost/prcf_keuangan_dashboard/test_maintenance_status.php
+ * Buka di browser: http://localhost/prcf_keuangan/test_maintenance_status.php
  */
 
 require_once '../includes/maintenance_config.php';

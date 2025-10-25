@@ -67,11 +67,11 @@ echo [4/4] Starting Ngrok Tunnel...
 echo ================================================
 echo.
 echo IMPORTANT: Your application will be accessible at:
-echo https://YOUR-NGROK-URL.ngrok-free.app/prcf_keuangan_dashboard/
+echo https://YOUR-NGROK-URL.ngrok-free.app/prcf_keuangan/
 echo.
-echo NOTE: Don't forget to add /prcf_keuangan_dashboard/ at the end!
+echo NOTE: Don't forget to add /prcf_keuangan/ at the end!
 echo.
-echo Share the FULL URL (including /prcf_keuangan_dashboard/) with your friends!
+echo Share the FULL URL (including /prcf_keuangan/) with your friends!
 echo.
 echo Test Users (Password: password):
 echo - PM:  yadi@company.com

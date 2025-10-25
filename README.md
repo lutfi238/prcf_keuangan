@@ -14,7 +14,7 @@
 Proyek ini telah direstrukturisasi untuk kemudahan maintenance dan skalabilitas:
 
 ```
-prcf_keuangan_dashboard/
+prcf_keuangan/
 ├── index.php                           # Entry point utama
 │
 ├── 📂 auth/                            # Sistem autentikasi
@@ -179,7 +179,7 @@ define('SKIP_OTP_FOR_ALL', true);
 
 ### 5️⃣ **Akses Aplikasi**
 ```
-URL: http://localhost/prcf_keuangan_dashboard/
+URL: http://localhost/prcf_keuangan/
 ```
 
 **Default Users:**

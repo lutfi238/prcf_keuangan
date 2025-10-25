@@ -18,7 +18,7 @@ echo.
 echo [2/2] Opening test pages...
 echo.
 
-start http://localhost/prcf_keuangan_dashboard/test_email.php
+start http://localhost/prcf_keuangan/test_email.php
 timeout /t 2 /nobreak >nul
 start https://mail.google.com/mail/u/0/
 

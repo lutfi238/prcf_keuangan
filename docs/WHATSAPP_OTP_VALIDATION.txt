@@ -127,7 +127,7 @@
 ║  🧪 TESTING CHECKLIST                                                       ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
-║  Test URL: http://localhost/prcf_keuangan_dashboard/register.php           ║
+║  Test URL: http://localhost/prcf_keuangan/register.php           ║
 ║                                                                              ║
 ║  Test Cases:                                                                ║
 ║  ───────────                                                                ║
@@ -178,7 +178,7 @@
 ║  🚀 READY TO TEST!                                                          ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
-║  1. Open: http://localhost/prcf_keuangan_dashboard/register.php            ║
+║  1. Open: http://localhost/prcf_keuangan/register.php            ║
 ║                                                                              ║
 ║  2. Try different phone numbers:                                            ║
 ║     - Valid: 081234567890                                                   ║

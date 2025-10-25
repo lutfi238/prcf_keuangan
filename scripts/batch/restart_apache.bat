@@ -16,7 +16,7 @@ echo    DONE! Apache Restarted!
 echo ============================================
 echo.
 echo Maintenance mode should be active now!
-echo Test: http://localhost/prcf_keuangan_dashboard/login.php
+echo Test: http://localhost/prcf_keuangan/login.php
 echo.
 pause
 

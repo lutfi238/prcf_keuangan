@@ -33,7 +33,7 @@ Script ini akan otomatis:
 
 ### 5️⃣ Share URL ke Teman
 ```
-https://xxxx.ngrok-free.app/prcf_keuangan_dashboard/
+https://xxxx.ngrok-free.app/prcf_keuangan/
 ```
 
 ---
@@ -46,7 +46,7 @@ Karena email OTP tidak bekerja dari localhost/ngrok, ada 2 opsi:
 
 Jalankan ini di terminal:
 ```bash
-cd C:\xampp\htdocs\prcf_keuangan_dashboard
+cd C:\xampp\htdocs\prcf_keuangan
 copy login.php login_backup.php
 ```
 
@@ -181,7 +181,7 @@ Lalu di `verify_otp.php`, tampilkan OTP:
 **Teman tidak bisa akses?**
 - Cek XAMPP masih running
 - Cek ngrok masih aktif
-- Share full URL termasuk `/prcf_keuangan_dashboard/`
+- Share full URL termasuk `/prcf_keuangan/`
 
 **Ngrok timeout?**
 - Restart ngrok

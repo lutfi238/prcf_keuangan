@@ -318,7 +318,7 @@ When you have a custom domain:
 
 5. **Test:**
    ```
-   http://localhost/prcf_keuangan_dashboard/test_email.php
+   http://localhost/prcf_keuangan/test_email.php
    ```
 
 ---

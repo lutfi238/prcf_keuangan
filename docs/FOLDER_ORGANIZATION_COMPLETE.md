@@ -8,7 +8,7 @@ Proyek **PRCF Keuangan Dashboard** telah berhasil diorganisir dari struktur flat
 
 ### **Before** (Messy Root Directory)
 ```
-prcf_keuangan_dashboard/
+prcf_keuangan/
 ├── index.php
 ├── login.php
 ├── register.php
@@ -27,7 +27,7 @@ prcf_keuangan_dashboard/
 
 ### **After** (Organized Structure)
 ```
-prcf_keuangan_dashboard/
+prcf_keuangan/
 ├── index.php                    # Only entry point in root
 │
 ├── auth/                        # All authentication
@@ -211,7 +211,7 @@ fetch(`../../api/get_proposals.php?kode_proyek=${id}`)
 function check_maintenance() {
     if (is_maintenance_active()) {
         $script_name = $_SERVER['SCRIPT_NAME'];
-        $depth = substr_count(dirname($script_name), '/') - substr_count('/prcf_keuangan_dashboard', '/');
+        $depth = substr_count(dirname($script_name), '/') - substr_count('/prcf_keuangan', '/');
         $prefix = str_repeat('../', $depth);
         header('Location: ' . $prefix . 'public/maintenance.php');
         exit();

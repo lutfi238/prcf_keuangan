@@ -6,7 +6,7 @@ Setelah memasukkan OTP yang benar, halaman hanya refresh dan tidak masuk ke dash
 ## ✅ Solusi Cepat
 
 ### 1. **Test Session Tool**
-Buka: `http://localhost/prcf_keuangan_dashboard/tests/check_session.php`
+Buka: `http://localhost/prcf_keuangan/tests/check_session.php`
 
 **Jika logged_in = YES:**
 - Klik tombol "Go to Dashboard"
@@ -46,7 +46,7 @@ Time range: All time
 
 ## 🔍 Test Session Persistence
 
-Buka: `http://localhost/prcf_keuangan_dashboard/tests/test_session_write.php`
+Buka: `http://localhost/prcf_keuangan/tests/test_session_write.php`
 
 Follow the steps:
 1. Step 1: Write session

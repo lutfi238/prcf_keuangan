@@ -26,7 +26,7 @@ echo       SMTP_USER: (email Brevo Anda)
 echo       SMTP_PASS: (SMTP key dari dashboard)
 echo.
 echo [4/4] Test Email
-echo     http://localhost/prcf_keuangan_dashboard/test_email.php
+echo     http://localhost/prcf_keuangan/test_email.php
 echo.
 echo ================================================
 echo.

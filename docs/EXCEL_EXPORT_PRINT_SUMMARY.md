@@ -34,13 +34,13 @@ The user requested that Excel export functionality in both the Bank Book (buku_b
 ### 1. Enhanced Export Scripts
 
 **Files Modified**:
-1. `c:\xampp\htdocs\prcf_keuangan_dashboard\pages\books\export_bank_excel.php`
+1. `c:\xampp\htdocs\prcf_keuangan\pages\books\export_bank_excel.php`
    - Added 27 lines of WorksheetOptions configuration
    - Configured portrait orientation
    - Set print margins and paper size
    - Enabled fit-to-page scaling
 
-2. `c:\xampp\htdocs\prcf_keuangan_dashboard\pages\books\export_piutang_excel.php`
+2. `c:\xampp\htdocs\prcf_keuangan\pages\books\export_piutang_excel.php`
    - Added 27 lines of WorksheetOptions configuration
    - Configured portrait orientation
    - Set print margins and paper size

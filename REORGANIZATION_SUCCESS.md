@@ -135,7 +135,7 @@ require_once '../../includes/config.php';
 // Auto-calculates correct path from any location:
 function check_maintenance() {
     $depth = substr_count(dirname($_SERVER['SCRIPT_NAME']), '/') 
-           - substr_count('/prcf_keuangan_dashboard', '/');
+           - substr_count('/prcf_keuangan', '/');
     $prefix = str_repeat('../', $depth);
     header('Location: ' . $prefix . 'public/maintenance.php');
 }
@@ -192,7 +192,7 @@ function check_maintenance() {
 ## 📁 New Folder Structure Summary
 
 ```
-prcf_keuangan_dashboard/
+prcf_keuangan/
 ├── 📄 index.php                # Entry point (root)
 ├── 📖 README.md                # Complete documentation
 │

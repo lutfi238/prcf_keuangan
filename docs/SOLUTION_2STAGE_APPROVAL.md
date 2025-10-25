@@ -17,7 +17,7 @@ Field `approved_by_fm`, `fm_approval_date`, `approved_by_dir`, `dir_approval_dat
 
 Buka file ini di browser:
 ```
-http://localhost/prcf_keuangan_dashboard/CHECK_2STAGE_STATUS.php
+http://localhost/prcf_keuangan/CHECK_2STAGE_STATUS.php
 ```
 
 File ini akan menunjukkan:

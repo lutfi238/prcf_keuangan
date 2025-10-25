@@ -319,10 +319,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_header'])) {
 ## 🔗 Related Files
 
 1. **Primary Implementation**:
-   - `c:\xampp\htdocs\prcf_keuangan_dashboard\pages\books\buku_piutang.php`
+   - `c:\xampp\htdocs\prcf_keuangan\pages\books\buku_piutang.php`
 
 2. **Reference Implementation** (Bank Book Module):
-   - `c:\xampp\htdocs\prcf_keuangan_dashboard\pages\books\buku_bank.php`
+   - `c:\xampp\htdocs\prcf_keuangan\pages\books\buku_bank.php`
 
 3. **Documentation**:
    - This file: `docs\BUKU_PIUTANG_EXCHANGE_RATE_CONVERSION.md`

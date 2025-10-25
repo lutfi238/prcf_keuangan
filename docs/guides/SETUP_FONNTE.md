@@ -89,7 +89,7 @@ Sebelum mulai, pastikan Anda punya:
 
 ### **STEP 4: Update config.php** ⚙️
 
-1. **Buka file:** `c:\xampp\htdocs\prcf_keuangan_dashboard\config.php`
+1. **Buka file:** `c:\xampp\htdocs\prcf_keuangan\config.php`
 
 2. **Cari baris ini:**
    ```php
@@ -150,7 +150,7 @@ Sebelum mulai, pastikan Anda punya:
 
 1. **Buka:**
    ```
-   http://localhost/prcf_keuangan_dashboard/register.php
+   http://localhost/prcf_keuangan/register.php
    ```
 
 2. **Isi form dengan nomor WhatsApp ANDA:**
@@ -172,7 +172,7 @@ Sebelum mulai, pastikan Anda punya:
 
 1. **Buka:**
    ```
-   http://localhost/prcf_keuangan_dashboard/login.php
+   http://localhost/prcf_keuangan/login.php
    ```
 
 2. **Login dengan akun yang baru dibuat:**
@@ -429,7 +429,7 @@ define('WA_OTP_ENABLED', true); // true = enabled, false = disabled
 
 ### **Testing Credentials:**
 ```
-URL: http://localhost/prcf_keuangan_dashboard
+URL: http://localhost/prcf_keuangan
 Test User: pm_test / password123
 WhatsApp: (sesuaikan dengan nomor Anda di database)
 ```
@@ -460,7 +460,7 @@ WhatsApp: (sesuaikan dengan nomor Anda di database)
 
 3. **Test Page:**
    ```
-   http://localhost/prcf_keuangan_dashboard/test_whatsapp_otp.php
+   http://localhost/prcf_keuangan/test_whatsapp_otp.php
    ```
 
 ---

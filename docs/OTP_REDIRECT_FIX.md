@@ -102,7 +102,7 @@ Tool baru untuk debug session state secara visual:
 ```bash
 1. Buka browser (Chrome/Firefox)
 2. Clear cache & cookies (Ctrl+Shift+Delete)
-3. Buka http://localhost/prcf_keuangan_dashboard/auth/login.php
+3. Buka http://localhost/prcf_keuangan/auth/login.php
 4. Login dengan credentials
 5. Masukkan OTP yang dikirim ke email
 6. Klik "Verifikasi & Masuk"
@@ -113,7 +113,7 @@ Tool baru untuk debug session state secara visual:
 
 ```bash
 1. Setelah verifikasi OTP, jika masih belum masuk dashboard
-2. Buka http://localhost/prcf_keuangan_dashboard/tests/check_session.php
+2. Buka http://localhost/prcf_keuangan/tests/check_session.php
 3. Check status "Logged In"
    - ✅ YES → Klik "Go to Dashboard"
    - ❌ NO → Login ulang, ada masalah lain
@@ -294,7 +294,7 @@ Jika masalah masih terjadi setelah mengikuti semua langkah di atas:
 
 2. **Run session debug tool:**
    ```
-   http://localhost/prcf_keuangan_dashboard/tests/check_session.php
+   http://localhost/prcf_keuangan/tests/check_session.php
    ```
 
 3. **Take screenshot of:**

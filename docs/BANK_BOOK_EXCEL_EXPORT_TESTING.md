@@ -14,7 +14,7 @@ Before testing, ensure:
 **Objective**: Verify that the export button appears and downloads an Excel file.
 
 **Steps**:
-1. Navigate to: `http://localhost/prcf_keuangan_dashboard/pages/books/buku_bank.php`
+1. Navigate to: `http://localhost/prcf_keuangan/pages/books/buku_bank.php`
 2. Expand a project that has bank book data
 3. Expand a year
 4. Locate a month/period with transactions
@@ -262,7 +262,7 @@ Before testing, ensure:
 
 **Steps**:
 1. Logout from system
-2. Try to access: `http://localhost/prcf_keuangan_dashboard/pages/books/export_bank_excel.php?id=BH-20251020-073558-25fb`
+2. Try to access: `http://localhost/prcf_keuangan/pages/books/export_bank_excel.php?id=BH-20251020-073558-25fb`
 3. Login as Project Manager (not Finance Manager)
 4. Try to access the export URL again
 5. Login as Finance Manager

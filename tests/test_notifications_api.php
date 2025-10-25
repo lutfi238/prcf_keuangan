@@ -3,7 +3,7 @@
  * Quick Test Script for Notification API
  * 
  * Usage:
- * 1. Open this file in browser: http://localhost/prcf_keuangan_dashboard/test_notifications_api.php
+ * 1. Open this file in browser: http://localhost/prcf_keuangan/test_notifications_api.php
  * 2. Login to your dashboard in another tab
  * 3. This script will fetch notifications for your session
  */

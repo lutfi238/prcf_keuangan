@@ -104,14 +104,14 @@ define('FROM_NAME', 'PRCFI Financial');
 
 ### **Test di Localhost:**
 
-1. Buka: `http://localhost/prcf_keuangan_dashboard/test_email.php`
+1. Buka: `http://localhost/prcf_keuangan/test_email.php`
 2. Masukkan email Anda
 3. Klik "Kirim Test Email"
 4. ✅ Cek inbox email Anda!
 
 ### **Test Login:**
 
-1. Buka: `http://localhost/prcf_keuangan_dashboard/`
+1. Buka: `http://localhost/prcf_keuangan/`
 2. Login: `yadi@company.com` / `password`
 3. Halaman verify OTP muncul
 4. **Cek email Anda** - OTP akan masuk!
@@ -129,7 +129,7 @@ ngrok http 80
 
 ### **2. Buka URL Ngrok:**
 ```
-https://xxxx-xxxx.ngrok-free.app/prcf_keuangan_dashboard/
+https://xxxx-xxxx.ngrok-free.app/prcf_keuangan/
 ```
 
 ### **3. Login:**

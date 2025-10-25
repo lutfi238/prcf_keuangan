@@ -48,7 +48,7 @@ App Password: ganti dengan App Password 16 digit
 
 ```bash
 1. Start XAMPP (Apache + MySQL)
-2. Buka: http://localhost/prcf_keuangan_dashboard/
+2. Buka: http://localhost/prcf_keuangan/
 3. Login dengan: yadi@company.com / password
 4. Lihat halaman verify OTP:
    - Jika kotak kuning muncul = email gagal (normal di localhost)

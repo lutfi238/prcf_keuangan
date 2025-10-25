@@ -167,7 +167,7 @@
 ║  Start Development:                                                         ║
 ║  ──────────────────                                                         ║
 ║  1. Start Apache + MySQL (XAMPP)                                            ║
-║  2. Open: http://localhost/prcf_keuangan_dashboard                          ║
+║  2. Open: http://localhost/prcf_keuangan                          ║
 ║  3. Login: pm_test / password123                                            ║
 ║  4. Test WhatsApp OTP                                                       ║
 ║                                                                              ║
@@ -299,7 +299,7 @@
 Last Updated: October 16, 2025
 System Status: ✅ ALL SYSTEMS GO!
 
-Quick Start: http://localhost/prcf_keuangan_dashboard
+Quick Start: http://localhost/prcf_keuangan
 Login: pm_test / password123
 
 Need Help? → Check QUICK_REFERENCE.md

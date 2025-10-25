@@ -39,7 +39,7 @@ define('MAINTENANCE_MODE', false); // ← Ubah jadi false
 
 ### **Step 1: Edit maintenance_config.php**
 
-**File location:** `c:\xampp\htdocs\prcf_keuangan_dashboard\maintenance_config.php`
+**File location:** `c:\xampp\htdocs\prcf_keuangan\maintenance_config.php`
 
 ```php
 // ============================================================================
@@ -95,7 +95,7 @@ check_maintenance(); // Redirect to maintenance if active
 
 ### **Edit maintenance.php:**
 
-**File location:** `c:\xampp\htdocs\prcf_keuangan_dashboard\maintenance.php`
+**File location:** `c:\xampp\htdocs\prcf_keuangan\maintenance.php`
 
 #### **Change Title:**
 ```php
@@ -309,7 +309,7 @@ if (basename($_SERVER['PHP_SELF']) === 'maintenance.php') {
 ## 📚 **FILES STRUCTURE**
 
 ```
-prcf_keuangan_dashboard/
+prcf_keuangan/
 ├── maintenance_config.php       ← Configuration
 ├── maintenance.php              ← Maintenance page (beautiful)
 ├── under_construction.php       ← Under construction page

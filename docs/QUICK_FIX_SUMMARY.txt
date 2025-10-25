@@ -52,7 +52,7 @@
 ================================================================================
 
 EASY WAY:
-1. Open: http://localhost/prcf_keuangan_dashboard/test_notifications_api.php
+1. Open: http://localhost/prcf_keuangan/test_notifications_api.php
 2. Login to dashboard first, then open the test page
 3. Check if notifications are in chronological order
 

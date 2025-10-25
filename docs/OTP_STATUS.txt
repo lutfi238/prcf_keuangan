@@ -70,7 +70,7 @@
 ║  QUICK TEST                                                                 ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
-║  1. Open: http://localhost/prcf_keuangan_dashboard/login.php               ║
+║  1. Open: http://localhost/prcf_keuangan/login.php               ║
 ║  2. Login dengan: pm_test / password123                                     ║
 ║  3. OTP akan muncul di halaman (besar, biru)                                ║
 ║  4. Copy & paste OTP ke form                                                ║

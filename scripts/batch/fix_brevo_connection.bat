@@ -51,7 +51,7 @@ echo.
 echo ================================================
 echo NEXT STEPS:
 echo 1. RESTART Apache di XAMPP Control Panel
-echo 2. Test lagi: http://localhost/prcf_keuangan_dashboard/test_email.php
+echo 2. Test lagi: http://localhost/prcf_keuangan/test_email.php
 echo ================================================
 echo.
 

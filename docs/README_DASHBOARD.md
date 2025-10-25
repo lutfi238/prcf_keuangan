@@ -200,7 +200,7 @@ FM: Review & Monitor
 ## File Structure
 
 ```
-prcf_keuangan_dashboard/
+prcf_keuangan/
 ├── config.php (Main config)
 ├── config_simple.php (Simple config)
 │
@@ -261,7 +261,7 @@ SOURCE C:/Users/LutFi/Downloads/prcf_keuangan.sql;
 
 ### 3. Akses Aplikasi
 ```
-http://localhost/prcf_keuangan_dashboard/
+http://localhost/prcf_keuangan/
 ```
 
 ### 4. Test Login

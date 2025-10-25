@@ -34,7 +34,7 @@ Save, lalu restart Apache.
 
 ### **Step 2: Test Email**
 
-1. Buka browser: `http://localhost/prcf_keuangan_dashboard/test_email.php`
+1. Buka browser: `http://localhost/prcf_keuangan/test_email.php`
 2. Masukkan **email Anda sendiri**
 3. Klik "Kirim Test Email"
 4. Cek inbox email Anda
@@ -95,7 +95,7 @@ Harus dapat response.
 
 ### **Test Login:**
 
-1. Buka: `http://localhost/prcf_keuangan_dashboard/`
+1. Buka: `http://localhost/prcf_keuangan/`
 2. Login: `yadi@company.com` / `password`
 3. **Cek email** (bukan tampilan halaman!)
 4. Masukkan OTP dari email

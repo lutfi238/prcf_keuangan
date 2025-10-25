@@ -253,16 +253,16 @@ WHERE TABLE_SCHEMA = 'prcf_keuangan'
 ## 📚 Related Documentation
 
 1. **Frontend Implementation**:
-   - [`BUKU_PIUTANG_EXCHANGE_RATE_CONVERSION.md`](file://c:\xampp\htdocs\prcf_keuangan_dashboard\docs\BUKU_PIUTANG_EXCHANGE_RATE_CONVERSION.md) - UI and JavaScript conversion logic
+   - [`BUKU_PIUTANG_EXCHANGE_RATE_CONVERSION.md`](file://c:\xampp\htdocs\prcf_keuangan\docs\BUKU_PIUTANG_EXCHANGE_RATE_CONVERSION.md) - UI and JavaScript conversion logic
 
 2. **Reference Implementation**:
-   - [`EXCHANGE_RATE_FEATURE.md`](file://c:\xampp\htdocs\prcf_keuangan_dashboard\docs\EXCHANGE_RATE_FEATURE.md) - Bank book exchange rate feature
+   - [`EXCHANGE_RATE_FEATURE.md`](file://c:\xampp\htdocs\prcf_keuangan\docs\EXCHANGE_RATE_FEATURE.md) - Bank book exchange rate feature
 
 3. **Related Updates**:
-   - [`BUKU_PIUTANG_PERIOD_STRUCTURE_UPDATE.md`](file://c:\xampp\htdocs\prcf_keuangan_dashboard\docs\BUKU_PIUTANG_PERIOD_STRUCTURE_UPDATE.md) - Period field changes
+   - [`BUKU_PIUTANG_PERIOD_STRUCTURE_UPDATE.md`](file://c:\xampp\htdocs\prcf_keuangan\docs\BUKU_PIUTANG_PERIOD_STRUCTURE_UPDATE.md) - Period field changes
 
 4. **Schema File**:
-   - [`assets/other/prcf_keuangan.sql`](file://c:\xampp\htdocs\prcf_keuangan_dashboard\assets\other\prcf_keuangan.sql) - Updated database schema
+   - [`assets/other/prcf_keuangan.sql`](file://c:\xampp\htdocs\prcf_keuangan\assets\other\prcf_keuangan.sql) - Updated database schema
 
 ---
 

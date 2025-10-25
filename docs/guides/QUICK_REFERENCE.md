@@ -283,7 +283,7 @@ Total: ~Rp 112,000/month
 2. Import database: prcf_keuangan
 3. Copy config.php (update DB credentials if needed)
 4. Start Apache & MySQL
-5. Open: http://localhost/prcf_keuangan_dashboard
+5. Open: http://localhost/prcf_keuangan
 6. Login: pm_test / password123
 7. Done! 🎉
 ```

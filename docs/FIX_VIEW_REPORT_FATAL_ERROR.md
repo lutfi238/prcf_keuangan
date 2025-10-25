@@ -5,7 +5,7 @@
 ### 🔍 Problem
 Fatal error occurred when accessing `view_report.php`:
 ```
-Fatal error: Uncaught Error: Call to a member function bind_param() on bool in C:\xampp\htdocs\prcf_keuangan_dashboard\pages\reports\view_report.php:49
+Fatal error: Uncaught Error: Call to a member function bind_param() on bool in C:\xampp\htdocs\prcf_keuangan\pages\reports\view_report.php:49
 ```
 
 **Root Cause**: The `laporan_keuangan_detail` table either doesn't exist or has database connectivity issues, causing `$conn->prepare()` to return `false` instead of a statement object.

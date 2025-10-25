@@ -59,7 +59,7 @@ notepad C:\xampp\apache\logs\error.log
 **Tool:** `tests/test_otp_manual.php`
 
 ```
-http://localhost/prcf_keuangan_dashboard/tests/test_otp_manual.php
+http://localhost/prcf_keuangan/tests/test_otp_manual.php
 ```
 
 **How to use:**

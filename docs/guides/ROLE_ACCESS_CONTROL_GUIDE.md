@@ -203,25 +203,25 @@ Untuk memastikan sistem bekerja dengan baik:
 
 1. **Login sebagai Finance Manager**
    ```
-   - Coba akses: http://localhost/prcf_keuangan_dashboard/dashboard_sa.php
+   - Coba akses: http://localhost/prcf_keuangan/dashboard_sa.php
    - Expected: Redirect ke unauthorized.php dengan pesan yang sesuai
    ```
 
 2. **Login sebagai Project Manager**
    ```
-   - Coba akses: http://localhost/prcf_keuangan_dashboard/buku_bank.php
+   - Coba akses: http://localhost/prcf_keuangan/buku_bank.php
    - Expected: Redirect ke unauthorized.php dengan pesan yang sesuai
    ```
 
 3. **Login sebagai Staff Accountant**
    ```
-   - Coba akses: http://localhost/prcf_keuangan_dashboard/create_proposal.php
+   - Coba akses: http://localhost/prcf_keuangan/create_proposal.php
    - Expected: Redirect ke unauthorized.php dengan pesan yang sesuai
    ```
 
 4. **Login sebagai Direktur**
    ```
-   - Coba akses: http://localhost/prcf_keuangan_dashboard/validate_report.php
+   - Coba akses: http://localhost/prcf_keuangan/validate_report.php
    - Expected: Redirect ke unauthorized.php dengan pesan yang sesuai
    ```
 

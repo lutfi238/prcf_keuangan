@@ -116,7 +116,7 @@ Test 4 metode redirect:
 
 **How to use:**
 ```
-http://localhost/prcf_keuangan_dashboard/tests/test_redirect_methods.php
+http://localhost/prcf_keuangan/tests/test_redirect_methods.php
 ```
 
 Click each method dan lihat mana yang berhasil preserve session.
@@ -203,7 +203,7 @@ exit();
 ### Step 1: Test Redirect Methods
 
 ```bash
-1. Buka: http://localhost/prcf_keuangan_dashboard/tests/test_redirect_methods.php
+1. Buka: http://localhost/prcf_keuangan/tests/test_redirect_methods.php
 2. Test each method (header, meta, javascript, combined)
 3. Check yang mana SUCCESS (✅ green)
 4. Verify session data preserved
@@ -215,7 +215,7 @@ exit();
 1. Clear browser cache & cookies (PENTING!)
 2. Close ALL browser windows
 3. Open new browser window
-4. Go to: http://localhost/prcf_keuangan_dashboard/auth/login.php
+4. Go to: http://localhost/prcf_keuangan/auth/login.php
 5. Login dengan credentials
 6. Check email untuk OTP
 7. Input OTP di verify_otp.php

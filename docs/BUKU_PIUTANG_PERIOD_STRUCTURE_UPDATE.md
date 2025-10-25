@@ -340,10 +340,10 @@ WHERE periode_bulan IS NULL OR periode_tahun IS NULL;
 ## 🔗 Related Files
 
 1. **Primary Implementation**:
-   - `c:\xampp\htdocs\prcf_keuangan_dashboard\pages\books\buku_piutang.php`
+   - `c:\xampp\htdocs\prcf_keuangan\pages\books\buku_piutang.php`
 
 2. **Database Schema**:
-   - `c:\xampp\htdocs\prcf_keuangan_dashboard\assets\other\prcf_keuangan.sql`
+   - `c:\xampp\htdocs\prcf_keuangan\assets\other\prcf_keuangan.sql`
 
 3. **Documentation**:
    - This file: `docs\BUKU_PIUTANG_PERIOD_STRUCTURE_UPDATE.md`

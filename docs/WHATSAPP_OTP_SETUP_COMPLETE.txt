@@ -73,7 +73,7 @@
 ║  ✅ STEP 3: UPDATE CONFIG.PHP (PASTE TOKEN)                                 ║
 ║  ────────────────────────────────────────────────────────                   ║
 ║                                                                              ║
-║  1. Buka file: c:\xampp\htdocs\prcf_keuangan_dashboard\config.php          ║
+║  1. Buka file: c:\xampp\htdocs\prcf_keuangan\config.php          ║
 ║     (file sudah terbuka di Cursor)                                          ║
 ║                                                                              ║
 ║  2. Cari baris ini (sekitar line 23):                                       ║
@@ -99,7 +99,7 @@
 ║                                                                              ║
 ║  TEST 1: Test Page (Quick Test)                                             ║
 ║  ────────────────────────────────                                           ║
-║  1. Buka: http://localhost/prcf_keuangan_dashboard/test_whatsapp_otp.php   ║
+║  1. Buka: http://localhost/prcf_keuangan/test_whatsapp_otp.php   ║
 ║                                                                              ║
 ║  2. Masukkan nomor WhatsApp KAMU:                                           ║
 ║     Contoh: 081234567890                                                    ║
@@ -114,7 +114,7 @@
 ║                                                                              ║
 ║  TEST 2: Full Flow (Register → Login → OTP)                                 ║
 ║  ────────────────────────────────────────────                               ║
-║  1. Buka: http://localhost/prcf_keuangan_dashboard/register.php            ║
+║  1. Buka: http://localhost/prcf_keuangan/register.php            ║
 ║                                                                              ║
 ║  2. Isi form registrasi:                                                    ║
 ║     Username: test_wa                                                       ║

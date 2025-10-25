@@ -8,7 +8,7 @@
 ## Proposed Structure:
 
 ```
-prcf_keuangan_dashboard/
+prcf_keuangan/
 ├── index.php                   (Keep di root - entry point)
 ├── .htaccess                   (Keep di root - routing)
 ├── .gitignore                 (Keep di root - git config)

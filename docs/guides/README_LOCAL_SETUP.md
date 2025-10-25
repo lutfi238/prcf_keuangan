@@ -33,7 +33,7 @@ When someone clones the repository, they must provide their own credentials. Fol
 
 ## 5. Running
 1. Start Apache & MySQL (e.g., via XAMPP).
-2. Visit `http://localhost/prcf_keuangan_dashboard/index.php`.
+2. Visit `http://localhost/prcf_keuangan/index.php`.
 3. Login credentials are seeded in the database (see README for default emails/passwords).
 
 ## 6. Email OTP Testing

@@ -498,7 +498,7 @@ SOURCE C:/Users/LutFi/Downloads/prcf_keuangan.sql;
 ```
 
 ### **2. Test Login**
-- URL: `http://localhost/prcf_keuangan_dashboard/`
+- URL: `http://localhost/prcf_keuangan/`
 - Test User PM: 
   - Email: `yadi@company.com`
   - Password: `password`
@@ -513,7 +513,7 @@ SOURCE C:/Users/LutFi/Downloads/prcf_keuangan.sql;
   - Password: `password`
 
 ### **3. Test Register**
-- URL: `http://localhost/prcf_keuangan_dashboard/register.php`
+- URL: `http://localhost/prcf_keuangan/register.php`
 - Isi form dengan data baru
 - Cek email untuk OTP (pastikan mail() PHP sudah configured)
 

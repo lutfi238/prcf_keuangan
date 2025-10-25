@@ -14,8 +14,8 @@
 ### **Step 1: Clone Repository**
 
 ```bash
-git clone git@github.com:lutfi238/prcf_keuangan_dashboard.git
-cd prcf_keuangan_dashboard
+git clone git@github.com:lutfi238/prcf_keuangan.git
+cd prcf_keuangan
 ```
 
 ### **Step 2: Database Setup**
@@ -70,7 +70,7 @@ chmod 644 config.php maintenance_config.php
 php -S localhost:8000
 
 # Or use XAMPP/MAMP/Laragon
-# Visit: http://localhost/prcf_keuangan_dashboard
+# Visit: http://localhost/prcf_keuangan
 ```
 
 ---
@@ -202,7 +202,7 @@ Error: Still can access pages
 
 ## 📞 **Support**
 
-- **Issues:** [GitHub Issues](https://github.com/lutfi238/prcf_keuangan_dashboard/issues)
+- **Issues:** [GitHub Issues](https://github.com/lutfi238/prcf_keuangan/issues)
 - **Email:** pblprcf@gmail.com
 - **Documentation:** See `*.md` files in project root
 
