@@ -11,6 +11,7 @@ config.php
 maintenance_config.php
 includes/config.local.php
 includes/maintenance_config.local.php
+Assets/other
 
 # Environment files
 .env

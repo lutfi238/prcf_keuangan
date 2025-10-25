@@ -782,7 +782,7 @@ $month_names = [
 
                                                             <!-- Summary Bar -->
                                                             <div class="bg-gradient-to-r from-purple-50 to-purple-100 px-5 py-3 border-b border-purple-200">
-                                                                <div class="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+                                                                <div class="grid grid-cols-1 md:grid-cols-5 gap-4 text-sm">
                                                                     <div>
                                                                         <p class="text-purple-700 font-semibold text-xs mb-1">Saldo Awal</p>
                                                                         <p class="text-purple-900 font-bold">
@@ -825,11 +825,18 @@ $month_names = [
                                                                             <?php echo strtoupper($header['status_laporan']); ?>
                                                                         </span>
                                                                     </div>
-                                                                    <div class="flex items-center justify-end">
+                                                                    <div class="flex flex-col md:flex-row items-start md:items-center justify-end gap-2">
+                                                                        <!-- Export to Excel Button -->
+                                                                        <a href="export_bank_excel.php?id=<?php echo $header['id_bank_header']; ?>" 
+                                                                            target="_blank"
+                                                                            class="whitespace-nowrap inline-flex items-center px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition duration-200 text-xs font-semibold">
+                                                                            <i class="fas fa-file-excel mr-1"></i> Export to Excel
+                                                                        </a>
+                                                                        <!-- Delete Button -->
                                                                         <form method="POST" onsubmit="return confirm('Yakin ingin menghapus header ini? Semua detail transaksi akan ikut terhapus!');" class="inline">
                                                                             <input type="hidden" name="id_bank_header" value="<?php echo $header['id_bank_header']; ?>">
                                                                             <button type="submit" name="delete_header" 
-                                                                                class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition duration-200 text-xs font-semibold flex items-center">
+                                                                                class="whitespace-nowrap inline-flex items-center px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition duration-200 text-xs font-semibold">
                                                                                 <i class="fas fa-trash mr-1"></i> Hapus
                                                                             </button>
                                                                         </form>

@@ -683,7 +683,14 @@ $piutang_headers = $conn->query("SELECT ph.id_piutang, ph.kode_proyek, p.nama_pr
                                                                         <?php echo strtoupper($header['status']); ?>
                                                                     </span>
                                                                 </div>
-                                                                <div class="flex items-center justify-end">
+                                                                <div class="flex items-center justify-end space-x-2">
+                                                                    <!-- Export to Excel Button -->
+                                                                    <a href="export_piutang_excel.php?id=<?php echo $header['id_piutang']; ?>" 
+                                                                        target="_blank"
+                                                                        class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition duration-200 text-xs font-semibold flex items-center">
+                                                                        <i class="fas fa-file-excel mr-1"></i> Export to Excel
+                                                                    </a>
+                                                                    <!-- Delete Button -->
                                                                     <form method="POST" onsubmit="return confirm('Yakin ingin menghapus header ini? Semua detail transaksi akan ikut terhapus!');" class="inline">
                                                                         <input type="hidden" name="id_piutang" value="<?php echo $header['id_piutang']; ?>">
                                                                         <button type="submit" name="delete_header" 
