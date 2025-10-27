@@ -63,18 +63,18 @@ if ($check_column && $check_column->num_rows > 0) {
         ORDER BY p.created_at DESC");
 }
 
-// Get validated financial reports
+// Get validated financial reports (both pending and approved)
 $reports = $conn->query("SELECT lh.*, u.nama as creator_name,
     u2.nama as fm_name
-    FROM laporan_keuangan_header lh 
+    FROM laporan_keuangan_header lh
     LEFT JOIN user u ON lh.created_by = u.id_user
     LEFT JOIN user u2 ON lh.approved_by = u2.id_user
-    WHERE lh.status_lap IN ('verified', 'approved') 
+    WHERE lh.status_lap IN ('verified', 'approved')
     ORDER BY lh.created_at DESC");
 
-// Get notifications for Direktur (proposals waiting for stage 2 approval)
+// Get notifications for Direktur (proposals waiting for stage 2 approval + reports waiting for approval)
 $notif_proposals = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status = 'approved_fm'")->fetch_assoc()['count'];
-$notif_reports = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'approved' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['count'];
+$notif_reports = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'verified' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['count'];
 $total_notifications = $notif_proposals + $notif_reports;
 
 // Get recent notifications with details
@@ -98,17 +98,17 @@ while ($row = $approved_proposals->fetch_assoc()) {
     ];
 }
 
-// Add approved report notifications
-$approved_reports = $conn->query("SELECT lh.id_laporan_keu, lh.nama_kegiatan, lh.updated_at 
-    FROM laporan_keuangan_header lh 
-    WHERE lh.status_lap = 'approved' AND lh.updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
+// Add report notifications (reports waiting for DIR approval)
+$report_notifs = $conn->query("SELECT lh.id_laporan_keu, lh.nama_kegiatan, lh.updated_at
+    FROM laporan_keuangan_header lh
+    WHERE lh.status_lap = 'verified' AND lh.updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
     ORDER BY lh.updated_at DESC LIMIT 5");
-while ($row = $approved_reports->fetch_assoc()) {
+while ($row = $report_notifs->fetch_assoc()) {
     $is_unread = (strtotime($row['updated_at']) > strtotime($last_notification_check));
     $notifications[] = [
         'type' => 'report',
         'id' => $row['id_laporan_keu'],
-        'title' => 'Laporan disetujui FM: ' . $row['nama_kegiatan'],
+        'title' => 'Laporan menunggu approval: ' . $row['nama_kegiatan'],
         'link' => 'approve_report_dir.php?id=' . $row['id_laporan_keu'],
         'time' => time_elapsed_string($row['updated_at']),
         'is_unread' => $is_unread
@@ -144,8 +144,8 @@ if (isset($_GET['success'])) {
 $total_proyek = $conn->query("SELECT COUNT(*) as count FROM proyek WHERE status_proyek != 'cancelled'")->fetch_assoc()['count'];
 $proposal_masuk = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status = 'approved_fm'")->fetch_assoc()['count'];
 $laporan_approved = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'approved'")->fetch_assoc()['count'];
-$pending_review = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status = 'approved_fm'")->fetch_assoc()['count'] + 
-                  $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE approved_by IS NOT NULL AND approved_by > 0 AND status_lap != 'approved'")->fetch_assoc()['count'];
+$pending_review = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status = 'approved_fm'")->fetch_assoc()['count'] +
+                  $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap IN ('verified', 'approved')")->fetch_assoc()['count'];
 
 // Close session writing to ensure session is fully saved before HTML output
 // This prevents session conflicts when user clicks notification links
@@ -406,9 +406,9 @@ session_write_close();
         <div id="reportsContent" class="tab-content hidden">
             <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
                 <div class="p-6 border-b border-gray-200">
-                    <h3 class="text-lg font-bold text-gray-800">Laporan Keuangan untuk Approval</h3>
+                    <h3 class="text-lg font-bold text-gray-800">Laporan Keuangan</h3>
                 </div>
-                
+
                 <div class="overflow-x-auto">
                     <table class="w-full">
                         <thead class="bg-gray-50">
@@ -423,9 +423,9 @@ session_write_close();
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
-                            <?php 
+                            <?php
                             $no = 1;
-                            while ($report = $reports->fetch_assoc()): 
+                            while ($report = $reports->fetch_assoc()):
                             ?>
                             <tr class="hover:bg-gray-50">
                                 <td class="px-6 py-4 text-sm text-gray-900"><?php echo $no++; ?></td>
@@ -446,10 +446,10 @@ session_write_close();
                                                 ○ FM
                                             </span>
                                         <?php endif; ?>
-                                        
+
                                         <?php if ($report['status_lap'] === 'approved'): ?>
                                             <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                                ✓ DIR
+                                                ✓ DIR (Final)
                                             </span>
                                         <?php else: ?>
                                             <span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
@@ -459,15 +459,30 @@ session_write_close();
                                     </div>
                                 </td>
                                 <td class="px-6 py-4 text-sm">
-                                    <a href="approve_report_dir.php?id=<?php echo $report['id_laporan_keu']; ?>" 
-                                        class="text-purple-600 hover:text-purple-900">
-                                        <i class="fas fa-check-circle mr-1"></i> Approve
-                                    </a>
+                                    <?php if ($report['status_lap'] === 'approved'): ?>
+                                        <!-- Already approved - show View action -->
+                                        <a href="../reports/view_report.php?id=<?php echo $report['id_laporan_keu']; ?>"
+                                            class="text-blue-600 hover:text-blue-900">
+                                            <i class="fas fa-eye mr-1"></i> View
+                                        </a>
+                                    <?php else: ?>
+                                        <!-- Still pending approval - show Approve action -->
+                                        <a href="approve_report_dir.php?id=<?php echo $report['id_laporan_keu']; ?>"
+                                            class="text-purple-600 hover:text-purple-900">
+                                            <i class="fas fa-check-circle mr-1"></i> Approve
+                                        </a>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
                             <?php endwhile; ?>
                         </tbody>
                     </table>
+                    <?php if ($no === 1): ?>
+                    <div class="p-8 text-center text-gray-500">
+                        <i class="fas fa-inbox text-4xl mb-4"></i>
+                        <p class="text-lg">Tidak ada laporan keuangan</p>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -478,14 +493,14 @@ session_write_close();
             document.querySelectorAll('.tab-content').forEach(content => {
                 content.classList.add('hidden');
             });
-            
+
             document.querySelectorAll('.tab-button').forEach(button => {
                 button.classList.remove('border-purple-500', 'text-purple-600');
                 button.classList.add('border-transparent', 'text-gray-500');
             });
-            
+
             document.getElementById(tabName + 'Content').classList.remove('hidden');
-            
+
             const activeButton = document.getElementById('tab' + tabName.charAt(0).toUpperCase() + tabName.slice(1));
             activeButton.classList.remove('border-transparent', 'text-gray-500');
             activeButton.classList.add('border-purple-500', 'text-purple-600');
