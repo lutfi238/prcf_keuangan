@@ -28,10 +28,11 @@ $user_role = $_SESSION['user_role'];
 $user_name = $_SESSION['user_name'];
 $user_id = $_SESSION['user_id'];
 $report_id = $_GET['id'] ?? 0;
+$return_tab = $_GET['return_tab'] ?? 'proposals'; // Default to proposals if not specified
 
 // Handle approval
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve'])) {
-    $stmt = $conn->prepare("UPDATE laporan_keuangan_header SET status_lap = 'approved', approved_by = ? WHERE id_laporan_keu = ?");
+    $stmt = $conn->prepare("UPDATE laporan_keuangan_header SET status_lap = 'approved', approved_by = ?, updated_at = NOW() WHERE id_laporan_keu = ?");
     $stmt->bind_param("ii", $user_id, $report_id);
     
     if ($stmt->execute()) {
@@ -52,6 +53,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve'])) {
     }
 }
 
+// Handle request revision
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_revision'])) {
+    $revision_notes = $_POST['revision_notes'] ?? '';
+    
+    // Check if catatan_fm column exists, otherwise use catatan_finance
+    $check_column = $conn->query("SHOW COLUMNS FROM laporan_keuangan_header LIKE 'catatan_fm'");
+    $column_name = ($check_column->num_rows > 0) ? 'catatan_fm' : 'catatan_finance';
+    
+    $stmt = $conn->prepare("UPDATE laporan_keuangan_header SET status_lap = 'revision_requested', $column_name = ?, updated_at = NOW() WHERE id_laporan_keu = ?");
+    $stmt->bind_param("si", $revision_notes, $report_id);
+    
+    if ($stmt->execute()) {
+        // Get report details
+        $report_stmt = $conn->prepare("SELECT lh.*, u.email, u.nama FROM laporan_keuangan_header lh LEFT JOIN user u ON lh.created_by = u.id_user WHERE id_laporan_keu = ?");
+        $report_stmt->bind_param("i", $report_id);
+        $report_stmt->execute();
+        $report_data = $report_stmt->get_result()->fetch_assoc();
+        
+        // Notify PM
+        send_notification_email(
+            $report_data['email'],
+            'Permintaan Revisi Laporan Keuangan dari FM',
+            'Laporan keuangan Anda untuk kegiatan "' . $report_data['nama_kegiatan'] . '" memerlukan revisi. Catatan: ' . $revision_notes
+        );
+        
+        // Redirect back to dashboard
+        header('Location: ../dashboards/dashboard_fm.php?tab=' . urlencode($return_tab) . '&msg=revision_sent');
+        exit();
+    }
+}
+
 // Get report data
 $stmt = $conn->prepare("SELECT lh.*, u.nama as creator_name, u2.nama as verifier_name 
     FROM laporan_keuangan_header lh 
@@ -63,7 +95,7 @@ $stmt->execute();
 $report = $stmt->get_result()->fetch_assoc();
 
 if (!$report) {
-    header('Location: ../dashboards/dashboard_fm.php');
+    header('Location: ../dashboards/dashboard_fm.php?tab=' . urlencode($return_tab));
     exit();
 }
 
@@ -87,7 +119,7 @@ $items = $details->get_result();
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <div class="flex items-center space-x-4">
-                    <a href="dashboard_fm.php" class="text-gray-600 hover:text-gray-800">
+                    <a href="../dashboards/dashboard_fm.php?tab=<?php echo urlencode($return_tab); ?>" class="text-gray-600 hover:text-gray-800">
                         <i class="fas fa-arrow-left"></i>
                     </a>
                     <h1 class="text-xl font-bold text-gray-800">Approve Laporan Keuangan</h1>
@@ -101,7 +133,7 @@ $items = $details->get_result();
         <?php if (isset($success)): ?>
             <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
                 <?php echo $success; ?>
-                <a href="dashboard_fm.php" class="block mt-2 text-green-800 underline">Kembali ke Dashboard</a>
+                <a href="../dashboards/dashboard_fm.php?tab=<?php echo urlencode($return_tab); ?>" class="block mt-2 text-green-800 underline">Kembali ke Dashboard</a>
             </div>
         <?php endif; ?>
 
@@ -262,12 +294,12 @@ $items = $details->get_result();
             </div>
 
             <!-- Approval Section -->
-            <?php if ($report['status_lap'] === 'verified' && !$report['approved_by']): ?>
+            <?php if (in_array($report['status_lap'], ['submitted', 'verified']) && !$report['approved_by']): ?>
                 <?php if ($user_role === 'Finance Manager'): ?>
             <div class="p-8 border-t border-gray-200 bg-gray-50">
                 <h3 class="text-lg font-bold text-gray-800 mb-4">Approval Finance Manager</h3>
                 
-                <form method="POST" class="space-y-4">
+                <form method="POST" class="space-y-4" id="approvalForm">
                     <div class="bg-white p-6 rounded-lg border border-gray-200">
                         <div class="flex items-start space-x-4">
                             <div class="flex-shrink-0">
@@ -277,7 +309,7 @@ $items = $details->get_result();
                             </div>
                             <div class="flex-1">
                                 <p class="font-medium text-gray-800 mb-2">Tanda Tangan Digital</p>
-                                <p class="text-sm text-gray-600 mb-4">Dengan menekan tombol "Valid", Anda menyetujui laporan keuangan ini dan memberikan tanda tangan digital sebagai Finance Manager.</p>
+                                <p class="text-sm text-gray-600 mb-4">Dengan menekan tombol "Verify", Anda menyetujui laporan keuangan ini dan memberikan tanda tangan digital sebagai Finance Manager.</p>
                                 <div class="flex items-center space-x-2 text-sm text-gray-600">
                                     <i class="fas fa-user"></i>
                                     <span><?php echo $user_name; ?></span>
@@ -288,11 +320,24 @@ $items = $details->get_result();
                         </div>
                     </div>
 
-                    <div class="flex justify-end">
-                        <button type="submit" name="approve"
+                    <!-- Notes Section (Initially Hidden) -->
+                    <div id="notesSection" class="hidden">
+                        <label class="block text-gray-700 text-sm font-medium mb-2">Catatan Revisi untuk Project Manager</label>
+                        <textarea name="revision_notes" id="revisionNotes" rows="4" 
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                            placeholder="Berikan catatan atau alasan mengapa laporan ini perlu direvisi..."></textarea>
+                    </div>
+
+                    <div class="flex justify-end space-x-4">
+                        <button type="button" id="revisionBtn"
+                            class="px-6 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition duration-200 font-medium"
+                            onclick="toggleRevisionMode()">
+                            <i class="fas fa-edit mr-2"></i> Request Revision
+                        </button>
+                        <button type="submit" name="approve" id="approveBtn"
                             class="px-8 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition duration-200 font-medium text-lg"
                             onclick="return confirm('Apakah Anda yakin ingin meng-approve laporan ini?\n\nLaporan akan dikirim ke Direktur untuk approval final.')">
-                            <i class="fas fa-check-circle mr-2"></i> Valid - Approve Laporan
+                            <i class="fas fa-check-circle mr-2"></i> Verify
                         </button>
                     </div>
                 </form>
@@ -320,5 +365,62 @@ $items = $details->get_result();
             <?php endif; ?>
         </div>
     </main>
+
+    <script>
+        let revisionMode = false;
+
+        function toggleRevisionMode() {
+            const notesSection = document.getElementById('notesSection');
+            const revisionBtn = document.getElementById('revisionBtn');
+            const approveBtn = document.getElementById('approveBtn');
+            const revisionNotes = document.getElementById('revisionNotes');
+            const form = document.getElementById('approvalForm');
+
+            if (!revisionMode) {
+                // Switch to revision mode
+                revisionMode = true;
+                notesSection.classList.remove('hidden');
+                
+                // Change Request Revision button to Cancel
+                revisionBtn.innerHTML = '<i class="fas fa-times mr-2"></i> Cancel';
+                revisionBtn.classList.remove('bg-yellow-500', 'hover:bg-yellow-600');
+                revisionBtn.classList.add('bg-gray-500', 'hover:bg-gray-600');
+                
+                // Change Verify button to Send to PM
+                approveBtn.type = 'submit';
+                approveBtn.name = 'request_revision';
+                approveBtn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i> Send to PM';
+                approveBtn.classList.remove('bg-green-500', 'hover:bg-green-600');
+                approveBtn.classList.add('bg-orange-500', 'hover:bg-orange-600');
+                approveBtn.onclick = function() {
+                    if (!revisionNotes.value.trim()) {
+                        alert('Mohon berikan catatan revisi sebelum mengirim ke PM.');
+                        return false;
+                    }
+                    return confirm('Apakah Anda yakin ingin mengirim permintaan revisi ke Project Manager?');
+                };
+            } else {
+                // Switch back to normal mode
+                revisionMode = false;
+                notesSection.classList.add('hidden');
+                revisionNotes.value = '';
+                
+                // Restore Request Revision button
+                revisionBtn.innerHTML = '<i class="fas fa-edit mr-2"></i> Request Revision';
+                revisionBtn.classList.remove('bg-gray-500', 'hover:bg-gray-600');
+                revisionBtn.classList.add('bg-yellow-500', 'hover:bg-yellow-600');
+                
+                // Restore Verify button
+                approveBtn.type = 'submit';
+                approveBtn.name = 'approve';
+                approveBtn.innerHTML = '<i class="fas fa-check-circle mr-2"></i> Verify';
+                approveBtn.classList.remove('bg-orange-500', 'hover:bg-orange-600');
+                approveBtn.classList.add('bg-green-500', 'hover:bg-green-600');
+                approveBtn.onclick = function() {
+                    return confirm('Apakah Anda yakin ingin meng-approve laporan ini?\n\nLaporan akan dikirim ke Direktur untuk approval final.');
+                };
+            }
+        }
+    </script>
 </body>
 </html>

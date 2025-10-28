@@ -25,6 +25,7 @@ if ($_SESSION['user_role'] !== 'Direktur') {
 $user_name = $_SESSION['user_name'];
 $user_id = $_SESSION['user_id'];
 $report_id = $_GET['id'] ?? 0;
+$return_tab = $_GET['return_tab'] ?? 'reports'; // Default to reports if not specified
 
 // Handle final approval
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['final_approve'])) {
@@ -88,7 +89,7 @@ $stmt->execute();
 $report = $stmt->get_result()->fetch_assoc();
 
 if (!$report) {
-    header('Location: ../dashboards/dashboard_dir.php');
+    header('Location: ../dashboards/dashboard_dir.php?tab=' . urlencode($return_tab));
     exit();
 }
 
@@ -112,7 +113,7 @@ $items = $details->get_result();
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <div class="flex items-center space-x-4">
-                    <a href="dashboard_dir.php" class="text-gray-600 hover:text-gray-800">
+                    <a href="../dashboards/dashboard_dir.php?tab=<?php echo urlencode($return_tab); ?>" class="text-gray-600 hover:text-gray-800">
                         <i class="fas fa-arrow-left"></i>
                     </a>
                     <h1 class="text-xl font-bold text-gray-800">Final Approval - Direktur</h1>
@@ -126,7 +127,7 @@ $items = $details->get_result();
         <?php if (isset($success)): ?>
             <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
                 <?php echo $success; ?>
-                <a href="dashboard_dir.php" class="block mt-2 text-green-800 underline">Kembali ke Dashboard</a>
+                <a href="../dashboards/dashboard_dir.php?tab=<?php echo urlencode($return_tab); ?>" class="block mt-2 text-green-800 underline">Kembali ke Dashboard</a>
             </div>
         <?php endif; ?>
 

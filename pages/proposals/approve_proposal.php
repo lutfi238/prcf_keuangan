@@ -21,6 +21,7 @@ $user_name = $_SESSION['user_name'];
 $user_id = $_SESSION['user_id'];
 $user_role = $_SESSION['user_role'];
 $proposal_id = $_GET['id'] ?? 0;
+$return_tab = $_GET['return_tab'] ?? 'proposals'; // Default to proposals if not specified
 
 // Handle approval - 2-STAGE APPROVAL SYSTEM
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve'])) {
@@ -121,7 +122,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve'])) {
                 );
             }
             
-            header('Location: ../dashboards/dashboard_dir.php?success=proposal_approved_final');
+            header('Location: ../dashboards/dashboard_dir.php?success=proposal_approved_final&tab=' . urlencode($return_tab));
             exit();
         }
     } else {
@@ -144,7 +145,7 @@ $stmt->execute();
 $proposal = $stmt->get_result()->fetch_assoc();
 
 if (!$proposal) {
-    header('Location: ../dashboards/dashboard_dir.php');
+    header('Location: ../dashboards/dashboard_dir.php?tab=' . urlencode($return_tab));
     exit();
 }
 ?>
@@ -162,7 +163,7 @@ if (!$proposal) {
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <div class="flex items-center space-x-4">
-                    <a href="dashboard_dir.php" class="text-gray-600 hover:text-gray-800">
+                    <a href="../dashboards/dashboard_dir.php?tab=<?php echo urlencode($return_tab); ?>" class="text-gray-600 hover:text-gray-800">
                         <i class="fas fa-arrow-left"></i>
                     </a>
                     <h1 class="text-xl font-bold text-gray-800">Approve Proposal</h1>
@@ -176,7 +177,7 @@ if (!$proposal) {
         <?php if (isset($success)): ?>
             <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
                 <?php echo $success; ?>
-                <a href="dashboard_dir.php" class="block mt-2 text-green-800 underline">Kembali ke Dashboard</a>
+                <a href="../dashboards/dashboard_dir.php?tab=<?php echo urlencode($return_tab); ?>" class="block mt-2 text-green-800 underline">Kembali ke Dashboard</a>
             </div>
         <?php endif; ?>
 

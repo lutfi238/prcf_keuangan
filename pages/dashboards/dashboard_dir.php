@@ -383,12 +383,12 @@ session_write_close();
                                 </td>
                                 <td class="px-6 py-4 text-sm">
                                     <?php if ($proposal['status'] === 'approved_fm'): ?>
-                                        <a href="../proposals/approve_proposal.php?id=<?php echo $proposal['id_proposal']; ?>" 
+                                        <a href="../proposals/approve_proposal.php?id=<?php echo $proposal['id_proposal']; ?>&return_tab=proposals" 
                                             class="text-purple-600 hover:text-purple-900 font-medium">
                                             <i class="fas fa-clipboard-check mr-1"></i> Approve Stage 2
                                         </a>
                                     <?php else: ?>
-                                        <a href="../proposals/review_proposal_dir.php?id=<?php echo $proposal['id_proposal']; ?>" 
+                                        <a href="../proposals/review_proposal_dir.php?id=<?php echo $proposal['id_proposal']; ?>&return_tab=proposals" 
                                             class="text-gray-600 hover:text-gray-900">
                                             <i class="fas fa-eye mr-1"></i> View
                                         </a>
@@ -461,13 +461,13 @@ session_write_close();
                                 <td class="px-6 py-4 text-sm">
                                     <?php if ($report['status_lap'] === 'approved'): ?>
                                         <!-- Already approved - show View action -->
-                                        <a href="../reports/view_report.php?id=<?php echo $report['id_laporan_keu']; ?>"
+                                        <a href="../reports/view_report.php?id=<?php echo $report['id_laporan_keu']; ?>&return_tab=reports"
                                             class="text-blue-600 hover:text-blue-900">
                                             <i class="fas fa-eye mr-1"></i> View
                                         </a>
                                     <?php else: ?>
                                         <!-- Still pending approval - show Approve action -->
-                                        <a href="approve_report_dir.php?id=<?php echo $report['id_laporan_keu']; ?>"
+                                        <a href="../reports/approve-report-dir.php?id=<?php echo $report['id_laporan_keu']; ?>&return_tab=reports"
                                             class="text-purple-600 hover:text-purple-900">
                                             <i class="fas fa-check-circle mr-1"></i> Approve
                                         </a>
@@ -489,7 +489,7 @@ session_write_close();
     </main>
 
     <script>
-        function showTab(tabName) {
+        function showTab(tabName, updateUrl = true) {
             document.querySelectorAll('.tab-content').forEach(content => {
                 content.classList.add('hidden');
             });
@@ -504,7 +504,24 @@ session_write_close();
             const activeButton = document.getElementById('tab' + tabName.charAt(0).toUpperCase() + tabName.slice(1));
             activeButton.classList.remove('border-transparent', 'text-gray-500');
             activeButton.classList.add('border-purple-500', 'text-purple-600');
+
+            // Update URL without reloading page
+            if (updateUrl) {
+                const url = new URL(window.location);
+                url.searchParams.set('tab', tabName);
+                window.history.replaceState({}, '', url);
+            }
         }
+
+        // On page load, check for tab parameter and restore it
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const activeTab = urlParams.get('tab');
+            
+            if (activeTab && (activeTab === 'proposals' || activeTab === 'reports')) {
+                showTab(activeTab, false);
+            }
+        });
 
         function toggleNotifications() {
             const panel = document.getElementById('notificationPanel');

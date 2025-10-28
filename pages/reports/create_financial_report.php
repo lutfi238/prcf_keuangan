@@ -235,12 +235,12 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
 
                         <div>
                             <label class="block text-gray-700 text-sm font-medium mb-2">Nama Proposal *</label>
-                            <select name="id_proposal" id="id_proposal" required 
+                            <select name="id_proposal" id="id_proposal" required
                                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
                                 <option value="">Pilih Proposal</option>
                             </select>
                             <p class="text-xs text-gray-500 mt-1">
-                                <i class="fas fa-info-circle mr-1"></i>Pilih proposal yang terkait dengan kode proyek
+                                <i class="fas fa-info-circle mr-1"></i>Hanya proposal yang belum digunakan untuk laporan keuangan yang akan muncul
                             </p>
                         </div>
                     </div>
@@ -359,7 +359,19 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
                             });
                             proposalSelect.disabled = false;
                         } else {
-                            proposalSelect.innerHTML = '<option value="">Tidak ada proposal untuk proyek ini</option>';
+                            // Check if there are any proposals at all for this project
+                            fetch(`../../api/get_proposals.php?kode_proyek=${encodeURIComponent(kode_projek)}&include_used=1`)
+                                .then(response => response.json())
+                                .then(allData => {
+                                    if (allData.success && allData.proposals.length > 0) {
+                                        proposalSelect.innerHTML = '<option value="">Semua proposal telah digunakan untuk laporan keuangan</option>';
+                                    } else {
+                                        proposalSelect.innerHTML = '<option value="">Tidak ada proposal untuk proyek ini</option>';
+                                    }
+                                })
+                                .catch(error => {
+                                    proposalSelect.innerHTML = '<option value="">Tidak ada proposal untuk proyek ini</option>';
+                                });
                         }
                     })
                     .catch(error => {
