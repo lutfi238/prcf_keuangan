@@ -115,7 +115,7 @@ function check_maintenance() {
     if (is_maintenance_active()) {
         // Determine correct path based on current file location
         $script_name = $_SERVER['SCRIPT_NAME'];
-        $depth = substr_count(dirname($script_name), '/') - substr_count('/prcf_keuangan_dashboard', '/');
+        $depth = substr_count(dirname($script_name), '/') - substr_count('/prcf_keuangan', '/');
         $prefix = str_repeat('../', $depth);
         header('Location: ' . $prefix . 'public/maintenance.php');
         exit();
