@@ -277,27 +277,75 @@ session_write_close();
                     </p>
                 </div>
                 
-                <form method="POST" class="space-y-4">
-                    <div>
-                        <label class="block text-gray-700 text-sm font-medium mb-2">Catatan untuk Project Manager (Opsional)</label>
-                        <textarea name="catatan" rows="4" 
+                <form method="POST" class="space-y-4" id="reviewForm">
+                    <div id="revisionNotesContainer" class="hidden">
+                        <label class="block text-gray-700 text-sm font-medium mb-2">Catatan untuk Project Manager *</label>
+                        <textarea name="catatan" id="catatanField" rows="4" 
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
                             placeholder="Berikan catatan atau komentar terkait proposal ini..."></textarea>
                     </div>
 
                     <div class="flex justify-end space-x-4">
-                        <button type="submit" name="request_revision"
+                        <button type="button" id="revisionBtn"
                             class="px-6 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition duration-200 font-medium"
-                            onclick="return confirm('Apakah Anda yakin ingin meminta revisi proposal ini?')">
-                            <i class="fas fa-edit mr-2"></i> Minta Revisi
+                            onclick="toggleRevisionMode()">
+                            <i class="fas fa-edit mr-2"></i> <span id="revisionBtnText">Minta Revisi</span>
                         </button>
-                        <button type="submit" name="approve"
+                        <button type="submit" name="approve" id="approveBtn"
                             class="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition duration-200 font-medium"
                             onclick="return confirm('Setujui proposal ini? (Stage 1/2 - menunggu Direktur)')">
-                            <i class="fas fa-check-circle mr-2"></i> Setujui (Stage 1/2)
+                            <i class="fas fa-check-circle mr-2"></i> <span id="approveBtnText">Setujui (Stage 1/2)</span>
                         </button>
                     </div>
                 </form>
+                
+                <script>
+                let revisionMode = false;
+                
+                function toggleRevisionMode() {
+                    revisionMode = !revisionMode;
+                    const container = document.getElementById('revisionNotesContainer');
+                    const revisionBtn = document.getElementById('revisionBtn');
+                    const approveBtn = document.getElementById('approveBtn');
+                    const revisionBtnText = document.getElementById('revisionBtnText');
+                    const approveBtnText = document.getElementById('approveBtnText');
+                    const catatanField = document.getElementById('catatanField');
+                    const form = document.getElementById('reviewForm');
+                    
+                    if (revisionMode) {
+                        // Show revision notes
+                        container.classList.remove('hidden');
+                        catatanField.required = true;
+                        
+                        // Change button labels
+                        revisionBtnText.textContent = 'Batal';
+                        revisionBtn.classList.remove('bg-yellow-500', 'hover:bg-yellow-600');
+                        revisionBtn.classList.add('bg-gray-500', 'hover:bg-gray-600');
+                        
+                        approveBtnText.textContent = 'Kirim Revisi ke PM';
+                        approveBtn.setAttribute('name', 'request_revision');
+                        approveBtn.classList.remove('bg-green-500', 'hover:bg-green-600');
+                        approveBtn.classList.add('bg-red-500', 'hover:bg-red-600');
+                        approveBtn.onclick = function() { return confirm('Kirim permintaan revisi ke Project Manager?'); };
+                    } else {
+                        // Hide revision notes
+                        container.classList.add('hidden');
+                        catatanField.required = false;
+                        catatanField.value = '';
+                        
+                        // Restore button labels
+                        revisionBtnText.textContent = 'Minta Revisi';
+                        revisionBtn.classList.remove('bg-gray-500', 'hover:bg-gray-600');
+                        revisionBtn.classList.add('bg-yellow-500', 'hover:bg-yellow-600');
+                        
+                        approveBtnText.textContent = 'Setujui (Stage 1/2)';
+                        approveBtn.setAttribute('name', 'approve');
+                        approveBtn.classList.remove('bg-red-500', 'hover:bg-red-600');
+                        approveBtn.classList.add('bg-green-500', 'hover:bg-green-600');
+                        approveBtn.onclick = function() { return confirm('Setujui proposal ini? (Stage 1/2 - menunggu Direktur)'); };
+                    }
+                }
+                </script>
             </div>
             <?php elseif ($proposal['status'] === 'approved_fm'): ?>
             <div class="p-8 border-t border-gray-200 bg-green-50">

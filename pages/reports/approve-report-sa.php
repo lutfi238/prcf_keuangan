@@ -225,15 +225,10 @@ $items = $details->get_result();
                                 <td class="border border-gray-300 px-2 py-2 text-center">
                                     <?php if (!empty($item['file_nota'])): ?>
                                         <?php $isImage = preg_match('/\.(jpg|jpeg|png|gif|bmp|webp|tif|tiff)$/i', $item['file_nota']); ?>
-                                        <?php if ($isImage): ?>
-                                            <a href="<?php echo htmlspecialchars($item['file_nota']); ?>" target="_blank" class="inline-flex items-center px-3 py-1 bg-blue-500 text-white rounded-full text-xs hover:bg-blue-600">
-                                                <i class="fas fa-image mr-1"></i> Preview
-                                            </a>
-                                        <?php else: ?>
-                                            <a href="<?php echo htmlspecialchars($item['file_nota']); ?>" target="_blank" class="inline-flex items-center px-3 py-1 bg-blue-500 text-white rounded-full text-xs hover:bg-blue-600">
-                                                <i class="fas fa-file-pdf mr-1"></i> Unduh
-                                            </a>
-                                        <?php endif; ?>
+                                        <button onclick="previewReceipt('<?php echo htmlspecialchars($item['file_nota']); ?>', <?php echo $isImage ? 'true' : 'false'; ?>)" 
+                                            class="inline-flex items-center px-3 py-1 bg-blue-500 text-white rounded-full text-xs hover:bg-blue-600">
+                                            <i class="fas fa-<?php echo $isImage ? 'image' : 'file-pdf'; ?> mr-1"></i> Preview
+                                        </button>
                                     <?php else: ?>
                                         <span class="text-xs text-gray-400">-</span>
                                     <?php endif; ?>
@@ -300,5 +295,63 @@ $items = $details->get_result();
             <?php endif; ?>
         </div>
     </main>
+
+    <!-- Receipt Preview Modal -->
+    <div id="receiptPreviewModal" class="fixed z-50 inset-0 bg-black/80 hidden items-center justify-center">
+        <div class="flex flex-col items-center max-w-7xl max-h-screen p-4">
+            <button onclick="closeReceiptPreview()" class="mb-4 self-end text-white bg-black/60 hover:bg-black/80 px-4 py-2 rounded-lg">
+                <i class="fas fa-times text-lg mr-2"></i>Close
+            </button>
+            <img id="modalReceiptImage" src="" alt="Preview" class="hidden max-h-[85vh] max-w-full rounded shadow-2xl" />
+            <embed id="modalReceiptPDF" src="" type="application/pdf" class="hidden w-full h-[85vh] rounded shadow-2xl" />
+        </div>
+    </div>
+
+    <script>
+        function previewReceipt(filePath, isImage) {
+            const modal = document.getElementById('receiptPreviewModal');
+            const imgElement = document.getElementById('modalReceiptImage');
+            const pdfElement = document.getElementById('modalReceiptPDF');
+            
+            // Hide both initially
+            imgElement.classList.add('hidden');
+            pdfElement.classList.add('hidden');
+            
+            if (isImage) {
+                imgElement.src = filePath;
+                imgElement.classList.remove('hidden');
+            } else {
+                pdfElement.src = filePath;
+                pdfElement.classList.remove('hidden');
+            }
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+        
+        function closeReceiptPreview() {
+            const modal = document.getElementById('receiptPreviewModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            
+            // Clear sources
+            document.getElementById('modalReceiptImage').src = '';
+            document.getElementById('modalReceiptPDF').src = '';
+        }
+        
+        // Close on click outside
+        document.getElementById('receiptPreviewModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeReceiptPreview();
+            }
+        });
+        
+        // Close on escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeReceiptPreview();
+            }
+        });
+    </script>
 </body>
 </html>

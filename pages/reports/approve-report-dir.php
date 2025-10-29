@@ -271,7 +271,7 @@ $items = $details->get_result();
             <!-- Final Approval Section -->
             <?php if ($report['approved_by'] && $report['status_lap'] !== 'approved'): ?>
             <div class="p-8 border-t border-gray-200 bg-purple-50">
-                <h3 class="text-lg font-bold text-gray-800 mb-4">Final Approval - Direktur</h3>
+                <h3 class="text-lg font-bold text-gray-800 mb-4">Final Approval - Direktur (Stage 2/2)</h3>
                 
                 <form method="POST" class="space-y-4">
                     <div class="bg-white p-6 rounded-lg border border-purple-200">
@@ -311,8 +311,8 @@ $items = $details->get_result();
                     <div class="flex justify-end">
                         <button type="submit" name="final_approve"
                             class="px-8 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition duration-200 font-medium text-lg shadow-lg"
-                            onclick="return confirm('KONFIRMASI FINAL APPROVAL\n\nApakah Anda yakin ingin memberikan approval final?\n\nSetelah di-approve, laporan tidak dapat diubah lagi.')">
-                            <i class="fas fa-check-double mr-2"></i> Valid - Final Approval
+                            onclick="return confirm('KONFIRMASI FINAL APPROVAL (Stage 2/2)\n\nApakah Anda yakin ingin memberikan approval final?\n\nSetelah di-approve, laporan tidak dapat diubah lagi.')">
+                            <i class="fas fa-check-double mr-2"></i> Approve (Stage 2/2)
                         </button>
                     </div>
                 </form>

@@ -267,51 +267,126 @@ session_write_close();
         </div>
 
         <!-- Stats Overview -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div class="bg-gradient-to-br from-purple-50 to-purple-100 p-6 rounded-lg border border-purple-200">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm text-gray-600 mb-1">Total Proyek</p>
-                        <p class="text-3xl font-bold text-gray-800"><?php echo $total_proyek; ?></p>
+        <div class="mb-8">
+            <!-- Proposals Section -->
+            <div class="mb-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3 flex items-center">
+                    <i class="fas fa-file-alt text-blue-600 mr-2"></i>
+                    Proposals Overview
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-lg border border-blue-200">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-600 mb-1">Incoming for Approval</p>
+                                <p class="text-3xl font-bold text-gray-800" data-stat="pending_proposals"><?php echo $proposal_masuk; ?></p>
+                                <p class="text-xs text-gray-500 mt-1">Awaiting Director approval (Stage 2/2)</p>
+                            </div>
+                            <div class="bg-blue-500 p-3 rounded-full">
+                                <i class="fas fa-inbox text-white text-2xl"></i>
+                            </div>
+                        </div>
                     </div>
-                    <div class="bg-purple-500 p-3 rounded-full">
-                        <i class="fas fa-project-diagram text-white text-2xl"></i>
+
+                    <div class="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-lg border border-green-200">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-600 mb-1">Approved (Final)</p>
+                                <p class="text-3xl font-bold text-gray-800">
+                                    <?php echo $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status = 'approved'")->fetch_assoc()['count']; ?>
+                                </p>
+                                <p class="text-xs text-gray-500 mt-1">Finalized by Director</p>
+                            </div>
+                            <div class="bg-green-500 p-3 rounded-full">
+                                <i class="fas fa-check-double text-white text-2xl"></i>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-lg border border-blue-200">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm text-gray-600 mb-1">Proposal Masuk</p>
-                        <p class="text-3xl font-bold text-gray-800"><?php echo $proposal_masuk; ?></p>
+            <!-- Financial Reports Section -->
+            <div class="mb-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3 flex items-center">
+                    <i class="fas fa-chart-line text-purple-600 mr-2"></i>
+                    Financial Reports Overview
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-gradient-to-br from-purple-50 to-purple-100 p-6 rounded-lg border border-purple-200">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-600 mb-1">Submitted & Verified</p>
+                                <p class="text-3xl font-bold text-gray-800" data-stat="pending_reports">
+                                    <?php echo $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap IN ('verified', 'approved_fm')")->fetch_assoc()['count']; ?>
+                                </p>
+                                <p class="text-xs text-gray-500 mt-1">Ready for Director approval</p>
+                            </div>
+                            <div class="bg-purple-500 p-3 rounded-full">
+                                <i class="fas fa-file-invoice-dollar text-white text-2xl"></i>
+                            </div>
+                        </div>
                     </div>
-                    <div class="bg-blue-500 p-3 rounded-full">
-                        <i class="fas fa-file-alt text-white text-2xl"></i>
+
+                    <div class="bg-gradient-to-br from-teal-50 to-teal-100 p-6 rounded-lg border border-teal-200">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-600 mb-1">Approved (Final)</p>
+                                <p class="text-3xl font-bold text-gray-800" data-stat="approved_reports"><?php echo $laporan_approved; ?></p>
+                                <p class="text-xs text-gray-500 mt-1">Finalized by Director</p>
+                            </div>
+                            <div class="bg-teal-500 p-3 rounded-full">
+                                <i class="fas fa-check-circle text-white text-2xl"></i>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div class="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-lg border border-green-200">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm text-gray-600 mb-1">Laporan Approved</p>
-                        <p class="text-3xl font-bold text-gray-800"><?php echo $laporan_approved; ?></p>
+            <!-- Projects Section -->
+            <div>
+                <h3 class="text-lg font-bold text-gray-800 mb-3 flex items-center">
+                    <i class="fas fa-project-diagram text-orange-600 mr-2"></i>
+                    Projects Overview
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-gradient-to-br from-orange-50 to-orange-100 p-6 rounded-lg border border-orange-200">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-600 mb-1">Total Projects</p>
+                                <p class="text-3xl font-bold text-gray-800"><?php echo $total_proyek; ?></p>
+                            </div>
+                            <div class="bg-orange-500 p-3 rounded-full">
+                                <i class="fas fa-folder text-white text-2xl"></i>
+                            </div>
+                        </div>
                     </div>
-                    <div class="bg-green-500 p-3 rounded-full">
-                        <i class="fas fa-check-circle text-white text-2xl"></i>
-                    </div>
-                </div>
-            </div>
 
-            <div class="bg-gradient-to-br from-yellow-50 to-yellow-100 p-6 rounded-lg border border-yellow-200">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm text-gray-600 mb-1">Pending Review</p>
-                        <p class="text-3xl font-bold text-gray-800"><?php echo $pending_review; ?></p>
+                    <div class="bg-gradient-to-br from-cyan-50 to-cyan-100 p-6 rounded-lg border border-cyan-200">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-600 mb-1">Active Projects</p>
+                                <p class="text-3xl font-bold text-gray-800">
+                                    <?php echo $conn->query("SELECT COUNT(*) as count FROM proyek WHERE status_proyek IN ('planning', 'ongoing')")->fetch_assoc()['count']; ?>
+                                </p>
+                            </div>
+                            <div class="bg-cyan-500 p-3 rounded-full">
+                                <i class="fas fa-spinner text-white text-2xl"></i>
+                            </div>
+                        </div>
                     </div>
-                    <div class="bg-yellow-500 p-3 rounded-full">
-                        <i class="fas fa-clock text-white text-2xl"></i>
+
+                    <div class="bg-gradient-to-br from-indigo-50 to-indigo-100 p-6 rounded-lg border border-indigo-200">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-600 mb-1">Completed Projects</p>
+                                <p class="text-3xl font-bold text-gray-800">
+                                    <?php echo $conn->query("SELECT COUNT(*) as count FROM proyek WHERE status_proyek = 'completed'")->fetch_assoc()['count']; ?>
+                                </p>
+                            </div>
+                            <div class="bg-indigo-500 p-3 rounded-full">
+                                <i class="fas fa-flag-checkered text-white text-2xl"></i>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -337,7 +412,29 @@ session_write_close();
         <div id="proposalsContent" class="tab-content">
             <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
                 <div class="p-6 border-b border-gray-200">
-                    <h3 class="text-lg font-bold text-gray-800">Proposal untuk Approval</h3>
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-bold text-gray-800">Proposal untuk Approval</h3>
+                        <div class="relative">
+                            <input type="text" id="searchProposals" placeholder="Cari judul atau PJ..." 
+                                class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 w-64">
+                            <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+                        </div>
+                    </div>
+                    <div class="flex gap-3">
+                        <select id="filterProposalProject" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400">
+                            <option value="">Semua Proyek</option>
+                            <?php 
+                            $projects = $conn->query("SELECT DISTINCT kode_projek FROM proyek ORDER BY kode_projek");
+                            while ($proj = $projects->fetch_assoc()): ?>
+                                <option value="<?php echo htmlspecialchars($proj['kode_projek']); ?>">
+                                    <?php echo htmlspecialchars($proj['kode_projek']); ?>
+                                </option>
+                            <?php endwhile; ?>
+                        </select>
+                        <button onclick="resetProposalFilters()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">
+                            <i class="fas fa-redo mr-2"></i>Reset
+                        </button>
+                    </div>
                 </div>
                 
                 <div class="overflow-x-auto">
@@ -358,10 +455,13 @@ session_write_close();
                             $no = 1;
                             while ($proposal = $proposals->fetch_assoc()): 
                             ?>
-                            <tr class="hover:bg-gray-50">
+                            <tr class="hover:bg-gray-50 proposal-row"
+                                data-title="<?php echo strtolower(htmlspecialchars($proposal['judul_proposal'])); ?>"
+                                data-pj="<?php echo strtolower(htmlspecialchars($proposal['pj'])); ?>"
+                                data-project="<?php echo strtolower(htmlspecialchars($proposal['kode_projek'])); ?>">
                                 <td class="px-6 py-4 text-sm text-gray-900"><?php echo $no++; ?></td>
-                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo $proposal['judul_proposal']; ?></td>
-                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo $proposal['pj']; ?></td>
+                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($proposal['judul_proposal']); ?></td>
+                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($proposal['pj']); ?></td>
                                 <td class="px-6 py-4 text-sm text-gray-900"><?php echo $proposal['kode_proyek']; ?></td>
                                 <td class="px-6 py-4 text-sm text-gray-900">
                                     <?php echo date('d/m/Y', strtotime($proposal['date'])); ?>
@@ -369,7 +469,7 @@ session_write_close();
                                 <td class="px-6 py-4">
                                     <?php if ($proposal['status'] === 'submitted'): ?>
                                         <span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                                            Menunggu Approval FM
+                                            Pending FM Approval
                                         </span>
                                     <?php elseif ($proposal['status'] === 'approved_fm'): ?>
                                         <span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
@@ -560,6 +660,50 @@ session_write_close();
         });
         document.querySelector('.notification-bell-button').addEventListener('click', function(e) {
             e.stopPropagation();
+        });
+        
+        // Search and Filter for Proposals
+        function filterProposals() {
+            const searchTerm = document.getElementById('searchProposals').value.toLowerCase();
+            const filterProject = document.getElementById('filterProposalProject').value.toLowerCase();
+            const rows = document.querySelectorAll('.proposal-row');
+            let visibleCount = 0;
+            
+            rows.forEach(row => {
+                const title = row.dataset.title || '';
+                const pj = row.dataset.pj || '';
+                const project = row.dataset.project || '';
+                
+                const matchesSearch = !searchTerm || title.includes(searchTerm) || pj.includes(searchTerm);
+                const matchesProject = !filterProject || project === filterProject;
+                
+                if (matchesSearch && matchesProject) {
+                    row.style.display = '';
+                    visibleCount++;
+                    row.querySelector('td:first-child').textContent = visibleCount;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+        
+        function resetProposalFilters() {
+            document.getElementById('searchProposals').value = '';
+            document.getElementById('filterProposalProject').value = '';
+            filterProposals();
+        }
+        
+        // Add event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchProposals = document.getElementById('searchProposals');
+            const filterProposalProject = document.getElementById('filterProposalProject');
+            
+            if (searchProposals) {
+                searchProposals.addEventListener('input', filterProposals);
+            }
+            if (filterProposalProject) {
+                filterProposalProject.addEventListener('change', filterProposals);
+            }
         });
     </script>
     

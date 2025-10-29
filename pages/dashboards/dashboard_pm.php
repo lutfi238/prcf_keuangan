@@ -368,10 +368,10 @@ session_write_close();
                             $color = 'blue';
                             $status_text = [
                                 'draft' => 'Draft',
-                                'submitted' => 'Menunggu persetujuan FM',
-                                'approved_fm' => 'Disetujui FM (1/2)',
-                                'approved' => 'Disetujui (Final)',
-                                'rejected' => 'Ditolak'
+                                'submitted' => 'Pending FM Approval',
+                                'approved_fm' => 'Approved by FM (1/2)',
+                                'approved' => 'Approved (Final)',
+                                'rejected' => 'Rejected'
                             ];
                             $link = '../proposals/view_proposal.php?id=' . $activity['id']; // READ-ONLY for PM
                         } else {
@@ -379,11 +379,11 @@ session_write_close();
                             $color = 'green';
                             $status_text = [
                                 'draft' => 'Draft',
-                                'submitted' => 'Menunggu validasi SA',
-                                'verified' => 'Terverifikasi',
-                                'revision_requested' => 'Perlu revisi dari FM',
-                                'approved' => 'Disetujui',
-                                'rejected' => 'Ditolak'
+                                'submitted' => 'Pending SA Validation',
+                                'verified' => 'Verified',
+                                'revision_requested' => 'Needs Revision from FM',
+                                'approved' => 'Approved',
+                                'rejected' => 'Rejected'
                             ];
                             $link = '../reports/view_report_pm.php?id=' . $activity['id']; // READ-ONLY for PM
                         }

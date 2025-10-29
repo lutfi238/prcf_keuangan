@@ -59,8 +59,13 @@ $reports = $conn->query("SELECT lh.*, u.nama as creator_name
     WHERE lh.status_lap IN ('submitted', 'verified') 
     ORDER BY lh.created_at DESC");
 
+// Get statistics for SA dashboard
+$stat_waiting_validation = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'submitted'")->fetch_assoc()['count'];
+$stat_validated = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'verified'")->fetch_assoc()['count'];
+$stat_needs_revision = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'rejected'")->fetch_assoc()['count'];
+
 // Get notifications for SA
-$notif_pending_reports = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'submitted'")->fetch_assoc()['count'];
+$notif_pending_reports = $stat_waiting_validation;
 $total_notifications = $notif_pending_reports;
 
 // Get recent notifications with details
@@ -213,8 +218,8 @@ session_write_close();
             <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-lg border border-blue-200">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-600 mb-1">Menunggu Validasi</p>
-                        <p class="text-3xl font-bold text-gray-800">5</p>
+                        <p class="text-sm text-gray-600 mb-1">Pending Validation</p>
+                        <p class="text-3xl font-bold text-gray-800"><?php echo $stat_waiting_validation; ?></p>
                     </div>
                     <div class="bg-blue-500 p-3 rounded-full">
                         <i class="fas fa-clock text-white text-2xl"></i>
@@ -225,8 +230,8 @@ session_write_close();
             <div class="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-lg border border-green-200">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-600 mb-1">Telah Divalidasi</p>
-                        <p class="text-3xl font-bold text-gray-800">12</p>
+                        <p class="text-sm text-gray-600 mb-1">Validated</p>
+                        <p class="text-3xl font-bold text-gray-800"><?php echo $stat_validated; ?></p>
                     </div>
                     <div class="bg-green-500 p-3 rounded-full">
                         <i class="fas fa-check-circle text-white text-2xl"></i>
@@ -237,8 +242,8 @@ session_write_close();
             <div class="bg-gradient-to-br from-yellow-50 to-yellow-100 p-6 rounded-lg border border-yellow-200">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-600 mb-1">Perlu Revisi</p>
-                        <p class="text-3xl font-bold text-gray-800">3</p>
+                        <p class="text-sm text-gray-600 mb-1">Needs Revision</p>
+                        <p class="text-3xl font-bold text-gray-800"><?php echo $stat_needs_revision; ?></p>
                     </div>
                     <div class="bg-yellow-500 p-3 rounded-full">
                         <i class="fas fa-exclamation-triangle text-white text-2xl"></i>
@@ -282,11 +287,11 @@ session_write_close();
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <?php if ($report['status_lap'] === 'submitted'): ?>
                                     <span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                                        Menunggu Validasi
+                                        Pending Validation
                                     </span>
                                 <?php elseif ($report['status_lap'] === 'verified'): ?>
                                     <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                        Tervalidasi
+                                        Validated
                                     </span>
                                 <?php endif; ?>
                             </td>

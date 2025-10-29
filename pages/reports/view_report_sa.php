@@ -124,11 +124,11 @@ if ($details_stmt) {
                         <?php
                         $status_badges = [
                             'draft' => '<span class="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs">Draft</span>',
-                            'submitted' => '<span class="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs">Menunggu Validasi</span>',
-                            'verified' => '<span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">Terverifikasi</span>',
-                            'revision_requested' => '<span class="px-2 py-1 bg-orange-100 text-orange-800 rounded-full text-xs">Perlu Revisi FM</span>',
-                            'approved' => '<span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">Disetujui</span>',
-                            'rejected' => '<span class="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs">Ditolak</span>'
+                            'submitted' => '<span class="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs">Pending Validation</span>',
+                            'verified' => '<span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">Verified</span>',
+                            'revision_requested' => '<span class="px-2 py-1 bg-orange-100 text-orange-800 rounded-full text-xs">Needs Revision (FM)</span>',
+                            'approved' => '<span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">Approved</span>',
+                            'rejected' => '<span class="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs">Rejected</span>'
                         ];
                         echo $status_badges[$report['status_lap']] ?? $report['status_lap'];
                         ?>

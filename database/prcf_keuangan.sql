@@ -3,9 +3,9 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Oct 22, 2025 at 04:55 AM
+-- Generation Time: Oct 29, 2025 at 08:29 AM
 -- Server version: 10.4.32-MariaDB
--- PHP Version: 8.2.12
+-- PHP Version: 8.0.30
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -54,7 +54,8 @@ CREATE TABLE `buku_bank_detail` (
 --
 
 INSERT INTO `buku_bank_detail` (`id_detail_bank`, `id_bank_header`, `tanggal`, `reff`, `title_activity`, `cost_description`, `recipient`, `place_code`, `exp_code`, `nominal_code`, `exrate`, `cost_curr`, `debit_idr`, `debit_usd`, `credit_idr`, `credit_usd`, `balance_idr`, `balance_usd`, `status`) VALUES
-('BD-20251020-074455-a668', 'BH-20251020-073558-25fb', '2025-01-01', 'BP01-24-07-01', 'Advance Staff', 'Advance - Forest patrol and monitoring, July 2024 (Yadi Purwanto)', 'Yadi Purwanto', '-', '-', 'Adv', 16116.00, '0', 0.00, 0.00, 52240000.00, 3241.50, 2447760000.00, -3241.50, 'ongoing');
+('BD-20251020-074455-a668', 'BH-20251020-073558-25fb', '2025-01-01', 'BP01-24-07-01', 'Advance Staff', 'Advance - Forest patrol and monitoring, July 2024 (Yadi Purwanto)', 'Yadi Purwanto', '-', '-', 'Adv', 16116.00, '0', 0.00, 0.00, 52240000.00, 3241.50, 2447760000.00, -3241.50, 'ongoing'),
+('BD-20251027-134628-4ec9', 'BH-20251027-134131-c6b0', '2025-10-27', 'BP01-24-06-02', 'Project Running', 'Advance - Operational for LPHD, Q1 (Penepian Raya)', 'Penepian Raya', '-', '-', 'Adv', 16116.15, '0', 0.00, 0.00, 15000000.00, 930.74, 3208000000.00, 199069.26, 'ongoing');
 
 -- --------------------------------------------------------
 
@@ -89,8 +90,10 @@ CREATE TABLE `buku_bank_header` (
 -- Dumping data for table `buku_bank_header`
 --
 
-INSERT INTO `buku_bank_header` (`id_bank_header`, `kode_proyek`, `account_name`, `bank_name`, `account_number`, `currency`, `periode_bulan`, `periode_tahun`, `saldo_awal_idr`, `saldo_awal_usd`, `current_period_change_idr`, `current_period_change_usd`, `saldo_akhir_idr`, `saldo_akhir_usd`, `prepared_by`, `approved_by`, `status_laporan`, `tanggal_pembuatan`, `tanggal_persetujuan`) VALUES
-('BH-20251020-073558-25fb', 'PRJ-2025-001', 'Aam', 'Bank M', '146 1231 123123', 'IDR', '01', '2025', 2500000000.00, 0.00, -52240000.00, -3241.50, 2447760000.00, -3241.50, 'Ferrosi Pratama', NULL, 'draft', '2025-10-20', NULL);
+INSERT INTO `buku_bank_header` (`id_bank_header`, `kode_proyek`, `account_name`, `bank_name`, `account_number`, `exrate`, `currency`, `periode_bulan`, `periode_tahun`, `saldo_awal_idr`, `saldo_awal_usd`, `current_period_change_idr`, `current_period_change_usd`, `saldo_akhir_idr`, `saldo_akhir_usd`, `prepared_by`, `approved_by`, `status_laporan`, `tanggal_pembuatan`, `tanggal_persetujuan`) VALUES
+('BH-20251020-073558-25fb', 'PRJ-2025-001', 'Aam', 'Bank M', '146 1231 123123', 1.00, 'IDR', '01', '2025', 2500000000.00, 0.00, -52240000.00, -3241.50, 2447760000.00, -3241.50, 'Ferrosi Pratama', NULL, 'draft', '2025-10-20', NULL),
+('BH-20251022-104252-3a9a', 'PRJ-2025-001', 'Aam', 'Bank M', '146 1231 123123', 16100.12, 'IDR', '02', '2025', 3220024000.00, 200000.00, 0.00, 0.00, 3220024000.00, 200000.00, 'lutfi', NULL, 'draft', '2025-10-22', NULL),
+('BH-20251027-134131-c6b0', 'PRJ-2025-001', 'Aam', 'Bank M', '146 1231 123123', 16115.00, 'USD', '10', '2025', 3223000000.00, 200000.00, -15000000.00, -930.74, 3208000000.00, 199069.26, 'Ferrosi Pratama', NULL, 'draft', '2025-10-27', NULL);
 
 -- --------------------------------------------------------
 
@@ -144,6 +147,13 @@ CREATE TABLE `buku_piutang_header` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `buku_piutang_header`
+--
+
+INSERT INTO `buku_piutang_header` (`id_piutang`, `kode_proyek`, `periode_bulan`, `periode_tahun`, `exrate`, `beginning_balance_idr`, `ending_balance_idr`, `beginning_balance_usd`, `ending_balance_usd`, `created_by`, `approved_by`, `catatan_fm`, `status`, `tgl_pembuatan`, `tgl_persetujuan`, `created_at`, `updated_at`) VALUES
+(1, 'PRJ-2025-001', '08', '2025', 16100.12, 3381026810.01, 3381026810.01, 210000.10, 210000.10, 9, NULL, NULL, 'draft', '2025-10-22', NULL, '2025-10-22 04:34:06', '2025-10-22 04:34:06');
 
 -- --------------------------------------------------------
 
@@ -219,7 +229,9 @@ CREATE TABLE `laporan_keuangan_detail` (
 --
 
 INSERT INTO `laporan_keuangan_detail` (`id_detail_keu`, `id_laporan_keu`, `invoice_no`, `invoice_date`, `item_desc`, `recipient`, `place_code`, `exp_code`, `unit_total`, `unit_cost`, `requested`, `actual`, `balance`, `explanation`, `file_nota`, `created_at`, `updated_at`) VALUES
-(1, 1, '11', '2025-10-16', 'Travel', 'Yoga', '1213', '1234', 1, 100000.00, 0.00, 0.00, 0.00, 'LKK - 1', NULL, '2025-10-16 09:09:57', '2025-10-16 09:09:57');
+(6, 5, '', '2025-10-30', 'Travel TO Nangga Jemah', 'LUTFI TRAVEL', '20208-NJ-01', '20208', 1, 400000.00, 0.00, 0.00, 0.00, '', '../../uploads/receipts/1761718308_1_RobloxScreenShot20251020_225818585.png', '2025-10-29 06:11:48', '2025-10-29 06:11:48'),
+(7, 6, '', '2025-10-31', 'Travel', 'Elmeanual', '20208-RJ-01', '20208', 1, 400000.00, 0.00, 0.00, 0.00, '', '../../uploads/receipts/1761720169_1_RobloxScreenShot20251020_225818585.png', '2025-10-29 06:42:49', '2025-10-29 06:42:49'),
+(8, 6, '', '0000-00-00', 'eat', 'rumah makan pak de', '20208-RJ-01', '20208', 5, 60000.00, 0.00, 0.00, 0.00, '', '../../uploads/receipts/1761720169_2_RobloxScreenShot20251020_225818585.png', '2025-10-29 06:42:49', '2025-10-29 06:42:49');
 
 -- --------------------------------------------------------
 
@@ -240,7 +252,7 @@ CREATE TABLE `laporan_keuangan_header` (
   `created_by` int(11) DEFAULT NULL,
   `verified_by` int(11) DEFAULT NULL,
   `approved_by` int(11) DEFAULT NULL,
-  `status_lap` enum('draft','submitted','verified','approved','rejected') DEFAULT 'draft',
+  `status_lap` enum('draft','submitted','verified','approved','rejected','revision_requested') DEFAULT 'draft' COMMENT 'draft=PM draft, submitted=waiting SA, verified=SA verified, approved=FM approved, rejected=rejected, revision_requested=FM requested revision',
   `catatan_finance` text DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -251,7 +263,8 @@ CREATE TABLE `laporan_keuangan_header` (
 --
 
 INSERT INTO `laporan_keuangan_header` (`id_laporan_keu`, `kode_projek`, `nama_projek`, `nama_kegiatan`, `pelaksana`, `tanggal_pelaksanaan`, `tanggal_laporan`, `mata_uang`, `exrate`, `created_by`, `verified_by`, `approved_by`, `status_lap`, `catatan_finance`, `created_at`, `updated_at`) VALUES
-(1, 'PRJ-2025-001', 'Tes - Prototype 1', 'Tes - LKK - 1', 'Chandra', '2025-10-16', '2025-10-16', 'IDR', 1.0000, 1, 6, NULL, 'rejected', '', '2025-10-16 09:09:57', '2025-10-19 12:59:40');
+(5, 'PRJ-2025-001', 'Training Fire Kontrols', '-', 'Chandra', '2025-10-30', '2025-10-29', 'IDR', 16000.0000, 1, 8, 4, 'approved', '', '2025-10-29 06:11:48', '2025-10-29 06:20:22'),
+(6, 'PRJ-2025-001', 'training fire kontrol 3', '0', 'Chandra', '2025-10-30', '2025-10-29', 'IDR', 16000.0000, 1, 8, NULL, 'rejected', 'nota travel tidak jelas', '2025-10-29 06:42:49', '2025-10-29 06:53:04');
 
 -- --------------------------------------------------------
 
@@ -282,15 +295,9 @@ CREATE TABLE `proposal` (
 --
 
 INSERT INTO `proposal` (`id_proposal`, `judul_proposal`, `pj`, `date`, `pemohon`, `status`, `approved_by_fm`, `approved_by_dir`, `fm_approval_date`, `dir_approval_date`, `kode_proyek`, `tor`, `file_budget`, `created_at`, `updated_at`) VALUES
-(5, 'Tes - Alur Kerja PM - 4', 'Yoga', '2025-10-16', 'Chandra', 'approved_fm', 5, NULL, '2025-10-16 15:25:45', NULL, 'PRJ-2025-001', 'uploads/tor/1760603074_Presentasi - Analisis PEC Warung Bubur Soto Ibu Suratmi.pdf', 'uploads/budgets/1760603074_chan of Personal Feedback – Johari Window (Chandra Erland Prayoga) (Responses).xlsx', '2025-10-16 08:24:34', '2025-10-16 08:25:45'),
-(6, 'Tes - Alur Kerja PM - 5', 'Yoga', '2025-10-16', 'Chandra', 'approved_fm', 5, NULL, '2025-10-16 15:35:37', NULL, 'PRJ-2025-001', 'uploads/tor/1760603721_KWU2_5E_3202316065_Chandra Erland Prayoga.pdf', 'uploads/budgets/1760603721_chan of Personal Feedback – Johari Window (Chandra Erland Prayoga) (Responses).xlsx', '2025-10-16 08:35:21', '2025-10-16 08:35:37'),
-(7, 'Tes - Alur Kerja PM - 6', 'Yoga', '2025-10-16', 'Chandra', 'approved_fm', 5, NULL, '2025-10-16 15:38:56', NULL, 'PRJ-2025-001', 'uploads/tor/1760603919_Timothy Ronald Journey - 5E - 3202316065 - Chandra Erland Prayoga.pdf', 'uploads/budgets/1760603919_chan of Personal Feedback – Johari Window (Chandra Erland Prayoga) (Responses).xlsx', '2025-10-16 08:38:39', '2025-10-16 08:38:56'),
-(8, 'Tes - Alur Kerja PM - 7', 'Yoga', '2025-10-16', 'Chandra', 'approved_fm', 5, NULL, '2025-10-16 15:44:14', NULL, 'PRJ-2025-001', 'uploads/tor/1760604226_Timothy Ronald Journey - 5E - 3202316065 - Chandra Erland Prayoga.pdf', 'uploads/budgets/1760604226_chan of Personal Feedback – Johari Window (Chandra Erland Prayoga) (Responses).xlsx', '2025-10-16 08:43:46', '2025-10-16 08:44:14'),
-(9, 'TEST - Proposal untuk DIR Approval', 'Test PJ', '2025-10-16', 'Chandra', 'approved', 5, 4, '2025-10-16 15:50:46', '2025-10-19 20:01:23', 'PRJ-2025-001', 'uploads/tor/TEST_TOR_FILE.pdf', 'uploads/budgets/TEST_BUDGET_FILE.xlsx', '2025-10-16 08:50:46', '2025-10-19 13:01:23'),
-(10, 'TEST - Proposal untuk DIR Approval', 'Test PJ', '2025-10-16', 'Chandra', 'approved', 5, NULL, '2025-10-16 15:51:01', '2025-10-17 18:35:03', 'PRJ-2025-001', 'uploads/tor/1760600730_KWU2_5E_3202316065_Chandra Erland Prayoga.pdf', 'uploads/budgets/1760600730_chan of Personal Feedback – Johari Window (Chandra Erland Prayoga) (Responses).xlsx', '2025-10-16 08:51:01', '2025-10-17 11:35:03'),
-(11, 'Tes - Alur Kerja PM - 8', 'Yoga', '2025-10-16', 'Chandra', 'approved', 5, 4, '2025-10-16 16:01:27', '2025-10-16 16:05:24', 'PRJ-2025-001', 'uploads/tor/1760605273_Timothy Ronald Journey - 5E - 3202316065 - Chandra Erland Prayoga.pdf', 'uploads/budgets/1760605273_chan of Personal Feedback – Johari Window (Chandra Erland Prayoga) (Responses).xlsx', '2025-10-16 09:01:13', '2025-10-16 09:05:24'),
-(12, 'Tes - Akun ke-2', 'Aam Wijaya', '2025-10-20', 'Ferrosi', 'rejected', NULL, NULL, NULL, NULL, 'PRJ-2025-001', '../../uploads/tor/1760880399_KWU2_KELAS_3202316027_FERROSI_PRATAMA_5E.pdf', '../../uploads/budgets/1760880399_KWU2_KELAS_3202316027_FERROSI_PRATAMA_5E.pdf', '2025-10-19 13:26:39', '2025-10-19 13:27:51'),
-(13, 'Tes - Akun ke-2.2', 'Aam', '2025-10-20', 'Ferrosi', 'approved', 5, 4, '2025-10-19 20:31:15', '2025-10-19 20:31:54', 'PRJ-2025-001', '../../uploads/tor/1760880617_KWU2_KELAS_3202316027_FERROSI_PRATAMA_5E.pdf', '../../uploads/budgets/1760880617_KWU2_KELAS_3202316027_FERROSI_PRATAMA_5E.pdf', '2025-10-19 13:30:17', '2025-10-19 13:31:54');
+(16, 'Training Fire Kontrols', 'Immanuel Huda', '2025-10-29', 'Chandra', 'approved', 4, 9, '2025-10-29 12:37:56', '2025-10-29 12:38:41', 'PRJ-2025-001', '../../uploads/tor/1761715669__Kelompok_2_-_Template_Penulisan_Proposal_Tugas_Akhir_(TA)_2025_[revisi_10_oktober].pdf', '../../uploads/budgets/1761715669__Kelompok_2_-_Template_Penulisan_Proposal_Tugas_Akhir_(TA)_2025_[revisi_10_oktober].pdf', '2025-10-29 05:27:49', '2025-10-29 05:38:41'),
+(17, 'training fire konttrol', 'immanual duda', '2025-10-29', 'Chandra', 'rejected', NULL, NULL, NULL, NULL, 'PRJ-2025-001', '../../uploads/tor/1761719311_KWU5_5E_3202316041_MUHAMMAD LUTFI FIRDAUS.pdf', '../../uploads/budgets/1761719311_KWU5_5E_3202316041_MUHAMMAD LUTFI FIRDAUS.pdf', '2025-10-29 06:28:31', '2025-10-29 06:29:26'),
+(18, 'training fire kontrol 3', 'immanual huda', '2025-10-29', 'Chandra', 'approved', 4, 9, '2025-10-29 13:39:06', '2025-10-29 13:39:55', 'PRJ-2025-001', '../../uploads/tor/1761719580_KWU5_5E_3202316041_MUHAMMAD LUTFI FIRDAUS.pdf', '../../uploads/budgets/1761719580_KWU5_5E_3202316041_MUHAMMAD LUTFI FIRDAUS.pdf', '2025-10-29 06:33:00', '2025-10-29 06:39:55');
 
 -- --------------------------------------------------------
 
@@ -332,20 +339,21 @@ CREATE TABLE `user` (
   `no_HP` varchar(20) DEFAULT NULL,
   `password_hash` varchar(255) NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `last_notification_check` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `user`
 --
 
-INSERT INTO `user` (`id_user`, `nama`, `role`, `email`, `no_HP`, `password_hash`, `created_at`, `updated_at`) VALUES
-(1, 'Chandra', 'Project Manager', '12345c4n12345@gmail.com', '6283153505411', '$2y$10$771q172G/MaqwIXKE9nOVutIrnjC6BEat7lD0KAUsJWywfG8UdG0C', '2025-10-16 06:36:23', '2025-10-16 07:02:14'),
-(4, 'Ferrosi Pratama', 'Finance Manager', 'ferrosipratamaq@gmail.com', '6289521340602', '$2y$10$4Dc7kmGgHY5WxZDfGw2zm.KIegC1xrX7GirUlXyj40Rl4/RzsopZu', '2025-10-16 06:43:55', '2025-10-20 02:36:45'),
-(5, 'zheamanda', 'Finance Manager', 'zheaamandavitaloka@gmail.com', '6283836609877', '$2y$10$aYQPYZIRplq3lYsN4s4TrOtR.UPafFF7zDCS/pF30MkABJ5G/Z/CW', '2025-10-16 06:50:22', '2025-10-19 13:06:36'),
-(6, 'Mione', 'Staff Accountant', 'hermionepriciliaa@gmail.com', '6282192831013', '$2y$10$sScVPxccDeOJ7Vboy0YWBecj497e/kPVdmz3sLuR0eiAmfLFwn0qO', '2025-10-16 07:01:18', '2025-10-16 07:03:39'),
-(8, 'Ferrosi', 'Project Manager', 'ferrosipratamaqu@gmail.com', '6282134812641', '$2y$10$c.kiil8chyMEiAqZgzpR7u5sqVVftQIJJLyKIckfatqprVRXNLuqO', '2025-10-19 13:22:11', '2025-10-19 13:22:11'),
-(9, 'lutfi', 'Project Manager', 'lutfifirdaus238@gmail.com', '6285752706608', '$2y$10$2fH773o5wxutvRZtlEKm2O/PNR6riXAOfdta1jT26dKhKyJnDFqnS', '2025-10-20 01:02:46', '2025-10-20 01:02:46');
+INSERT INTO `user` (`id_user`, `nama`, `role`, `email`, `no_HP`, `password_hash`, `created_at`, `updated_at`, `last_notification_check`) VALUES
+(1, 'Chandra', 'Project Manager', '12345c4n12345@gmail.com', '6283153505411', '$2y$10$771q172G/MaqwIXKE9nOVutIrnjC6BEat7lD0KAUsJWywfG8UdG0C', '2025-10-16 06:36:23', '2025-10-28 16:42:54', '2025-10-28 16:42:54'),
+(4, 'Ferrosi Pratama', 'Finance Manager', 'ferrosipratamaq@gmail.com', '6289521340602', '$2y$10$4Dc7kmGgHY5WxZDfGw2zm.KIegC1xrX7GirUlXyj40Rl4/RzsopZu', '2025-10-16 06:43:55', '2025-10-20 02:36:45', NULL),
+(5, 'zheamanda', 'Finance Manager', 'zheaamandavitaloka@gmail.com', '6283836609877', '$2y$10$aYQPYZIRplq3lYsN4s4TrOtR.UPafFF7zDCS/pF30MkABJ5G/Z/CW', '2025-10-16 06:50:22', '2025-10-19 13:06:36', NULL),
+(6, 'Mione', 'Staff Accountant', 'hermionepriciliaa@gmail.com', '6282192831013', '$2y$10$sScVPxccDeOJ7Vboy0YWBecj497e/kPVdmz3sLuR0eiAmfLFwn0qO', '2025-10-16 07:01:18', '2025-10-16 07:03:39', NULL),
+(8, 'Ferrosi', 'Staff Accountant', 'ferrosipratamaqu@gmail.com', '6282134812641', '$2y$10$c.kiil8chyMEiAqZgzpR7u5sqVVftQIJJLyKIckfatqprVRXNLuqO', '2025-10-19 13:22:11', '2025-10-27 06:17:28', NULL),
+(9, 'lutfi', 'Direktur', 'lutfifirdaus238@gmail.com', '6285752706608', '$2y$10$2fH773o5wxutvRZtlEKm2O/PNR6riXAOfdta1jT26dKhKyJnDFqnS', '2025-10-20 01:02:46', '2025-10-27 06:16:59', NULL);
 
 --
 -- Indexes for dumped tables
@@ -450,7 +458,7 @@ ALTER TABLE `buku_piutang_detail`
 -- AUTO_INCREMENT for table `buku_piutang_header`
 --
 ALTER TABLE `buku_piutang_header`
-  MODIFY `id_piutang` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id_piutang` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT for table `buku_piutang_unliquidated`
@@ -468,19 +476,19 @@ ALTER TABLE `laporan_donor`
 -- AUTO_INCREMENT for table `laporan_keuangan_detail`
 --
 ALTER TABLE `laporan_keuangan_detail`
-  MODIFY `id_detail_keu` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id_detail_keu` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- AUTO_INCREMENT for table `laporan_keuangan_header`
 --
 ALTER TABLE `laporan_keuangan_header`
-  MODIFY `id_laporan_keu` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id_laporan_keu` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT for table `proposal`
 --
 ALTER TABLE `proposal`
-  MODIFY `id_proposal` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
+  MODIFY `id_proposal` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
 
 --
 -- AUTO_INCREMENT for table `user`

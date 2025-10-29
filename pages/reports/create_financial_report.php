@@ -58,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_report'])) {
 
         // Insert details
         if (isset($_POST['items']) && is_array($_POST['items'])) {
-            $stmt_detail = $conn->prepare("INSERT INTO laporan_keuangan_detail (id_laporan_keu, invoice_no, invoice_date, item_desc, recipient, place_code, exp_code, unit_total, unit_cost, requested, actual, balance, explanation, file_nota) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt_detail = $conn->prepare("INSERT INTO laporan_keuangan_detail (id_laporan_keu, invoice_date, item_desc, recipient, place_code, exp_code, unit_total, unit_cost, requested, actual, balance, explanation, file_nota) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
             if (!$stmt_detail) {
                 throw new Exception('Gagal menyiapkan statement detail laporan.');
@@ -73,7 +73,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_report'])) {
             $max_size = 5 * 1024 * 1024; // 5MB
 
             foreach ($_POST['items'] as $index => $item) {
-                $invoice_no = trim($item['invoice_no'] ?? '');
                 $invoice_date = trim($item['invoice_date'] ?? '');
                 $item_desc = trim($item['item_desc'] ?? '');
                 $recipient = trim($item['recipient'] ?? '');
@@ -121,9 +120,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_report'])) {
                 }
 
                 $stmt_detail->bind_param(
-                    "issssssiddddss",
+                    "isssssiddddss",
                     $id_laporan_keu,
-                    $invoice_no,
                     $invoice_date,
                     $item_desc,
                     $recipient,
@@ -178,6 +176,7 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
     <title>Buat Laporan Keuangan - PRCFI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="../../assets/js/currency_format.js"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -266,8 +265,8 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
 
                         <div>
                             <label class="block text-gray-700 text-sm font-medium mb-2">Tanggal Laporan *</label>
-                            <input type="date" name="tanggal_laporan" required value="<?php echo date('Y-m-d'); ?>"
-                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
+                            <input type="date" name="tanggal_laporan" required value="<?php echo date('Y-m-d'); ?>" readonly
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-400">
                         </div>
                     </div>
 
@@ -396,12 +395,7 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
                         <i class="fas fa-trash"></i>
                     </button>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-gray-700 text-sm font-medium mb-2">No. Invoice</label>
-                        <input type="text" name="items[${itemCount}][invoice_no]" 
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
-                    </div>
+                <div class="grid grid-cols-1 gap-4">
                     <div>
                         <label class="block text-gray-700 text-sm font-medium mb-2">Tanggal Invoice</label>
                         <input type="date" name="items[${itemCount}][invoice_date]" 
@@ -417,10 +411,14 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
                         <input type="text" name="items[${itemCount}][recipient]" 
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
                     </div>
-                    <div>
+                    <div class="relative">
                         <label class="block text-gray-700 text-sm font-medium mb-2">Kode Tempat</label>
                         <input type="text" name="items[${itemCount}][place_code]" 
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
+                            class="place-code-input w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                            data-item-index="${itemCount}"
+                            autocomplete="off"
+                            placeholder="Ketik untuk mencari...">
+                        <div class="autocomplete-suggestions hidden absolute z-10 w-full bg-white border border-gray-300 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto"></div>
                     </div>
                     <div>
                         <label class="block text-gray-700 text-sm font-medium mb-2">Kode Pengeluaran</label>
@@ -643,6 +641,84 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
 
         // Add first item on page load
         addItem();
+        
+        // Prepare currency fields for submission
+        prepareCurrencyForSubmit('reportForm');
+        
+        // Place Code Autocomplete
+        let autocompleteTimer = null;
+        
+        document.addEventListener('click', function(e) {
+            if (!e.target.classList.contains('place-code-input')) {
+                document.querySelectorAll('.autocomplete-suggestions').forEach(el => {
+                    el.classList.add('hidden');
+                });
+            }
+        });
+        
+        document.addEventListener('input', function(e) {
+            if (e.target.classList.contains('place-code-input')) {
+                const input = e.target;
+                const searchTerm = input.value.trim();
+                const suggestionBox = input.nextElementSibling;
+                const kodeProyek = document.getElementById('kode_projek').value;
+                
+                if (!kodeProyek) {
+                    suggestionBox.classList.add('hidden');
+                    return;
+                }
+                
+                // Clear previous timer
+                if (autocompleteTimer) {
+                    clearTimeout(autocompleteTimer);
+                }
+                
+                // Wait 300ms before searching
+                autocompleteTimer = setTimeout(() => {
+                    if (searchTerm.length > 0) {
+                        fetchPlaceCodes(kodeProyek, searchTerm, input, suggestionBox);
+                    } else {
+                        suggestionBox.classList.add('hidden');
+                    }
+                }, 300);
+            }
+        });
+        
+        function fetchPlaceCodes(kodeProyek, searchTerm, inputField, suggestionBox) {
+            fetch(`../../api/get_place_codes.php?kode_proyek=${encodeURIComponent(kodeProyek)}&search_term=${encodeURIComponent(searchTerm)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.codes.length > 0) {
+                        suggestionBox.innerHTML = '';
+                        data.codes.forEach(code => {
+                            const div = document.createElement('div');
+                            div.className = 'px-4 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0';
+                            div.innerHTML = `
+                                <div class="font-medium text-gray-800">${code.place_code}</div>
+                                <div class="text-xs text-gray-600">${code.description || 'No description'}</div>
+                            `;
+                            div.addEventListener('click', function() {
+                                inputField.value = code.place_code;
+                                // Auto-fill exp_code if there's a corresponding field
+                                const expCodeField = inputField.closest('.border').querySelector('[name*="exp_code"]');
+                                if (expCodeField && code.exp_code) {
+                                    expCodeField.value = code.exp_code;
+                                }
+                                suggestionBox.classList.add('hidden');
+                            });
+                            suggestionBox.appendChild(div);
+                        });
+                        suggestionBox.classList.remove('hidden');
+                    } else {
+                        suggestionBox.innerHTML = '<div class="px-4 py-2 text-gray-500 text-sm">Tidak ada kode yang cocok</div>';
+                        suggestionBox.classList.remove('hidden');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching place codes:', error);
+                    suggestionBox.classList.add('hidden');
+                });
+        }
     </script>
 </body>
 </html>

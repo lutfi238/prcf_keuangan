@@ -53,36 +53,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve'])) {
     }
 }
 
-// Handle request revision
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_revision'])) {
-    $revision_notes = $_POST['revision_notes'] ?? '';
-    
-    // Check if catatan_fm column exists, otherwise use catatan_finance
-    $check_column = $conn->query("SHOW COLUMNS FROM laporan_keuangan_header LIKE 'catatan_fm'");
-    $column_name = ($check_column->num_rows > 0) ? 'catatan_fm' : 'catatan_finance';
-    
-    $stmt = $conn->prepare("UPDATE laporan_keuangan_header SET status_lap = 'revision_requested', $column_name = ?, updated_at = NOW() WHERE id_laporan_keu = ?");
-    $stmt->bind_param("si", $revision_notes, $report_id);
-    
-    if ($stmt->execute()) {
-        // Get report details
-        $report_stmt = $conn->prepare("SELECT lh.*, u.email, u.nama FROM laporan_keuangan_header lh LEFT JOIN user u ON lh.created_by = u.id_user WHERE id_laporan_keu = ?");
-        $report_stmt->bind_param("i", $report_id);
-        $report_stmt->execute();
-        $report_data = $report_stmt->get_result()->fetch_assoc();
-        
-        // Notify PM
-        send_notification_email(
-            $report_data['email'],
-            'Permintaan Revisi Laporan Keuangan dari FM',
-            'Laporan keuangan Anda untuk kegiatan "' . $report_data['nama_kegiatan'] . '" memerlukan revisi. Catatan: ' . $revision_notes
-        );
-        
-        // Redirect back to dashboard
-        header('Location: ../dashboards/dashboard_fm.php?tab=' . urlencode($return_tab) . '&msg=revision_sent');
-        exit();
-    }
-}
 
 // Get report data
 $stmt = $conn->prepare("SELECT lh.*, u.nama as creator_name, u2.nama as verifier_name 
@@ -260,15 +230,10 @@ $items = $details->get_result();
                                 <td class="px-4 py-2 text-center">
                                     <?php if (!empty($item['file_nota'])): ?>
                                         <?php $isImage = preg_match('/\.(jpg|jpeg|png|gif|bmp|webp|tif|tiff)$/i', $item['file_nota']); ?>
-                                        <?php if ($isImage): ?>
-                                            <a href="<?php echo htmlspecialchars($item['file_nota']); ?>" target="_blank" class="inline-flex items-center px-3 py-1 bg-blue-500 text-white rounded-full text-xs hover:bg-blue-600">
-                                                <i class="fas fa-image mr-1"></i> Preview
-                                            </a>
-                                        <?php else: ?>
-                                            <a href="<?php echo htmlspecialchars($item['file_nota']); ?>" target="_blank" class="inline-flex items-center px-3 py-1 bg-blue-500 text-white rounded-full text-xs hover:bg-blue-600">
-                                                <i class="fas fa-file-pdf mr-1"></i> Unduh
-                                            </a>
-                                        <?php endif; ?>
+                                        <button onclick="previewReceipt('<?php echo htmlspecialchars($item['file_nota']); ?>', <?php echo $isImage ? 'true' : 'false'; ?>)" 
+                                            class="inline-flex items-center px-3 py-1 bg-blue-500 text-white rounded-full text-xs hover:bg-blue-600">
+                                            <i class="fas fa-<?php echo $isImage ? 'image' : 'file-pdf'; ?> mr-1"></i> Preview
+                                        </button>
                                     <?php else: ?>
                                         <span class="text-xs text-gray-400">-</span>
                                     <?php endif; ?>
@@ -297,19 +262,28 @@ $items = $details->get_result();
             <?php if (in_array($report['status_lap'], ['submitted', 'verified']) && !$report['approved_by']): ?>
                 <?php if ($user_role === 'Finance Manager'): ?>
             <div class="p-8 border-t border-gray-200 bg-gray-50">
-                <h3 class="text-lg font-bold text-gray-800 mb-4">Approval Finance Manager</h3>
+                <h3 class="text-lg font-bold text-gray-800 mb-4">Final Approval - Finance Manager</h3>
                 
-                <form method="POST" class="space-y-4" id="approvalForm">
+                <form method="POST" class="space-y-4">
                     <div class="bg-white p-6 rounded-lg border border-gray-200">
                         <div class="flex items-start space-x-4">
                             <div class="flex-shrink-0">
-                                <div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
-                                    <i class="fas fa-signature text-blue-600 text-xl"></i>
+                                <div class="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                                    <i class="fas fa-signature text-green-600 text-xl"></i>
                                 </div>
                             </div>
                             <div class="flex-1">
-                                <p class="font-medium text-gray-800 mb-2">Tanda Tangan Digital</p>
-                                <p class="text-sm text-gray-600 mb-4">Dengan menekan tombol "Verify", Anda menyetujui laporan keuangan ini dan memberikan tanda tangan digital sebagai Finance Manager.</p>
+                                <p class="font-medium text-gray-800 mb-2">Tanda Tangan Digital - Finance Manager</p>
+                                <p class="text-sm text-gray-600 mb-4">Dengan menekan tombol "Approve", Anda menyetujui laporan keuangan ini dan memberikan tanda tangan digital sebagai Finance Manager. Laporan akan dikirim ke Direktur untuk approval final.</p>
+                                <div class="bg-blue-50 p-3 rounded-lg border border-blue-200 mb-4">
+                                    <div class="flex items-start">
+                                        <i class="fas fa-info-circle text-blue-600 mt-0.5 mr-2"></i>
+                                        <div class="text-sm text-blue-800">
+                                            <p class="font-medium">Informasi:</p>
+                                            <p>Laporan telah divalidasi oleh Staff Accounting. Jika laporan memerlukan revisi, silakan hubungi Staff Accounting untuk mengirimkan kembali ke Project Manager.</p>
+                                        </div>
+                                    </div>
+                                </div>
                                 <div class="flex items-center space-x-2 text-sm text-gray-600">
                                     <i class="fas fa-user"></i>
                                     <span><?php echo $user_name; ?></span>
@@ -320,24 +294,11 @@ $items = $details->get_result();
                         </div>
                     </div>
 
-                    <!-- Notes Section (Initially Hidden) -->
-                    <div id="notesSection" class="hidden">
-                        <label class="block text-gray-700 text-sm font-medium mb-2">Catatan Revisi untuk Project Manager</label>
-                        <textarea name="revision_notes" id="revisionNotes" rows="4" 
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                            placeholder="Berikan catatan atau alasan mengapa laporan ini perlu direvisi..."></textarea>
-                    </div>
-
-                    <div class="flex justify-end space-x-4">
-                        <button type="button" id="revisionBtn"
-                            class="px-6 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition duration-200 font-medium"
-                            onclick="toggleRevisionMode()">
-                            <i class="fas fa-edit mr-2"></i> Request Revision
-                        </button>
-                        <button type="submit" name="approve" id="approveBtn"
-                            class="px-8 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition duration-200 font-medium text-lg"
+                    <div class="flex justify-end">
+                        <button type="submit" name="approve"
+                            class="px-8 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition duration-200 font-medium text-lg shadow-lg"
                             onclick="return confirm('Apakah Anda yakin ingin meng-approve laporan ini?\n\nLaporan akan dikirim ke Direktur untuk approval final.')">
-                            <i class="fas fa-check-circle mr-2"></i> Verify
+                            <i class="fas fa-check-circle mr-2"></i> Approve
                         </button>
                     </div>
                 </form>
@@ -366,61 +327,53 @@ $items = $details->get_result();
         </div>
     </main>
 
+    <!-- Receipt Preview Modal -->
+    <div id="receiptPreviewModal" class="fixed z-50 inset-0 bg-black/80 hidden items-center justify-center">
+        <div class="flex flex-col items-center max-w-7xl max-h-screen p-4">
+            <button onclick="closeReceiptPreview()" class="mb-4 self-end text-white bg-black/60 hover:bg-black/80 px-4 py-2 rounded-lg">
+                <i class="fas fa-times text-lg mr-2"></i>Close
+            </button>
+            <img id="modalReceiptImage" src="" alt="Preview" class="hidden max-h-[85vh] max-w-full rounded shadow-2xl" />
+            <embed id="modalReceiptPDF" src="" type="application/pdf" class="hidden w-full h-[85vh] rounded shadow-2xl" />
+        </div>
+    </div>
+
     <script>
-        let revisionMode = false;
-
-        function toggleRevisionMode() {
-            const notesSection = document.getElementById('notesSection');
-            const revisionBtn = document.getElementById('revisionBtn');
-            const approveBtn = document.getElementById('approveBtn');
-            const revisionNotes = document.getElementById('revisionNotes');
-            const form = document.getElementById('approvalForm');
-
-            if (!revisionMode) {
-                // Switch to revision mode
-                revisionMode = true;
-                notesSection.classList.remove('hidden');
-                
-                // Change Request Revision button to Cancel
-                revisionBtn.innerHTML = '<i class="fas fa-times mr-2"></i> Cancel';
-                revisionBtn.classList.remove('bg-yellow-500', 'hover:bg-yellow-600');
-                revisionBtn.classList.add('bg-gray-500', 'hover:bg-gray-600');
-                
-                // Change Verify button to Send to PM
-                approveBtn.type = 'submit';
-                approveBtn.name = 'request_revision';
-                approveBtn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i> Send to PM';
-                approveBtn.classList.remove('bg-green-500', 'hover:bg-green-600');
-                approveBtn.classList.add('bg-orange-500', 'hover:bg-orange-600');
-                approveBtn.onclick = function() {
-                    if (!revisionNotes.value.trim()) {
-                        alert('Mohon berikan catatan revisi sebelum mengirim ke PM.');
-                        return false;
-                    }
-                    return confirm('Apakah Anda yakin ingin mengirim permintaan revisi ke Project Manager?');
-                };
+        function previewReceipt(filePath, isImage) {
+            const modal = document.getElementById('receiptPreviewModal');
+            const imgElement = document.getElementById('modalReceiptImage');
+            const pdfElement = document.getElementById('modalReceiptPDF');
+            
+            imgElement.classList.add('hidden');
+            pdfElement.classList.add('hidden');
+            
+            if (isImage) {
+                imgElement.src = filePath;
+                imgElement.classList.remove('hidden');
             } else {
-                // Switch back to normal mode
-                revisionMode = false;
-                notesSection.classList.add('hidden');
-                revisionNotes.value = '';
-                
-                // Restore Request Revision button
-                revisionBtn.innerHTML = '<i class="fas fa-edit mr-2"></i> Request Revision';
-                revisionBtn.classList.remove('bg-gray-500', 'hover:bg-gray-600');
-                revisionBtn.classList.add('bg-yellow-500', 'hover:bg-yellow-600');
-                
-                // Restore Verify button
-                approveBtn.type = 'submit';
-                approveBtn.name = 'approve';
-                approveBtn.innerHTML = '<i class="fas fa-check-circle mr-2"></i> Verify';
-                approveBtn.classList.remove('bg-orange-500', 'hover:bg-orange-600');
-                approveBtn.classList.add('bg-green-500', 'hover:bg-green-600');
-                approveBtn.onclick = function() {
-                    return confirm('Apakah Anda yakin ingin meng-approve laporan ini?\n\nLaporan akan dikirim ke Direktur untuk approval final.');
-                };
+                pdfElement.src = filePath;
+                pdfElement.classList.remove('hidden');
             }
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
         }
+        
+        function closeReceiptPreview() {
+            const modal = document.getElementById('receiptPreviewModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.getElementById('modalReceiptImage').src = '';
+            document.getElementById('modalReceiptPDF').src = '';
+        }
+        
+        document.getElementById('receiptPreviewModal').addEventListener('click', function(e) {
+            if (e.target === this) closeReceiptPreview();
+        });
+        
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeReceiptPreview();
+        });
     </script>
 </body>
 </html>

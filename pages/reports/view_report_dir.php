@@ -124,11 +124,11 @@ if ($details_stmt) {
                         <?php
                         $status_badges = [
                             'draft' => '<span class="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs">Draft</span>',
-                            'submitted' => '<span class="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs">Menunggu Validasi</span>',
-                            'verified' => '<span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">Terverifikasi</span>',
-                            'revision_requested' => '<span class="px-2 py-1 bg-orange-100 text-orange-800 rounded-full text-xs">Perlu Revisi FM</span>',
-                            'approved' => '<span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">Disetujui</span>',
-                            'rejected' => '<span class="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs">Ditolak</span>'
+                            'submitted' => '<span class="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs">Pending Validation</span>',
+                            'verified' => '<span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">Verified</span>',
+                            'revision_requested' => '<span class="px-2 py-1 bg-orange-100 text-orange-800 rounded-full text-xs">Needs Revision (FM)</span>',
+                            'approved' => '<span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">Approved</span>',
+                            'rejected' => '<span class="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs">Rejected</span>'
                         ];
                         echo $status_badges[$report['status_lap']] ?? $report['status_lap'];
                         ?>
@@ -194,15 +194,10 @@ if ($details_stmt) {
                                 <td class="border border-gray-200 px-3 py-2 text-center text-sm">
                                     <?php if (!empty($detail['file_nota'])): ?>
                                         <?php $isImage = preg_match('/\.(jpg|jpeg|png|gif|bmp|webp|tif|tiff)$/i', $detail['file_nota']); ?>
-                                        <?php if ($isImage): ?>
-                                            <a href="<?php echo htmlspecialchars($detail['file_nota']); ?>" target="_blank" class="inline-flex items-center px-3 py-1 bg-blue-500 text-white rounded-full text-xs hover:bg-blue-600">
-                                                <i class="fas fa-image mr-1"></i> Preview
-                                            </a>
-                                        <?php else: ?>
-                                            <a href="<?php echo htmlspecialchars($detail['file_nota']); ?>" target="_blank" class="inline-flex items-center px-3 py-1 bg-blue-500 text-white rounded-full text-xs hover:bg-blue-600">
-                                                <i class="fas fa-file-pdf mr-1"></i> Unduh
-                                            </a>
-                                        <?php endif; ?>
+                                        <button onclick="previewReceipt('<?php echo htmlspecialchars($detail['file_nota']); ?>', <?php echo $isImage ? 'true' : 'false'; ?>)" 
+                                            class="inline-flex items-center px-3 py-1 bg-blue-500 text-white rounded-full text-xs hover:bg-blue-600">
+                                            <i class="fas fa-<?php echo $isImage ? 'image' : 'file-pdf'; ?> mr-1"></i> Preview
+                                        </button>
                                     <?php else: ?>
                                         <span class="text-xs text-gray-400">-</span>
                                     <?php endif; ?>
@@ -234,5 +229,54 @@ if ($details_stmt) {
             </div>
         </div>
     </main>
+
+    <!-- Receipt Preview Modal -->
+    <div id="receiptPreviewModal" class="fixed z-50 inset-0 bg-black/80 hidden items-center justify-center">
+        <div class="flex flex-col items-center max-w-7xl max-h-screen p-4">
+            <button onclick="closeReceiptPreview()" class="mb-4 self-end text-white bg-black/60 hover:bg-black/80 px-4 py-2 rounded-lg">
+                <i class="fas fa-times text-lg mr-2"></i>Close
+            </button>
+            <img id="modalReceiptImage" src="" alt="Preview" class="hidden max-h-[85vh] max-w-full rounded shadow-2xl" />
+            <embed id="modalReceiptPDF" src="" type="application/pdf" class="hidden w-full h-[85vh] rounded shadow-2xl" />
+        </div>
+    </div>
+
+    <script>
+        function previewReceipt(filePath, isImage) {
+            const modal = document.getElementById('receiptPreviewModal');
+            const imgElement = document.getElementById('modalReceiptImage');
+            const pdfElement = document.getElementById('modalReceiptPDF');
+            
+            imgElement.classList.add('hidden');
+            pdfElement.classList.add('hidden');
+            
+            if (isImage) {
+                imgElement.src = filePath;
+                imgElement.classList.remove('hidden');
+            } else {
+                pdfElement.src = filePath;
+                pdfElement.classList.remove('hidden');
+            }
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+        
+        function closeReceiptPreview() {
+            const modal = document.getElementById('receiptPreviewModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.getElementById('modalReceiptImage').src = '';
+            document.getElementById('modalReceiptPDF').src = '';
+        }
+        
+        document.getElementById('receiptPreviewModal').addEventListener('click', function(e) {
+            if (e.target === this) closeReceiptPreview();
+        });
+        
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeReceiptPreview();
+        });
+    </script>
 </body>
 </html>

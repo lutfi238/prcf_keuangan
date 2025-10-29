@@ -50,7 +50,7 @@ if (isset($_GET['success'])) {
             $success_message = 'Password berhasil diubah!';
             break;
         case 'proposal_approved_stage1':
-            $success_message = 'Proposal berhasil disetujui! Menunggu persetujuan Direktur.';
+            $success_message = 'Proposal successfully approved! Waiting for Director approval.';
             break;
     }
 }
@@ -356,11 +356,11 @@ session_write_close();
                                 <td class="px-6 py-4">
                                     <?php if ($proposal['status'] === 'submitted'): ?>
                                         <span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                                            Menunggu Review
+                                            Pending Review
                                         </span>
                                     <?php elseif ($proposal['status'] === 'approved'): ?>
                                         <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                            Disetujui
+                                            Approved
                                         </span>
                                     <?php endif; ?>
                                 </td>
@@ -382,7 +382,39 @@ session_write_close();
         <div id="reportsContent" class="tab-content hidden">
             <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
                 <div class="p-6 border-b border-gray-200">
-                    <h3 class="text-lg font-bold text-gray-800">Daftar Semua Laporan Keuangan</h3>
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-bold text-gray-800">Daftar Semua Laporan Keuangan</h3>
+                        <div class="relative">
+                            <input type="text" id="searchReports" placeholder="Cari kegiatan, proyek, atau pembuat..." 
+                                class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 w-80">
+                            <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+                        </div>
+                    </div>
+                    <div class="flex gap-3">
+                        <select id="filterProject" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
+                            <option value="">Semua Proyek</option>
+                            <?php 
+                            $projects = $conn->query("SELECT DISTINCT kode_projek FROM proyek ORDER BY kode_projek");
+                            while ($proj = $projects->fetch_assoc()): ?>
+                                <option value="<?php echo htmlspecialchars($proj['kode_projek']); ?>">
+                                    <?php echo htmlspecialchars($proj['kode_projek']); ?>
+                                </option>
+                            <?php endwhile; ?>
+                        </select>
+                        <select id="filterStatus" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
+                            <option value="">Semua Status</option>
+                            <option value="draft">Draft</option>
+                            <option value="submitted">Pending SA</option>
+                            <option value="verified">Validated by SA</option>
+                            <option value="approved_fm">Approved by FM (1/2)</option>
+                            <option value="approved">Approved Final</option>
+                            <option value="revision_requested">Needs Revision</option>
+                            <option value="rejected">Rejected</option>
+                        </select>
+                        <button onclick="resetReportFilters()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">
+                            <i class="fas fa-redo mr-2"></i>Reset
+                        </button>
+                    </div>
                 </div>
                 
                 <div class="overflow-x-auto">
@@ -403,11 +435,22 @@ session_write_close();
                             $no = 1;
                             while ($report = $reports->fetch_assoc()): 
                             ?>
-                            <tr class="hover:bg-gray-50">
+                            <tr class="hover:bg-gray-50 cursor-pointer report-row" 
+                                data-activity="<?php echo strtolower(htmlspecialchars($report['nama_kegiatan'])); ?>"
+                                data-project="<?php echo strtolower(htmlspecialchars($report['kode_projek'])); ?>"
+                                data-creator="<?php echo strtolower(htmlspecialchars($report['creator_name'])); ?>"
+                                data-status="<?php echo strtolower(trim($report['status_lap'] ?? '')); ?>"
+                                onclick="window.location.href='<?php 
+                                // Smart routing: if approved/rejected, go to view page; otherwise go to approval page
+                                $view_page = ($report['approved_by'] || in_array($report['status_lap'], ['approved', 'rejected', 'revision_requested'])) 
+                                    ? '../reports/view_report_fm.php' 
+                                    : '../reports/approve-report-fm.php';
+                                echo $view_page . '?id=' . $report['id_laporan_keu'] . '&return_tab=reports';
+                            ?>'">
                                 <td class="px-6 py-4 text-sm text-gray-900"><?php echo $no++; ?></td>
-                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo $report['nama_kegiatan']; ?></td>
-                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo $report['kode_projek']; ?></td>
-                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo $report['creator_name']; ?></td>
+                                <td class="px-6 py-4 text-sm text-gray-900 font-medium"><?php echo htmlspecialchars($report['nama_kegiatan']); ?></td>
+                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($report['kode_projek']); ?></td>
+                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($report['creator_name']); ?></td>
                                 <td class="px-6 py-4 text-sm text-gray-900">
                                     <?php echo date('d/m/Y', strtotime($report['tanggal_laporan'])); ?>
                                 </td>
@@ -415,33 +458,46 @@ session_write_close();
                                     <?php
                                     $status = strtolower(trim($report['status_lap'] ?? ''));
                                     switch ($status) {
-                                        case 'verified':
-                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Tervalidasi SA</span>';
-                                            break;
-                                        case 'approved':
-                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">Disetujui FM</span>';
+                                        case 'draft':
+                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">Draft</span>';
                                             break;
                                         case 'submitted':
-                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Draft/Belum Validasi</span>';
+                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Pending SA Validation</span>';
+                                            break;
+                                        case 'verified':
+                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800"><i class="fas fa-check mr-1"></i>Validated by SA</span>';
+                                            break;
+                                        case 'approved_fm':
+                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800"><i class="fas fa-check mr-1"></i>Approved by FM (1/2)</span>';
+                                            break;
+                                        case 'approved':
+                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800"><i class="fas fa-check-double mr-1"></i>Approved Final</span>';
                                             break;
                                         case 'revision_requested':
-                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800">Perlu Revisi PM</span>';
+                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800"><i class="fas fa-edit mr-1"></i>Needs Revision</span>';
                                             break;
                                         case 'rejected':
-                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Ditolak</span>';
+                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800"><i class="fas fa-times mr-1"></i>Rejected</span>';
                                             break;
                                         default:
                                             error_log("⚠️ dashboard_fm.php - Unknown status_lap=" . ($report['status_lap'] ?? 'null') . " for laporan ID=" . ($report['id_laporan_keu'] ?? 'null'));
-                                            $label = $status ? htmlspecialchars($report['status_lap']) : 'Status tidak diketahui';
+                                            $label = $status ? htmlspecialchars($report['status_lap']) : 'Unknown Status';
                                             echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">' . $label . '</span>';
                                     }
                                     ?>
                                 </td>
-                                <td class="px-6 py-4 text-sm">
-                                    <a href="../reports/approve-report-fm.php?id=<?php echo $report['id_laporan_keu']; ?>&return_tab=reports" 
-                                        class="text-blue-600 hover:text-blue-900">
-                                        <i class="fas fa-eye mr-1"></i> Review
-                                    </a>
+                                <td class="px-6 py-4 text-sm" onclick="event.stopPropagation();">
+                                    <?php if ($report['approved_by'] || in_array($report['status_lap'], ['approved', 'approved_fm', 'rejected', 'revision_requested'])): ?>
+                                        <a href="../reports/view_report_fm.php?id=<?php echo $report['id_laporan_keu']; ?>&return_tab=reports" 
+                                            class="text-blue-600 hover:text-blue-900 font-medium">
+                                            <i class="fas fa-eye mr-1"></i> View
+                                        </a>
+                                    <?php else: ?>
+                                        <a href="../reports/approve-report-fm.php?id=<?php echo $report['id_laporan_keu']; ?>&return_tab=reports" 
+                                            class="text-green-600 hover:text-green-900 font-medium">
+                                            <i class="fas fa-check-circle mr-1"></i> Approve
+                                        </a>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
                             <?php endwhile; ?>
@@ -535,6 +591,62 @@ session_write_close();
                 e.stopPropagation();
             });
         }
+        // Search and Filter for Reports
+        function filterReports() {
+            const searchTerm = document.getElementById('searchReports').value.toLowerCase();
+            const filterProject = document.getElementById('filterProject').value.toLowerCase();
+            const filterStatus = document.getElementById('filterStatus').value.toLowerCase();
+            const rows = document.querySelectorAll('.report-row');
+            let visibleCount = 0;
+            
+            rows.forEach(row => {
+                const activity = row.dataset.activity || '';
+                const project = row.dataset.project || '';
+                const creator = row.dataset.creator || '';
+                const status = row.dataset.status || '';
+                
+                const matchesSearch = !searchTerm || 
+                    activity.includes(searchTerm) || 
+                    project.includes(searchTerm) || 
+                    creator.includes(searchTerm);
+                
+                const matchesProject = !filterProject || project === filterProject;
+                const matchesStatus = !filterStatus || status === filterStatus;
+                
+                if (matchesSearch && matchesProject && matchesStatus) {
+                    row.style.display = '';
+                    visibleCount++;
+                    // Update row numbers
+                    row.querySelector('td:first-child').textContent = visibleCount;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+        
+        function resetReportFilters() {
+            document.getElementById('searchReports').value = '';
+            document.getElementById('filterProject').value = '';
+            document.getElementById('filterStatus').value = '';
+            filterReports();
+        }
+        
+        // Add event listeners for report filters
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('searchReports');
+            const filterProject = document.getElementById('filterProject');
+            const filterStatus = document.getElementById('filterStatus');
+            
+            if (searchInput) {
+                searchInput.addEventListener('input', filterReports);
+            }
+            if (filterProject) {
+                filterProject.addEventListener('change', filterReports);
+            }
+            if (filterStatus) {
+                filterStatus.addEventListener('change', filterReports);
+            }
+        });
     </script>
     
     <!-- Real-time Notifications -->

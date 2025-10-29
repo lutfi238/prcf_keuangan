@@ -76,6 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Determine redirect URL based on role
             $redirect = '../pages/dashboards/';
             switch ($user['role']) {
+                case 'Admin':            $redirect .= 'dashboard_admin.php'; break;
                 case 'Project Manager':  $redirect .= 'dashboard_pm.php'; break;
                 case 'Staff Accountant': $redirect .= 'dashboard_sa.php'; break;
                 case 'Finance Manager':  $redirect .= 'dashboard_fm.php'; break;

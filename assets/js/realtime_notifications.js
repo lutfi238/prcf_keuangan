@@ -1,6 +1,8 @@
-// Real-time Notification System
+// Real-time Notification System with Server-Sent Events (SSE)
 let notificationCount = 0;
 let notificationCheckInterval;
+let eventSource = null;
+let useSSE = true; // Toggle to use SSE or fallback to polling
 
 // Update notification badge and count
 function updateNotificationBadge(count) {
@@ -198,13 +200,111 @@ function toggleNotificationsRealtime() {
     }
 }
 
-// Start polling for notifications
+// Initialize Server-Sent Events connection
+function initializeSSE() {
+    if (!useSSE || !window.EventSource) {
+        console.log('SSE not supported or disabled, falling back to polling');
+        startNotificationPolling();
+        return;
+    }
+    
+    // Close existing connection if any
+    if (eventSource) {
+        eventSource.close();
+    }
+    
+    // Create new SSE connection
+    const baseUrl = window.location.pathname.includes('/pages/') ? '../../api/' : 'api/';
+    eventSource = new EventSource(baseUrl + 'realtime_updates.php');
+    
+    // Handle incoming updates
+    eventSource.addEventListener('update', function(e) {
+        try {
+            const data = JSON.parse(e.data);
+            console.log('SSE Update received:', data);
+            
+            // Update notification badge
+            if (data.total_notifications !== undefined) {
+                updateNotificationBadge(data.total_notifications);
+            }
+            
+            // Update dashboard stats if they exist
+            updateDashboardStats(data);
+            
+            // Update notification panel if open
+            if (data.notifications && data.notifications.length > 0) {
+                updateNotificationPanel(data.notifications, data.total_notifications);
+            }
+        } catch (error) {
+            console.error('Error parsing SSE data:', error);
+        }
+    });
+    
+    // Handle heartbeat
+    eventSource.addEventListener('heartbeat', function(e) {
+        console.log('SSE Heartbeat:', e.data);
+    });
+    
+    // Handle connection errors
+    eventSource.onerror = function(error) {
+        console.error('SSE Error:', error);
+        console.log('SSE connection lost, attempting to reconnect...');
+        
+        // Close and retry after 5 seconds
+        if (eventSource.readyState === EventSource.CLOSED) {
+            console.log('SSE connection closed, falling back to polling');
+            useSSE = false;
+            startNotificationPolling();
+        }
+    };
+    
+    // Handle connection open
+    eventSource.onopen = function() {
+        console.log('SSE connection established');
+    };
+}
+
+// Update dashboard statistics in real-time
+function updateDashboardStats(data) {
+    // Update proposal count
+    if (data.pending_proposals !== undefined) {
+        const proposalCountElement = document.querySelector('[data-stat="pending_proposals"]');
+        if (proposalCountElement) {
+            proposalCountElement.textContent = data.pending_proposals;
+        }
+    }
+    
+    // Update report count
+    if (data.pending_reports !== undefined) {
+        const reportCountElement = document.querySelector('[data-stat="pending_reports"]');
+        if (reportCountElement) {
+            reportCountElement.textContent = data.pending_reports;
+        }
+    }
+    
+    // Update revision counts (for PM)
+    if (data.revision_proposals !== undefined) {
+        const revisionProposalElement = document.querySelector('[data-stat="revision_proposals"]');
+        if (revisionProposalElement) {
+            revisionProposalElement.textContent = data.revision_proposals;
+        }
+    }
+    
+    if (data.revision_reports !== undefined) {
+        const revisionReportElement = document.querySelector('[data-stat="revision_reports"]');
+        if (revisionReportElement) {
+            revisionReportElement.textContent = data.revision_reports;
+        }
+    }
+}
+
+// Start polling for notifications (fallback)
 function startNotificationPolling() {
     // Initial fetch
     fetchNotifications();
     
-    // Poll every 3 seconds for real-time updates
-    notificationCheckInterval = setInterval(fetchNotifications, 3000);
+    // Poll every 5 seconds for real-time updates
+    notificationCheckInterval = setInterval(fetchNotifications, 5000);
 }
 
 // Trigger immediate refresh (useful after actions like save/approve)
@@ -219,6 +319,15 @@ function stopNotificationPolling() {
     }
 }
 
+// Stop SSE connection
+function stopSSE() {
+    if (eventSource) {
+        console.log('Closing SSE connection');
+        eventSource.close();
+        eventSource = null;
+    }
+}
+
 // Handle notification click - clear badge immediately
 function onNotificationClick(event) {
     // Clear badge immediately when clicking a notification
@@ -230,11 +339,26 @@ function onNotificationClick(event) {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
-    startNotificationPolling();
+    // Try SSE first, fallback to polling if not supported
+    initializeSSE();
 });
 
 // Cleanup on page unload
 window.addEventListener('beforeunload', function() {
+    stopSSE();
     stopNotificationPolling();
+});
+
+// Handle page visibility change (pause when tab is hidden to save resources)
+document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+        console.log('Page hidden, maintaining SSE connection in background');
+    } else {
+        console.log('Page visible, SSE connection active');
+        // Optionally refresh immediately when tab becomes visible
+        if (!useSSE) {
+            refreshNotifications();
+        }
+    }
 });
 
