@@ -43,7 +43,11 @@ prcf_keuangan/
 │   │   ├── validate_report.php         # Validasi (SA)
 │   │   ├── approve_report.php          # Approval (FM)
 │   │   ├── approve_report_dir.php      # Approval (Direktur)
-│   │   └── view_report.php             # Lihat laporan
+│   │   ├── view_report_pm.php           # Lihat laporan (PM)
+│   │   ├── view_report_fm.php           # Lihat laporan (FM)
+│   │   ├── view_report_sa.php           # Lihat laporan (SA)
+│   │   ├── view_report_dir.php          # Lihat laporan (Direktur)
+│   │   └── view_report.php              # Redirect ke role-specific view
 │   │
 │   ├── books/                          # Buku keuangan
 │   │   ├── buku_bank.php               # Buku bank

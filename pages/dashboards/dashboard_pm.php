@@ -385,7 +385,7 @@ session_write_close();
                                 'approved' => 'Disetujui',
                                 'rejected' => 'Ditolak'
                             ];
-                            $link = '../reports/view_report.php?id=' . $activity['id']; // READ-ONLY for PM
+                            $link = '../reports/view_report_pm.php?id=' . $activity['id']; // READ-ONLY for PM
                         }
                         $current_status = $status_text[$activity['status']] ?? $activity['status'];
                         ?>

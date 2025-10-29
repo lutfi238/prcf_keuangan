@@ -461,7 +461,7 @@ session_write_close();
                                 <td class="px-6 py-4 text-sm">
                                     <?php if ($report['status_lap'] === 'approved'): ?>
                                         <!-- Already approved - show View action -->
-                                        <a href="../reports/view_report.php?id=<?php echo $report['id_laporan_keu']; ?>&return_tab=reports"
+                                        <a href="../reports/view_report_dir.php?id=<?php echo $report['id_laporan_keu']; ?>&return_tab=reports"
                                             class="text-blue-600 hover:text-blue-900">
                                             <i class="fas fa-eye mr-1"></i> View
                                         </a>
