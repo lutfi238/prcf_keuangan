@@ -77,7 +77,7 @@ while ($row = $pending_reports->fetch_assoc()) {
         'type' => 'report',
         'id' => $row['id_laporan_keu'],
         'title' => 'Laporan baru perlu validasi: ' . $row['nama_kegiatan'],
-        'link' => '../reports/validate_report.php?id=' . $row['id_laporan_keu'],
+        'link' => '../reports/approve-report-sa.php?id=' . $row['id_laporan_keu'],
         'time' => time_elapsed_string($row['created_at']),
         'is_unread' => $is_unread
     ];
@@ -291,7 +291,7 @@ session_write_close();
                                 <?php endif; ?>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                <a href="../reports/validate_report.php?id=<?php echo $report['id_laporan_keu']; ?>" 
+                                <a href="../reports/approve-report-sa.php?id=<?php echo $report['id_laporan_keu']; ?>" 
                                     class="text-blue-600 hover:text-blue-900 mr-3">
                                     <i class="fas fa-eye mr-1"></i> Review
                                 </a>

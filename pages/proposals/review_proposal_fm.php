@@ -26,6 +26,7 @@ if ($_SESSION['user_role'] !== 'Finance Manager') {
 $user_name = $_SESSION['user_name'];
 $user_id = $_SESSION['user_id'];
 $proposal_id = $_GET['id'] ?? 0;
+$return_tab = $_GET['return_tab'] ?? 'proposals'; // Default to proposals if not specified
 
 // Handle FM Approval (Stage 1)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -105,7 +106,7 @@ $proposal = $stmt->get_result()->fetch_assoc();
 
 if (!$proposal) {
     error_log("⚠️ review_proposal_fm.php - Proposal not found: ID = $proposal_id");
-    header('Location: ../dashboards/dashboard_fm.php');
+    header('Location: ../dashboards/dashboard_fm.php?tab=' . urlencode($return_tab));
     exit();
 }
 
@@ -129,7 +130,7 @@ session_write_close();
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <div class="flex items-center space-x-4">
-                    <a href="../dashboards/dashboard_fm.php" class="text-gray-600 hover:text-gray-800">
+                    <a href="../dashboards/dashboard_fm.php?tab=<?php echo urlencode($return_tab); ?>" class="text-gray-600 hover:text-gray-800">
                         <i class="fas fa-arrow-left"></i>
                     </a>
                     <h1 class="text-xl font-bold text-gray-800">Review Proposal (Finance Manager)</h1>
@@ -143,7 +144,7 @@ session_write_close();
         <?php if (isset($success)): ?>
             <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
                 <?php echo $success; ?>
-                <a href="../dashboards/dashboard_fm.php" class="block mt-2 text-green-800 underline">Kembali ke Dashboard</a>
+                <a href="../dashboards/dashboard_fm.php?tab=<?php echo urlencode($return_tab); ?>" class="block mt-2 text-green-800 underline">Kembali ke Dashboard</a>
             </div>
         <?php endif; ?>
 

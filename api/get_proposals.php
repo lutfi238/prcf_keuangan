@@ -10,6 +10,7 @@ if (!isset($_SESSION['logged_in'])) {
 }
 
 $kode_proyek = $_GET['kode_proyek'] ?? '';
+$include_used = isset($_GET['include_used']) && $_GET['include_used'] === '1';
 
 if (empty($kode_proyek)) {
     echo json_encode(['success' => false, 'message' => 'Kode proyek required']);
@@ -17,10 +18,23 @@ if (empty($kode_proyek)) {
 }
 
 // Fetch approved proposals for the selected project
-$stmt = $conn->prepare("SELECT id_proposal, judul_proposal, pj, date 
-    FROM proposal 
-    WHERE kode_proyek = ? AND status = 'approved' 
-    ORDER BY created_at DESC");
+if ($include_used) {
+    // Include all approved proposals (used for checking if any exist)
+    $stmt = $conn->prepare("SELECT id_proposal, judul_proposal, pj, date
+        FROM proposal
+        WHERE kode_proyek = ? AND status = 'approved'
+        ORDER BY created_at DESC");
+} else {
+    // Exclude those already used in financial reports
+    $stmt = $conn->prepare("SELECT id_proposal, judul_proposal, pj, date
+        FROM proposal p
+        WHERE kode_proyek = ? AND status = 'approved'
+        AND NOT EXISTS (
+            SELECT 1 FROM laporan_keuangan_header lh
+            WHERE lh.nama_projek = p.judul_proposal
+        )
+        ORDER BY created_at DESC");
+}
 $stmt->bind_param("s", $kode_proyek);
 $stmt->execute();
 $result = $stmt->get_result();

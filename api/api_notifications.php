@@ -163,7 +163,8 @@ switch ($user_role) {
         $notif_approved = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE pemohon = '{$user_name}' AND status = 'approved' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['count'];
         $notif_rejected = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE pemohon = '{$user_name}' AND status = 'rejected' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['count'];
         $notif_reports = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE created_by = {$user_id} AND status_lap IN ('verified', 'approved') AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['count'];
-        $total_count = $notif_approved + $notif_rejected + $notif_reports;
+        $notif_revision = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE created_by = {$user_id} AND status_lap = 'revision_requested' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['count'];
+        $total_count = $notif_approved + $notif_rejected + $notif_reports + $notif_revision;
         
         // Approved proposals
         $approved_proposals = $conn->query("SELECT id_proposal, judul_proposal, updated_at as notification_time
@@ -194,6 +195,23 @@ switch ($user_role) {
                 'title' => 'Proposal Perlu Revisi',
                 'message' => $row['judul_proposal'],
                 'link' => 'view_proposal.php?id=' . $row['id_proposal'],
+                'time' => $row['notification_time'],
+                'sort_time' => strtotime($row['notification_time'])
+            ];
+        }
+        
+        // Reports needing revision
+        $revision_reports = $conn->query("SELECT id_laporan_keu, nama_kegiatan, updated_at as notification_time
+            FROM laporan_keuangan_header 
+            WHERE created_by = {$user_id} AND status_lap = 'revision_requested' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
+            ORDER BY updated_at DESC");
+        
+        while ($row = $revision_reports->fetch_assoc()) {
+            $notifications[] = [
+                'type' => 'warning',
+                'title' => 'Laporan Perlu Revisi',
+                'message' => $row['nama_kegiatan'],
+                'link' => '../reports/edit_financial_report.php?id=' . $row['id_laporan_keu'],
                 'time' => $row['notification_time'],
                 'sort_time' => strtotime($row['notification_time'])
             ];

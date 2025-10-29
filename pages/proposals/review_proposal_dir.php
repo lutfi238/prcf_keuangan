@@ -26,6 +26,7 @@ if ($_SESSION['user_role'] !== 'Direktur') {
 $user_name = $_SESSION['user_name'];
 $user_id = $_SESSION['user_id'];
 $proposal_id = $_GET['id'] ?? 0;
+$return_tab = $_GET['return_tab'] ?? 'proposals'; // Default to proposals if not specified
 
 // Handle DIR Approval (Stage 2)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -118,7 +119,7 @@ $proposal = $stmt->get_result()->fetch_assoc();
 
 if (!$proposal) {
     // make sure the path is correct
-    header('Location: ../dashboards/dashboard_dir.php');
+    header('Location: ../dashboards/dashboard_dir.php?tab=' . urlencode($return_tab));
     exit();
 }
 
@@ -149,7 +150,7 @@ if (isset($_GET['success'])) {
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <div class="flex items-center space-x-4">
-                    <a href="../dashboards/dashboard_dir.php" class="text-gray-600 hover:text-gray-800">
+                    <a href="../dashboards/dashboard_dir.php?tab=<?php echo urlencode($return_tab); ?>" class="text-gray-600 hover:text-gray-800">
                         <i class="fas fa-arrow-left"></i>
                     </a>
                     <h1 class="text-xl font-bold text-gray-800">Review Proposal (Direktur)</h1>
@@ -163,7 +164,7 @@ if (isset($_GET['success'])) {
         <?php if (!empty($success)): ?>
             <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
                 <?php echo $success; ?>
-                <a href="../dashboards/dashboard_dir.php" class="block mt-2 text-green-800 underline">Kembali ke Dashboard</a>
+                <a href="../dashboards/dashboard_dir.php?tab=<?php echo urlencode($return_tab); ?>" class="block mt-2 text-green-800 underline">Kembali ke Dashboard</a>
             </div>
         <?php endif; ?>
 

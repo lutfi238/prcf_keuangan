@@ -63,7 +63,9 @@ $proposals = $conn->query("SELECT p.*, pr.nama_proyek
 $notif_approved_proposals = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE pemohon = '{$user_name}' AND status = 'approved' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['count'];
 $notif_rejected_proposals = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE pemohon = '{$user_name}' AND status = 'rejected' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['count'];
 $notif_approved_reports = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE created_by = {$user_id} AND status_lap = 'approved' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['count'];
-$total_notifications = $notif_approved_proposals + $notif_rejected_proposals + $notif_approved_reports;
+$notif_revision_reports = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE created_by = {$user_id} AND status_lap = 'revision_requested' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['count'];
+$notif_reports = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE created_by = {$user_id} AND status_lap IN ('verified', 'approved', 'revision_requested') AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['count'];
+$total_notifications = $notif_approved_proposals + $notif_rejected_proposals + $notif_approved_reports + $notif_revision_reports;
 
 // Get recent notifications with details
 $notifications = [];
@@ -97,6 +99,23 @@ while ($row = $rejected_proposals->fetch_assoc()) {
         'id' => $row['id_proposal'],
         'title' => 'Proposal ditolak: ' . $row['judul_proposal'],
         'link' => '../proposals/view_proposal.php?id=' . $row['id_proposal'],
+        'time' => time_elapsed_string($row['updated_at']),
+        'is_unread' => $is_unread
+    ];
+}
+
+// Add revision report notifications
+$revision_reports = $conn->query("SELECT id_laporan_keu, nama_kegiatan, updated_at 
+    FROM laporan_keuangan_header 
+    WHERE created_by = {$user_id} AND status_lap = 'revision_requested' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
+    ORDER BY updated_at DESC LIMIT 5");
+while ($row = $revision_reports->fetch_assoc()) {
+    $is_unread = (strtotime($row['updated_at']) > strtotime($last_notification_check));
+    $notifications[] = [
+        'type' => 'rejected',
+        'id' => $row['id_laporan_keu'],
+        'title' => 'Laporan perlu revisi: ' . $row['nama_kegiatan'],
+        'link' => '../reports/edit_financial_report.php?id=' . $row['id_laporan_keu'],
         'time' => time_elapsed_string($row['updated_at']),
         'is_unread' => $is_unread
     ];
@@ -361,11 +380,12 @@ session_write_close();
                             $status_text = [
                                 'draft' => 'Draft',
                                 'submitted' => 'Menunggu validasi SA',
-                                'verified' => 'Diverifikasi SA',
+                                'verified' => 'Terverifikasi',
+                                'revision_requested' => 'Perlu revisi dari FM',
                                 'approved' => 'Disetujui',
                                 'rejected' => 'Ditolak'
                             ];
-                            $link = '../reports/view_report.php?id=' . $activity['id']; // READ-ONLY for PM
+                            $link = '../reports/view_report_pm.php?id=' . $activity['id']; // READ-ONLY for PM
                         }
                         $current_status = $status_text[$activity['status']] ?? $activity['status'];
                         ?>

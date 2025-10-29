@@ -62,11 +62,10 @@ $proposals = $conn->query("SELECT p.*, u.nama as creator_name
     WHERE p.status IN ('submitted', 'approved') 
     ORDER BY p.created_at DESC");
 
-// Get validated financial reports for approval
+// Get all financial reports (SHOW ALL, not just 'verified')
 $reports = $conn->query("SELECT lh.*, u.nama as creator_name 
     FROM laporan_keuangan_header lh 
     LEFT JOIN user u ON lh.created_by = u.id_user 
-    WHERE lh.status_lap = 'verified' 
     ORDER BY lh.created_at DESC");
 
 // Get notifications (pending proposals + pending reports)
@@ -95,7 +94,7 @@ while ($row = $proposal_notifs->fetch_assoc()) {
     ];
 }
 
-// Add report notifications
+// Add report notifications (still only 'verified' for notifications)
 $report_notifs = $conn->query("SELECT lh.id_laporan_keu, lh.nama_kegiatan, lh.created_at, u.nama as creator 
     FROM laporan_keuangan_header lh 
     LEFT JOIN user u ON lh.created_by = u.id_user 
@@ -334,7 +333,7 @@ session_write_close();
                             <tr>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">No</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Judul</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">PJ</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pemohon</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Proyek</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tanggal</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
@@ -349,7 +348,7 @@ session_write_close();
                             <tr class="hover:bg-gray-50">
                                 <td class="px-6 py-4 text-sm text-gray-900"><?php echo $no++; ?></td>
                                 <td class="px-6 py-4 text-sm text-gray-900"><?php echo $proposal['judul_proposal']; ?></td>
-                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo $proposal['pj']; ?></td>
+                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo $proposal['pemohon']; ?></td>
                                 <td class="px-6 py-4 text-sm text-gray-900"><?php echo $proposal['kode_proyek']; ?></td>
                                 <td class="px-6 py-4 text-sm text-gray-900">
                                     <?php echo date('d/m/Y', strtotime($proposal['date'])); ?>
@@ -366,7 +365,7 @@ session_write_close();
                                     <?php endif; ?>
                                 </td>
                                 <td class="px-6 py-4 text-sm">
-                                    <a href="../proposals/review_proposal_fm.php?id=<?php echo $proposal['id_proposal']; ?>" 
+                                    <a href="../proposals/review_proposal_fm.php?id=<?php echo $proposal['id_proposal']; ?>&return_tab=proposals" 
                                         class="text-blue-600 hover:text-blue-900">
                                         <i class="fas fa-eye mr-1"></i> Review
                                     </a>
@@ -383,7 +382,7 @@ session_write_close();
         <div id="reportsContent" class="tab-content hidden">
             <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
                 <div class="p-6 border-b border-gray-200">
-                    <h3 class="text-lg font-bold text-gray-800">Laporan Keuangan yang Perlu Diapprove</h3>
+                    <h3 class="text-lg font-bold text-gray-800">Daftar Semua Laporan Keuangan</h3>
                 </div>
                 
                 <div class="overflow-x-auto">
@@ -413,14 +412,35 @@ session_write_close();
                                     <?php echo date('d/m/Y', strtotime($report['tanggal_laporan'])); ?>
                                 </td>
                                 <td class="px-6 py-4">
-                                    <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                        Tervalidasi SA
-                                    </span>
+                                    <?php
+                                    $status = strtolower(trim($report['status_lap'] ?? ''));
+                                    switch ($status) {
+                                        case 'verified':
+                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Tervalidasi SA</span>';
+                                            break;
+                                        case 'approved':
+                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">Disetujui FM</span>';
+                                            break;
+                                        case 'submitted':
+                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Draft/Belum Validasi</span>';
+                                            break;
+                                        case 'revision_requested':
+                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800">Perlu Revisi PM</span>';
+                                            break;
+                                        case 'rejected':
+                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Ditolak</span>';
+                                            break;
+                                        default:
+                                            error_log("⚠️ dashboard_fm.php - Unknown status_lap=" . ($report['status_lap'] ?? 'null') . " for laporan ID=" . ($report['id_laporan_keu'] ?? 'null'));
+                                            $label = $status ? htmlspecialchars($report['status_lap']) : 'Status tidak diketahui';
+                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">' . $label . '</span>';
+                                    }
+                                    ?>
                                 </td>
                                 <td class="px-6 py-4 text-sm">
-                                    <a href="../reports/approve_report.php?id=<?php echo $report['id_laporan_keu']; ?>" 
+                                    <a href="../reports/approve-report-fm.php?id=<?php echo $report['id_laporan_keu']; ?>&return_tab=reports" 
                                         class="text-blue-600 hover:text-blue-900">
-                                        <i class="fas fa-check-circle mr-1"></i> Approve
+                                        <i class="fas fa-eye mr-1"></i> Review
                                     </a>
                                 </td>
                             </tr>
@@ -433,7 +453,7 @@ session_write_close();
     </main>
 
     <script>
-        function showTab(tabName) {
+        function showTab(tabName, updateUrl = true) {
             // Hide all content
             document.querySelectorAll('.tab-content').forEach(content => {
                 content.classList.add('hidden');
@@ -452,7 +472,24 @@ session_write_close();
             const activeButton = document.getElementById('tab' + tabName.charAt(0).toUpperCase() + tabName.slice(1));
             activeButton.classList.remove('border-transparent', 'text-gray-500');
             activeButton.classList.add('border-blue-500', 'text-blue-600');
+
+            // Update URL without reloading page
+            if (updateUrl) {
+                const url = new URL(window.location);
+                url.searchParams.set('tab', tabName);
+                window.history.replaceState({}, '', url);
+            }
         }
+
+        // On page load, check for tab parameter and restore it
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const activeTab = urlParams.get('tab');
+            
+            if (activeTab && (activeTab === 'proposals' || activeTab === 'reports')) {
+                showTab(activeTab, false);
+            }
+        });
 
         function toggleNotifications() {
             const panel = document.getElementById('notificationPanel');
