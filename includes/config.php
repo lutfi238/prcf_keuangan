@@ -6,10 +6,7 @@ define('DB_USER', 'root');
 define('DB_PASS', '');
 define('DB_NAME', 'prcf_keuangan');
 
-// OTP Configuration
-define('FONNTE_API_URL', 'https://api.fonnte.com/send');
-define('FONNTE_TOKEN', 'JtuW4APts6pCciuizucu');
-define('WA_OTP_ENABLED', false);
+// OTP Configuration (Email only)
 
 // Developer Mode Configuration
 define('DEVELOPER_MODE', false);
@@ -29,7 +26,6 @@ define('FROM_NAME', 'PRCF INDONESIA Financial');
 
 // Toggle channels
 if (!defined('EMAIL_OTP_ENABLED')) define('EMAIL_OTP_ENABLED', true);
-if (!defined('WA_OTP_ENABLED')) define('WA_OTP_ENABLED', false);
 if (!defined('PHONE_LOGIN_ENABLED')) define('PHONE_LOGIN_ENABLED', true);
 
 // Phone number helper functions
@@ -56,8 +52,8 @@ if (!function_exists('normalize_phone_number')) {
     }
 }
 
-if (!function_exists('validate_whatsapp_number')) {
-    function validate_whatsapp_number($phone) {
+if (!function_exists('validate_phone_number_format')) {
+    function validate_phone_number_format($phone) {
         if (!$phone) {
             return ['valid' => true, 'error' => ''];
         }
@@ -315,90 +311,8 @@ function send_notification_email($email, $subject, $message) {
     }
 }
 
-function send_otp_whatsapp($phone, $otp) {
-    try {
-        if (!WA_OTP_ENABLED) {
-            error_log("⚠️ WhatsApp OTP is disabled");
-            return false;
-        }
-        
-        if (FONNTE_TOKEN === 'YOUR_FONNTE_TOKEN_HERE' || empty(FONNTE_TOKEN)) {
-            error_log("⚠️ Fonnte token not configured. Please update FONNTE_TOKEN in config.php");
-            return false;
-        }
-        
-        $phone = preg_replace('/[^0-9]/', '', $phone);
-        
-        if (substr($phone, 0, 1) === '0') {
-            $phone = '62' . substr($phone, 1);
-        }
-        
-        if (substr($phone, 0, 2) !== '62') {
-            $phone = '62' . $phone;
-        }
-        
-        $message = "🔐 *Kode OTP Login - PRCF INDONESIA Financial*\n\n";
-        $message .= "Kode OTP Anda: *{$otp}*\n\n";
-        $message .= "⏱️ Berlaku selama 60 detik.\n";
-        $message .= "🔒 Jangan bagikan kode ini kepada siapapun!\n\n";
-        $message .= "PRCF INDONESIA Financial Management System";
-        
-        $curl = curl_init();
-        
-        curl_setopt_array($curl, [
-            CURLOPT_URL => FONNTE_API_URL,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_ENCODING => '',
-            CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_CUSTOMREQUEST => 'POST',
-            CURLOPT_POSTFIELDS => [
-                'target' => $phone,
-                'message' => $message,
-                'countryCode' => '62'
-            ],
-            CURLOPT_HTTPHEADER => [
-                'Authorization: ' . FONNTE_TOKEN
-            ],
-        ]);
-        
-        $response = curl_exec($curl);
-        $http_code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-        $error = curl_error($curl);
-        
-        curl_close($curl);
-        
-        if ($error) {
-            error_log("❌ WhatsApp OTP cURL Error: " . $error);
-            return false;
-        }
-        
-        $result = json_decode($response, true);
-        
-        error_log("📱 WhatsApp OTP Debug:");
-        error_log("  Phone: " . $phone);
-        error_log("  HTTP Code: " . $http_code);
-        error_log("  Response: " . $response);
-        
-        if ($http_code === 200 && isset($result['status']) && $result['status'] === true) {
-            error_log("✅ WhatsApp OTP sent successfully to: " . $phone . " - OTP: " . $otp);
-            return true;
-        } else {
-            $error_msg = isset($result['reason']) ? $result['reason'] : 'Unknown error';
-            error_log("❌ Failed to send WhatsApp OTP to: " . $phone . " - Error: " . $error_msg);
-            return false;
-        }
-        
-    } catch (Exception $e) {
-        error_log("❌ WhatsApp OTP Exception: " . $e->getMessage());
-        return false;
-    }
-}
-
 function is_valid_phone_number($phone) {
-    $result = validate_whatsapp_number($phone);
+    $result = validate_phone_number_format($phone);
     return $result['valid'];
 }
 ?>

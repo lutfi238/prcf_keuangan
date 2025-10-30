@@ -85,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['otp'] = $otp;
                 $_SESSION['otp_time'] = time();
                 $_SESSION['otp_attempts'] = 0;
-                $_SESSION['otp_phone_masked'] = ''; // WhatsApp disabled
+                $_SESSION['otp_phone_masked'] = '';
                 
                 // Send OTP via email
                 if (defined('EMAIL_OTP_ENABLED') && EMAIL_OTP_ENABLED === true) {

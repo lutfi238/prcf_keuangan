@@ -46,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
         $error = 'Password tidak cocok';
     } else {
         // Validate phone number jika diisi
-        $phone_validation = validate_whatsapp_number($phone);
+        $phone_validation = validate_phone_number_format($phone);
         if (!$phone_validation['valid']) {
             $error = $phone_validation['error'];
         } else {
@@ -165,7 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                         title="Masukkan nomor telepon aktif bila ingin dihubungi admin">
                     <div class="mt-1 text-xs">
                         <p class="text-gray-500">
-                            💬 Opsional: isi jika ingin administrator menghubungi Anda via WhatsApp/telepon.
+                            📞 Opsional: isi jika ingin administrator menghubungi Anda via telepon.
                         </p>
                         <p class="text-gray-500 mt-1">
                             📱 Format: <code class="bg-gray-100 px-1 rounded">081234567890</code> atau <code class="bg-gray-100 px-1 rounded">6281234567890</code>
