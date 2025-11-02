@@ -12,8 +12,15 @@ if (!isset($_SESSION['logged_in']) || $_SESSION['user_role'] !== 'Admin') {
 }
 
 $user_name = $_SESSION['user_name'];
+$current_user_id = $_SESSION['user_id'];
 $success_message = '';
 $error_message = '';
+
+// Helper function: Count total admins
+function countAdmins($conn) {
+    $result = $conn->query("SELECT COUNT(*) as count FROM user WHERE role = 'Admin'");
+    return $result->fetch_assoc()['count'];
+}
 
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -40,24 +47,80 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $role = $_POST['role'];
         $no_HP = $_POST['no_HP'];
         
-        $stmt = $conn->prepare("UPDATE user SET nama = ?, role = ?, email = ?, no_HP = ? WHERE id_user = ?");
-        $stmt->bind_param("ssssi", $nama, $role, $email, $no_HP, $id_user);
-        
-        if ($stmt->execute()) {
-            $success_message = "User berhasil diupdate!";
+        // 🔒 PROTECTION 1: Cannot edit yourself
+        if ($id_user == $current_user_id) {
+            $error_message = "❌ Tidak dapat mengubah akun Anda sendiri! Minta admin lain untuk mengubah akun Anda.";
         } else {
-            $error_message = "Gagal mengupdate user: " . $conn->error;
+            // 🔒 PROTECTION 2: Check if demoting last admin
+            $check_user = $conn->query("SELECT role FROM user WHERE id_user = $id_user");
+            $current_role = $check_user->fetch_assoc()['role'];
+            
+            if ($current_role === 'Admin' && $role !== 'Admin') {
+                $admin_count = countAdmins($conn);
+                if ($admin_count <= 1) {
+                    $error_message = "❌ Tidak dapat mengubah role Admin terakhir! Sistem harus memiliki minimal 1 Admin.";
+                } else {
+                    // Safe to demote, proceed with update
+                    $stmt = $conn->prepare("UPDATE user SET nama = ?, role = ?, email = ?, no_HP = ? WHERE id_user = ?");
+                    $stmt->bind_param("ssssi", $nama, $role, $email, $no_HP, $id_user);
+                    
+                    if ($stmt->execute()) {
+                        $success_message = "✅ User berhasil diupdate!";
+                        error_log("ADMIN ACTION: User ID $current_user_id updated user ID $id_user (role changed: $current_role → $role)");
+                    } else {
+                        $error_message = "Gagal mengupdate user: " . $conn->error;
+                    }
+                }
+            } else {
+                // Normal update (not affecting admin role)
+                $stmt = $conn->prepare("UPDATE user SET nama = ?, role = ?, email = ?, no_HP = ? WHERE id_user = ?");
+                $stmt->bind_param("ssssi", $nama, $role, $email, $no_HP, $id_user);
+                
+                if ($stmt->execute()) {
+                    $success_message = "✅ User berhasil diupdate!";
+                } else {
+                    $error_message = "Gagal mengupdate user: " . $conn->error;
+                }
+            }
         }
     } elseif (isset($_POST['delete_user'])) {
         $id_user = $_POST['id_user'];
         
-        $stmt = $conn->prepare("DELETE FROM user WHERE id_user = ?");
-        $stmt->bind_param("i", $id_user);
-        
-        if ($stmt->execute()) {
-            $success_message = "User berhasil dihapus!";
+        // 🔒 PROTECTION 1: Cannot delete yourself
+        if ($id_user == $current_user_id) {
+            $error_message = "❌ Tidak dapat menghapus akun Anda sendiri!";
         } else {
-            $error_message = "Gagal menghapus user: " . $conn->error;
+            // 🔒 PROTECTION 2: Check if deleting last admin
+            $check_user = $conn->query("SELECT role FROM user WHERE id_user = $id_user");
+            $user_role = $check_user->fetch_assoc()['role'];
+            
+            if ($user_role === 'Admin') {
+                $admin_count = countAdmins($conn);
+                if ($admin_count <= 1) {
+                    $error_message = "❌ Tidak dapat menghapus Admin terakhir! Sistem harus memiliki minimal 1 Admin.";
+                } else {
+                    // Safe to delete, proceed
+                    $stmt = $conn->prepare("DELETE FROM user WHERE id_user = ?");
+                    $stmt->bind_param("i", $id_user);
+                    
+                    if ($stmt->execute()) {
+                        $success_message = "✅ User berhasil dihapus!";
+                        error_log("ADMIN ACTION: User ID $current_user_id deleted user ID $id_user (role: $user_role)");
+                    } else {
+                        $error_message = "Gagal menghapus user: " . $conn->error;
+                    }
+                }
+            } else {
+                // Safe to delete non-admin user
+                $stmt = $conn->prepare("DELETE FROM user WHERE id_user = ?");
+                $stmt->bind_param("i", $id_user);
+                
+                if ($stmt->execute()) {
+                    $success_message = "✅ User berhasil dihapus!";
+                } else {
+                    $error_message = "Gagal menghapus user: " . $conn->error;
+                }
+            }
         }
     } elseif (isset($_POST['reset_password'])) {
         $id_user = $_POST['id_user'];
@@ -77,6 +140,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Get all users
 $users = $conn->query("SELECT * FROM user ORDER BY created_at DESC");
+
+// Count total admins for protection logic
+$admin_count = countAdmins($conn);
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -176,18 +242,34 @@ $users = $conn->query("SELECT * FROM user ORDER BY created_at DESC");
                             <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($user['no_HP'] ?? '-'); ?></td>
                             <td class="px-6 py-4 text-sm text-gray-500"><?php echo date('d/m/Y', strtotime($user['created_at'])); ?></td>
                             <td class="px-6 py-4 text-sm text-center">
-                                <button onclick='openEditModal(<?php echo json_encode($user); ?>)' 
-                                    class="text-blue-600 hover:text-blue-900 mr-3">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button onclick='openResetPasswordModal(<?php echo $user['id_user']; ?>, "<?php echo htmlspecialchars($user['nama']); ?>")' 
-                                    class="text-yellow-600 hover:text-yellow-900 mr-3">
-                                    <i class="fas fa-key"></i>
-                                </button>
-                                <button onclick='confirmDelete(<?php echo $user['id_user']; ?>, "<?php echo htmlspecialchars($user['nama']); ?>")' 
-                                    class="text-red-600 hover:text-red-900">
-                                    <i class="fas fa-trash"></i>
-                                </button>
+                                <?php 
+                                $is_self = ($user['id_user'] == $current_user_id);
+                                $is_last_admin = ($user['role'] === 'Admin' && $admin_count <= 1);
+                                $is_protected = $is_self || $is_last_admin;
+                                ?>
+                                
+                                <?php if ($is_self): ?>
+                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                                        <i class="fas fa-user-shield mr-1"></i> You
+                                    </span>
+                                <?php elseif ($is_last_admin): ?>
+                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700" title="Last admin - cannot be modified">
+                                        <i class="fas fa-shield-alt mr-1"></i> Protected
+                                    </span>
+                                <?php else: ?>
+                                    <button onclick='openEditModal(<?php echo json_encode($user); ?>)' 
+                                        class="text-blue-600 hover:text-blue-900 mr-3" title="Edit user">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button onclick='openResetPasswordModal(<?php echo $user['id_user']; ?>, "<?php echo htmlspecialchars($user['nama']); ?>")' 
+                                        class="text-yellow-600 hover:text-yellow-900 mr-3" title="Reset password">
+                                        <i class="fas fa-key"></i>
+                                    </button>
+                                    <button onclick='confirmDelete(<?php echo $user['id_user']; ?>, "<?php echo htmlspecialchars($user['nama']); ?>")' 
+                                        class="text-red-600 hover:text-red-900" title="Delete user">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                <?php endif; ?>
                             </td>
                         </tr>
                         <?php endwhile; ?>

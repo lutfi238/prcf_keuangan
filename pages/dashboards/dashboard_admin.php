@@ -66,29 +66,42 @@ if (!$recent_users) {
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body class="bg-gray-50">
-    <!-- Navigation -->
-    <nav class="bg-white shadow-md border-b border-gray-200">
-        <div class="max-w-7xl mx-auto px-6">
+<body class="bg-white min-h-screen">
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
-                <div class="flex items-center space-x-3">
-                    <i class="fas fa-user-shield text-2xl text-red-600"></i>
-                    <h1 class="text-xl font-bold text-gray-800">Admin Dashboard</h1>
+                <div class="flex items-center">
+                    <h1 class="text-xl font-bold text-gray-800">PRCF INDONESIA Financial</h1>
+                    <span class="ml-3 px-3 py-1 bg-red-100 text-red-700 text-xs font-semibold rounded-full">Admin</span>
                 </div>
                 
                 <div class="flex items-center space-x-4">
-                    <a href="../profile/profile.php" class="text-gray-600 hover:text-gray-800">
-                        <i class="fas fa-user-circle text-2xl"></i>
-                    </a>
-                    <a href="../../auth/logout.php" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
-                        <i class="fas fa-sign-out-alt mr-2"></i>Logout
-                    </a>
+                    <span class="text-gray-700 font-medium"><?php echo htmlspecialchars($user_name); ?></span>
+                    
+                    <!-- Profile -->
+                    <div class="relative" id="profileDropdown">
+                        <button onclick="toggleProfile()" class="flex items-center space-x-2">
+                            <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($user_name); ?>&background=DC2626&color=fff" 
+                                class="w-10 h-10 rounded-full border-2 border-red-500">
+                        </button>
+                        
+                        <div id="profilePanel" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+                            <a href="../profile/profile.php" class="block px-4 py-3 text-gray-700 hover:bg-gray-50">
+                                <i class="fas fa-user mr-2"></i> Edit Profil
+                            </a>
+                            <hr class="border-gray-200">
+                            <a href="../../auth/logout.php" class="block px-4 py-3 text-red-600 hover:bg-red-50">
+                                <i class="fas fa-sign-out-alt mr-2"></i> Logout
+                            </a>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
-    </nav>
+    </header>
 
-    <main class="max-w-7xl mx-auto px-6 py-8">
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Welcome Section -->
         <div class="mb-8">
             <h2 class="text-2xl font-bold text-gray-800 mb-2">Selamat Datang, <?php echo htmlspecialchars($user_name); ?></h2>
@@ -262,5 +275,23 @@ if (!$recent_users) {
             </a>
         </div>
     </main>
+
+    <script>
+        // Toggle Profile Dropdown
+        function toggleProfile() {
+            const panel = document.getElementById('profilePanel');
+            panel.classList.toggle('hidden');
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const profileDropdown = document.getElementById('profileDropdown');
+            const profilePanel = document.getElementById('profilePanel');
+            
+            if (profileDropdown && !profileDropdown.contains(event.target)) {
+                profilePanel.classList.add('hidden');
+            }
+        });
+    </script>
 </body>
 </html>
