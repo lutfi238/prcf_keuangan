@@ -1,28 +1,59 @@
-# Prevent caching issues with Ngrok
-# This file helps prevent redirect caching problems
+# InfinityFree Specific .htaccess Configuration
+# Place this file in your root directory (htdocs folder)
 
-# Disable caching for PHP files
-<FilesMatch "\.(php)$">
-    Header set Cache-Control "no-cache, no-store, must-revalidate"
-    Header set Pragma "no-cache"
-    Header set Expires "0"
+# Enable error display (ONLY for debugging - remove after fixing!)
+php_flag display_errors on
+php_value error_reporting 32767
+
+# PHP Settings for InfinityFree
+php_value upload_max_filesize 10M
+php_value post_max_size 10M
+php_value max_execution_time 300
+php_value max_input_time 300
+
+# Default charset
+AddDefaultCharset UTF-8
+
+# Prevent directory listing
+Options -Indexes
+
+# Custom error pages (optional)
+# ErrorDocument 404 /error404.php
+# ErrorDocument 500 /error500.php
+
+# Security Headers
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+</IfModule>
+
+# Rewrite rules (if using clean URLs)
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+    
+    # Redirect to https (uncomment if you have SSL)
+    # RewriteCond %{HTTPS} off
+    # RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+    
+    # Block access to sensitive files
+    RewriteRule ^includes/ - [F,L]
+    RewriteRule ^sql/ - [F,L]
+    RewriteRule ^\.git/ - [F,L]
+</IfModule>
+
+# File protection
+<FilesMatch "\.(htaccess|htpasswd|ini|log|sh|sql)$">
+    Order Allow,Deny
+    Deny from all
 </FilesMatch>
 
-# Disable caching for HTML files
-<FilesMatch "\.(html|htm)$">
-    Header set Cache-Control "no-cache, no-store, must-revalidate"
-    Header set Pragma "no-cache"
-    Header set Expires "0"
-</FilesMatch>
-
-# Force redirects to be fresh
-RewriteEngine On
-
-# Prevent caching of redirects
-RewriteCond %{QUERY_STRING} ^(.*)$
-RewriteRule ^(.*)$ - [E=no-cache:1]
-
-# Add no-cache header for all requests
-Header always set Cache-Control "no-cache, no-store, must-revalidate"
-Header always set Pragma "no-cache"
-Header always set Expires "0"
+# Allow access to uploads folder
+<Directory "uploads">
+    Options -Indexes
+    <FilesMatch "\.(jpg|jpeg|png|gif|pdf|xlsx|xls)$">
+        Order Allow,Deny
+        Allow from all
+    </FilesMatch>
+</Directory>
