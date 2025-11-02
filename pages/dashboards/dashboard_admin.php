@@ -237,39 +237,35 @@ if (!$recent_users) {
         </div>
 
         <!-- Quick Actions -->
-        <div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-            <a href="../admin/manage_users.php" class="block p-6 bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition">
-                <div class="flex items-center space-x-4">
-                    <div class="bg-blue-100 p-3 rounded-full">
-                        <i class="fas fa-users-cog text-blue-600 text-2xl"></i>
-                    </div>
-                    <div>
-                        <h4 class="font-bold text-gray-800">User Management</h4>
-                        <p class="text-sm text-gray-600">Create, edit, or delete users</p>
-                    </div>
-                </div>
-            </a>
-
-            <a href="../projects/manage_projects.php" class="block p-6 bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition">
+        <div class="mt-8 mb-6">
+            <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-bolt text-yellow-500 mr-2"></i> Quick Actions
+            </h3>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- System Control Panel -->
+            <a href="../admin/system_control.php" class="block p-6 bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md hover:border-purple-300 transition">
                 <div class="flex items-center space-x-4">
                     <div class="bg-purple-100 p-3 rounded-full">
-                        <i class="fas fa-project-diagram text-purple-600 text-2xl"></i>
+                        <i class="fas fa-sliders-h text-purple-600 text-2xl"></i>
                     </div>
                     <div>
-                        <h4 class="font-bold text-gray-800">Project Management</h4>
-                        <p class="text-sm text-gray-600">Manage projects and codes</p>
+                        <h4 class="font-bold text-gray-800">System Control</h4>
+                        <p class="text-sm text-gray-600">Toggle Maintenance & Under Construction mode</p>
                     </div>
                 </div>
             </a>
 
-            <a href="../../public/maintenance.php" class="block p-6 bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition">
+            <!-- System Health -->
+            <a href="../admin/system_health.php" class="block p-6 bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md hover:border-green-300 transition">
                 <div class="flex items-center space-x-4">
-                    <div class="bg-orange-100 p-3 rounded-full">
-                        <i class="fas fa-tools text-orange-600 text-2xl"></i>
+                    <div class="bg-green-100 p-3 rounded-full">
+                        <i class="fas fa-heartbeat text-green-600 text-2xl"></i>
                     </div>
                     <div>
-                        <h4 class="font-bold text-gray-800">System Settings</h4>
-                        <p class="text-sm text-gray-600">Configure system settings</p>
+                        <h4 class="font-bold text-gray-800">System Health</h4>
+                        <p class="text-sm text-gray-600">View database, server, and PHP info</p>
                     </div>
                 </div>
             </a>
