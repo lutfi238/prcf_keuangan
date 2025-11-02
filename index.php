@@ -9,6 +9,9 @@ check_maintenance();
 if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
     // Redirect ke dashboard sesuai role
     switch ($_SESSION['user_role']) {
+        case 'Admin':
+            header('Location: pages/dashboards/dashboard_admin.php');
+            break;
         case 'Project Manager':
             header('Location: pages/dashboards/dashboard_pm.php');
             break;
