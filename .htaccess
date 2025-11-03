@@ -49,11 +49,5 @@ Options -Indexes
     Deny from all
 </FilesMatch>
 
-# Allow access to uploads folder
-<Directory "uploads">
-    Options -Indexes
-    <FilesMatch "\.(jpg|jpeg|png|gif|pdf|xlsx|xls)$">
-        Order Allow,Deny
-        Allow from all
-    </FilesMatch>
-</Directory>
+# Note: uploads folder protection should be in a separate .htaccess file
+# inside the uploads folder itself
