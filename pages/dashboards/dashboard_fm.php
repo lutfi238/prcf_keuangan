@@ -579,18 +579,35 @@ session_write_close();
             }
         });
 
-        const notifPanelEl = document.getElementById('notificationPanel');
-        if (notifPanelEl) {
-            notifPanelEl.addEventListener('click', function(e) {
-                e.stopPropagation();
-            });
-        }
-        const notifButtonEl = document.querySelector('.notification-bell-button');
-        if (notifButtonEl) {
-            notifButtonEl.addEventListener('click', function(e) {
-                e.stopPropagation();
-            });
-        }
+        // Prevent dropdown from closing if click is inside notification panel or bell
+        document.addEventListener('DOMContentLoaded', function() {
+            const notifPanel = document.getElementById('notificationPanel');
+            const notifButton = document.querySelector('.notification-bell-button');
+            const profileBtn = document.querySelector('#profileDropdown button');
+            const profilePanel = document.getElementById('profilePanel');
+            
+            if (notifPanel) {
+                notifPanel.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            }
+            if (notifButton) {
+                notifButton.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            }
+            if (profileBtn) {
+                profileBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            }
+            if (profilePanel) {
+                profilePanel.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            }
+        });
+        
         // Search and Filter for Reports
         function filterReports() {
             const searchTerm = document.getElementById('searchReports').value.toLowerCase();

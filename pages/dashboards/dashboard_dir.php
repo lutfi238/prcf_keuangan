@@ -646,20 +646,44 @@ session_write_close();
         document.addEventListener('click', function(event) {
             const notifDropdown = document.getElementById('notificationDropdown');
             const profileDropdown = document.getElementById('profileDropdown');
-            if (notifDropdown && !notifDropdown.contains(event.target)) {
-                document.getElementById('notificationPanel').classList.add('hidden');
+            const notifPanel = document.getElementById('notificationPanel');
+            const profilePanel = document.getElementById('profilePanel');
+            
+            if (notifDropdown && !notifDropdown.contains(event.target) && notifPanel) {
+                notifPanel.classList.add('hidden');
             }
-            if (profileDropdown && !profileDropdown.contains(event.target)) {
-                document.getElementById('profilePanel').classList.add('hidden');
+            if (profileDropdown && !profileDropdown.contains(event.target) && profilePanel) {
+                profilePanel.classList.add('hidden');
             }
         });
 
         // Prevent dropdown from closing if click is inside notification panel or bell
-        document.getElementById('notificationPanel').addEventListener('click', function(e) {
-            e.stopPropagation();
-        });
-        document.querySelector('.notification-bell-button').addEventListener('click', function(e) {
-            e.stopPropagation();
+        document.addEventListener('DOMContentLoaded', function() {
+            const notifPanel = document.getElementById('notificationPanel');
+            const notifButton = document.querySelector('.notification-bell-button');
+            const profileBtn = document.querySelector('#profileDropdown button');
+            const profilePanel = document.getElementById('profilePanel');
+            
+            if (notifPanel) {
+                notifPanel.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            }
+            if (notifButton) {
+                notifButton.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            }
+            if (profileBtn) {
+                profileBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            }
+            if (profilePanel) {
+                profilePanel.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            }
         });
         
         // Search and Filter for Proposals
