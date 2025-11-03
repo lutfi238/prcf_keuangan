@@ -4,9 +4,10 @@ import { sql } from '@vercel/postgres'
 export { sql }
 
 // Helper function to execute queries with error handling
-export async function executeQuery(query: string, params: any[] = []) {
+// Note: Vercel Postgres uses tagged template literals, not raw query strings
+export async function executeQuery(template: TemplateStringsArray, ...values: any[]) {
   try {
-    const result = await sql.unsafe(query, params)
+    const result = await sql(template, ...values)
     return result
   } catch (error) {
     console.error('Database query error:', error)
