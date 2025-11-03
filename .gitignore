@@ -35,4 +35,3 @@ Thumbs.db
 # Database dumps (local only)
 database/*.sql
 sql/dumps/*.sql
-node_modules
