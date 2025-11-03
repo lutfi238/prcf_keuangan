@@ -118,11 +118,20 @@ function check_maintenance() {
     if (basename($_SERVER['PHP_SELF']) === 'maintenance.php') {
         return;
     }
-    
+
     if (is_maintenance_active()) {
         // Determine correct path based on current file location
         $script_name = $_SERVER['SCRIPT_NAME'];
-        $depth = substr_count(dirname($script_name), '/') - substr_count('/prcf_keuangan', '/');
+        $script_dir = dirname($script_name);
+
+        // Count directory separators to determine depth
+        // Example: '/prcf_keuangan/pages/admin/manage_users.php' -> '/prcf_keuangan/pages/admin' -> 3 slashes
+        $slash_count = substr_count($script_dir, '/');
+
+        // We need to go up (slash_count - 1) levels to reach the project root
+        // Then go into public/ directory
+        $depth = max(0, $slash_count - 1);
+
         $prefix = str_repeat('../', $depth);
         header('Location: ' . $prefix . 'public/maintenance.php');
         exit();
