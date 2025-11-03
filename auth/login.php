@@ -32,7 +32,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($result->num_rows === 1) {
             $user = $result->fetch_assoc();
-            if (password_verify($password, $user['password_hash'])) {
+
+            // Check account status
+            if ($user['status'] === 'inactive') {
+                $error = 'Akun Anda telah dinonaktifkan. Silakan hubungi administrator.';
+            } elseif ($user['status'] === 'pending') {
+                // Set session for pending user and redirect to pending page
+                $_SESSION['user_id'] = $user['id_user'];
+                $_SESSION['user_name'] = $user['nama'];
+                $_SESSION['user_role'] = $user['role'];
+                $_SESSION['user_email'] = $user['email'];
+                $_SESSION['user_status'] = 'pending';
+                $_SESSION['logged_in'] = true;
+                header('Location: account_pending.php');
+                exit();
+            } elseif (password_verify($password, $user['password_hash'])) {
                 
                 // 🔧 DEVELOPER MODE: Check if OTP should be bypassed
                 $is_developer = (defined('DEVELOPER_MODE') && DEVELOPER_MODE && 
@@ -45,6 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['user_name'] = $user['nama'];
                     $_SESSION['user_role'] = $user['role'];
                     $_SESSION['user_email'] = $user['email'];
+                    $_SESSION['user_status'] = $user['status'];
                     $_SESSION['logged_in'] = true;
                     
                     error_log("🔧 Developer Mode: OTP bypassed for {$user['email']}");
@@ -78,6 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['user_name'] = $user['nama'];
                 $_SESSION['user_role'] = $user['role'];
                 $_SESSION['user_email'] = $user['email'];
+                $_SESSION['user_status'] = $user['status'];
                 $_SESSION['logged_in'] = false;
                 
                 // Generate OTP

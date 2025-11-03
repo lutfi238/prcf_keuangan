@@ -51,6 +51,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
     } elseif ($password !== $confirm_password) {
         $error = 'Password tidak cocok';
     } else {
+        // Set default status as 'pending' for new registrations (requires admin approval)
+        $status = 'pending';
+
         // Validate phone number jika diisi
         $phone_validation = validate_phone_number_format($phone);
         if (!$phone_validation['valid']) {
@@ -82,11 +85,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                     } else {
                         // Insert user
                         $password_hash = password_hash($password, PASSWORD_DEFAULT);
-                        $stmt = $conn->prepare("INSERT INTO user (nama, email, password_hash, no_HP, role) VALUES (?, ?, ?, ?, ?)");
-                        $stmt->bind_param("sssss", $username, $email, $password_hash, $phone_formatted, $role);
+                        $stmt = $conn->prepare("INSERT INTO user (nama, email, password_hash, no_HP, role, status) VALUES (?, ?, ?, ?, ?, ?)");
+                        $stmt->bind_param("ssssss", $username, $email, $password_hash, $phone_formatted, $role, $status);
                         
                         if ($stmt->execute()) {
-                            $success = 'Akun berhasil dibuat! Silakan login.';
+                            $success = 'Akun berhasil dibuat! Akun Anda akan diverifikasi oleh administrator sebelum dapat digunakan. Silakan login setelah mendapat konfirmasi.';
                         } else {
                             $error = 'Gagal membuat akun: ' . $conn->error;
                         }

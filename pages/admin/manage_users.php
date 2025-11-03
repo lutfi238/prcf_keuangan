@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $password = $_POST['password'];
         $password_hash = password_hash($password, PASSWORD_DEFAULT);
         
-        $stmt = $conn->prepare("INSERT INTO user (nama, role, email, no_HP, password_hash) VALUES (?, ?, ?, ?, ?)");
+        $stmt = $conn->prepare("INSERT INTO user (nama, role, status, email, no_HP, password_hash) VALUES (?, ?, 'inactive', ?, ?, ?)");
         $stmt->bind_param("sssss", $nama, $role, $email, $no_HP, $password_hash);
         
         if ($stmt->execute()) {
@@ -126,14 +126,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id_user = $_POST['id_user'];
         $new_password = $_POST['new_password'];
         $password_hash = password_hash($new_password, PASSWORD_DEFAULT);
-        
+
         $stmt = $conn->prepare("UPDATE user SET password_hash = ? WHERE id_user = ?");
         $stmt->bind_param("si", $password_hash, $id_user);
-        
+
         if ($stmt->execute()) {
             $success_message = "Password berhasil direset!";
         } else {
             $error_message = "Gagal mereset password: " . $conn->error;
+        }
+    } elseif (isset($_POST['toggle_status'])) {
+        $id_user = $_POST['id_user'];
+        $current_status = $_POST['current_status'];
+        $new_status = ($current_status === 'active') ? 'inactive' : 'active';
+
+        // 🔒 PROTECTION: Cannot deactivate yourself
+        if ($id_user == $current_user_id) {
+            $error_message = "❌ Tidak dapat menonaktifkan akun Anda sendiri!";
+        } else {
+            $stmt = $conn->prepare("UPDATE user SET status = ? WHERE id_user = ?");
+            $stmt->bind_param("si", $new_status, $id_user);
+
+            if ($stmt->execute()) {
+                $action = $new_status === 'active' ? 'activated' : 'deactivated';
+                $success_message = "✅ User berhasil di{$action}!";
+                error_log("ADMIN ACTION: User ID $current_user_id {$action} user ID $id_user");
+            } else {
+                $error_message = "Gagal mengubah status user: " . $conn->error;
+            }
         }
     }
 }
@@ -200,8 +220,14 @@ $admin_count = countAdmins($conn);
                         <option value="Staff Accountant">Staff Accountant</option>
                         <option value="Project Manager">Project Manager</option>
                     </select>
+                    <select id="statusFilter" class="px-4 py-2 border border-gray-300 rounded-lg">
+                        <option value="">All Status</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                        <option value="pending">Pending</option>
+                    </select>
                 </div>
-                <input type="text" id="searchInput" placeholder="Search by name or email..." 
+                <input type="text" id="searchInput" placeholder="Search by name or email..."
                     class="px-4 py-2 border border-gray-300 rounded-lg w-64">
             </div>
 
@@ -213,6 +239,7 @@ $admin_count = countAdmins($conn);
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
                             <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
@@ -220,13 +247,13 @@ $admin_count = countAdmins($conn);
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
                         <?php while ($user = $users->fetch_assoc()): ?>
-                        <tr class="hover:bg-gray-50" data-role="<?php echo $user['role']; ?>" data-search="<?php echo strtolower($user['nama'] . ' ' . $user['email']); ?>">
+                        <tr class="hover:bg-gray-50" data-role="<?php echo $user['role']; ?>" data-status="<?php echo $user['status']; ?>" data-search="<?php echo strtolower($user['nama'] . ' ' . $user['email']); ?>">
                             <td class="px-6 py-4 text-sm text-gray-900"><?php echo $user['id_user']; ?></td>
                             <td class="px-6 py-4 text-sm text-gray-900 font-medium"><?php echo htmlspecialchars($user['nama']); ?></td>
                             <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($user['email']); ?></td>
                             <td class="px-6 py-4 text-sm">
                                 <span class="px-2 py-1 rounded-full text-xs font-medium
-                                    <?php 
+                                    <?php
                                     $role_colors = [
                                         'Admin' => 'bg-red-100 text-red-800',
                                         'Direktur' => 'bg-purple-100 text-purple-800',
@@ -237,6 +264,19 @@ $admin_count = countAdmins($conn);
                                     echo $role_colors[$user['role']] ?? 'bg-gray-100 text-gray-800';
                                     ?>">
                                     <?php echo $user['role']; ?>
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-sm">
+                                <span class="px-2 py-1 rounded-full text-xs font-medium
+                                    <?php
+                                    $status_colors = [
+                                        'active' => 'bg-green-100 text-green-800',
+                                        'inactive' => 'bg-red-100 text-red-800',
+                                        'pending' => 'bg-yellow-100 text-yellow-800'
+                                    ];
+                                    echo $status_colors[$user['status']] ?? 'bg-gray-100 text-gray-800';
+                                    ?>">
+                                    <?php echo ucfirst($user['status']); ?>
                                 </span>
                             </td>
                             <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($user['no_HP'] ?? '-'); ?></td>
@@ -257,15 +297,20 @@ $admin_count = countAdmins($conn);
                                         <i class="fas fa-shield-alt mr-1"></i> Protected
                                     </span>
                                 <?php else: ?>
-                                    <button onclick='openEditModal(<?php echo json_encode($user); ?>)' 
-                                        class="text-blue-600 hover:text-blue-900 mr-3" title="Edit user">
+                                    <button onclick='toggleUserStatus(<?php echo $user['id_user']; ?>, "<?php echo $user['status']; ?>", "<?php echo htmlspecialchars($user['nama']); ?>")'
+                                        class="text-<?php echo $user['status'] === 'active' ? 'orange' : 'green'; ?>-600 hover:text-<?php echo $user['status'] === 'active' ? 'orange' : 'green'; ?>-900 mr-2"
+                                        title="<?php echo $user['status'] === 'active' ? 'Deactivate' : 'Activate'; ?> user">
+                                        <i class="fas fa-<?php echo $user['status'] === 'active' ? 'user-slash' : 'user-check'; ?>"></i>
+                                    </button>
+                                    <button onclick='openEditModal(<?php echo json_encode($user); ?>)'
+                                        class="text-blue-600 hover:text-blue-900 mr-2" title="Edit user">
                                         <i class="fas fa-edit"></i>
                                     </button>
-                                    <button onclick='openResetPasswordModal(<?php echo $user['id_user']; ?>, "<?php echo htmlspecialchars($user['nama']); ?>")' 
-                                        class="text-yellow-600 hover:text-yellow-900 mr-3" title="Reset password">
+                                    <button onclick='openResetPasswordModal(<?php echo $user['id_user']; ?>, "<?php echo htmlspecialchars($user['nama']); ?>")'
+                                        class="text-yellow-600 hover:text-yellow-900 mr-2" title="Reset password">
                                         <i class="fas fa-key"></i>
                                     </button>
-                                    <button onclick='confirmDelete(<?php echo $user['id_user']; ?>, "<?php echo htmlspecialchars($user['nama']); ?>")' 
+                                    <button onclick='confirmDelete(<?php echo $user['id_user']; ?>, "<?php echo htmlspecialchars($user['nama']); ?>")'
                                         class="text-red-600 hover:text-red-900" title="Delete user">
                                         <i class="fas fa-trash"></i>
                                     </button>
@@ -419,23 +464,61 @@ $admin_count = countAdmins($conn);
             }
         }
 
+        function toggleUserStatus(userId, currentStatus, userName) {
+            const action = currentStatus === 'active' ? 'deactivate' : 'activate';
+            const confirmMessage = `Are you sure you want to ${action} user "${userName}"?\n\n${
+                action === 'deactivate'
+                    ? '• User will not be able to login\n• All active sessions will be terminated'
+                    : '• User will be able to login normally'
+            }`;
+
+            if (confirm(confirmMessage)) {
+                // Create a form to submit the toggle request
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.style.display = 'none';
+
+                const idInput = document.createElement('input');
+                idInput.name = 'id_user';
+                idInput.value = userId;
+                form.appendChild(idInput);
+
+                const statusInput = document.createElement('input');
+                statusInput.name = 'current_status';
+                statusInput.value = currentStatus;
+                form.appendChild(statusInput);
+
+                const toggleInput = document.createElement('input');
+                toggleInput.name = 'toggle_status';
+                toggleInput.value = '1';
+                form.appendChild(toggleInput);
+
+                document.body.appendChild(form);
+                form.submit();
+            }
+        }
+
         // Search and Filter
         document.getElementById('searchInput').addEventListener('input', filterTable);
         document.getElementById('roleFilter').addEventListener('change', filterTable);
+        document.getElementById('statusFilter').addEventListener('change', filterTable);
 
         function filterTable() {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
             const roleFilter = document.getElementById('roleFilter').value;
+            const statusFilter = document.getElementById('statusFilter').value;
             const rows = document.querySelectorAll('#usersTable tbody tr');
 
             rows.forEach(row => {
                 const searchData = row.getAttribute('data-search');
                 const role = row.getAttribute('data-role');
-                
+                const status = row.getAttribute('data-status');
+
                 const matchesSearch = searchData.includes(searchTerm);
                 const matchesRole = !roleFilter || role === roleFilter;
+                const matchesStatus = !statusFilter || status === statusFilter;
 
-                if (matchesSearch && matchesRole) {
+                if (matchesSearch && matchesRole && matchesStatus) {
                     row.style.display = '';
                 } else {
                     row.style.display = 'none';

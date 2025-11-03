@@ -13,6 +13,16 @@ $user_name = $_SESSION['user_name'];
 $success_message = '';
 $error_message = '';
 
+// Handle success message from URL parameter (after redirect)
+if (isset($_GET['success'])) {
+    $success_message = $_GET['success'];
+}
+
+// Add cache control headers to prevent browser caching
+header("Cache-Control: no-cache, no-store, must-revalidate");
+header("Pragma: no-cache");
+header("Expires: 0");
+
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['toggle_maintenance'])) {
@@ -27,10 +37,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
         
         if (file_put_contents('../../includes/maintenance_config.php', $config_content)) {
-            $success_message = $new_status ? 
-                "✅ Maintenance Mode ACTIVATED! Website is now offline for public." : 
+            // Clear any potential opcode cache
+            if (function_exists('opcache_reset')) {
+                opcache_reset();
+            }
+            if (function_exists('apcu_clear_cache')) {
+                apcu_clear_cache();
+            }
+
+            // Redirect with success message to force fresh page load
+            $message = $new_status ?
+                "✅ Maintenance Mode ACTIVATED! Website is now offline for public." :
                 "✅ Maintenance Mode DEACTIVATED! Website is now online.";
-            error_log("ADMIN ACTION: User '{$user_name}' " . ($new_status ? 'enabled' : 'disabled') . " maintenance mode");
+            header("Location: system_control.php?success=" . urlencode($message) . "&t=" . time());
+            exit();
         } else {
             $error_message = "❌ Failed to update maintenance config file. Check file permissions.";
         }
@@ -48,10 +68,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
         
         if (file_put_contents('../../includes/maintenance_config.php', $config_content)) {
-            $success_message = $new_status ? 
-                "✅ Registration ENABLED! Public users can now create accounts." : 
+            // Clear any potential opcode cache
+            if (function_exists('opcache_reset')) {
+                opcache_reset();
+            }
+            if (function_exists('apcu_clear_cache')) {
+                apcu_clear_cache();
+            }
+
+            // Redirect with success message to force fresh page load
+            $message = $new_status ?
+                "✅ Registration ENABLED! Public users can now create accounts." :
                 "✅ Registration DISABLED! Only admins can create new accounts.";
-            error_log("ADMIN ACTION: User '{$user_name}' " . ($new_status ? 'enabled' : 'disabled') . " public registration");
+            header("Location: system_control.php?success=" . urlencode($message) . "&t=" . time());
+            exit();
         } else {
             $error_message = "❌ Failed to update registration config. Check file permissions.";
         }
@@ -67,6 +97,9 @@ $registration_enabled = defined('REGISTRATION_ENABLED') && REGISTRATION_ENABLED 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>System Control - Admin Panel</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
