@@ -242,11 +242,11 @@ $items = $details->get_result();
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200">
-                            <?php
+                            <?php 
                             $no = 1;
                             $total_budget = 0;
                             $total_actual = 0;
-                            while ($item = $items->fetch_assoc()):
+                            while ($item = $items->fetch_assoc()): 
                                 // Calculate actual cost as Unit Total × Unit Cost
                                 $calculated_actual = ($item['unit_total'] ?? 0) * ($item['unit_cost'] ?? 0);
                                 $total_budget += $item['requested'];

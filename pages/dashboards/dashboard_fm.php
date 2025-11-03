@@ -109,9 +109,9 @@ while ($row = $proposal_notifs->fetch_assoc()) {
 
 // Add report notifications (still only 'verified' for notifications)
 $report_notifs = $conn->query("SELECT lh.id_laporan_keu, lh.nama_projek, lh.created_at, u.nama as creator
-    FROM laporan_keuangan_header lh
-    LEFT JOIN user u ON lh.created_by = u.id_user
-    WHERE lh.status_lap = 'verified'
+    FROM laporan_keuangan_header lh 
+    LEFT JOIN user u ON lh.created_by = u.id_user 
+    WHERE lh.status_lap = 'verified' 
     ORDER BY lh.created_at DESC LIMIT 5");
 while ($row = $report_notifs->fetch_assoc()) {
     $is_unread = (strtotime($row['created_at']) > strtotime($last_notification_check));
@@ -425,7 +425,7 @@ session_write_close();
                                     <?php echo date('d/m/Y', strtotime($report['tanggal_laporan'])); ?>
                                 </td>
                                 <td class="px-6 py-4">
-                                    <?php 
+                                    <?php
                                     $status = trim($report['status_lap']);
                                     // Debug: Show actual status
                                     switch ($status) {

@@ -226,6 +226,38 @@ prcf_keuangan/
   - Secure session handling
   - Cache control untuk back button issues
 
+## 🚀 Deployment Options
+
+### 📦 **Hosting Platforms**
+
+Untuk production deployment, pilih salah satu platform berikut:
+
+#### 🥇 **Heroku (Recommended untuk Pemula)**
+- ✅ **Free tier**: 550 jam/bulan
+- ✅ **Native PHP support** (tidak perlu Docker)
+- ✅ **Auto-deployment** dari GitHub
+- ✅ **MySQL database** (JawsDB add-on)
+- 📖 **Panduan**: [deployment/HEROKU_DEPLOYMENT.md](deployment/HEROKU_DEPLOYMENT.md)
+
+#### 🥈 **Railway**
+- ✅ **Free tier**: 512MB RAM, 1GB storage
+- ✅ **Docker support** (sudah siap)
+- ✅ **Auto-deployment** dari GitHub
+- ✅ **Built-in MySQL** database
+- 📖 **Panduan**: [deployment/RAILWAY_DEPLOYMENT.md](deployment/RAILWAY_DEPLOYMENT.md)
+
+#### 🥉 **Render**
+- ✅ **Free tier**: 750 jam app + 750 jam database/bulan
+- ✅ **Docker support**
+- ✅ **PostgreSQL/MySQL** support
+- ✅ **Auto-deployment** dari GitHub
+- 📖 **Panduan**: [deployment/RENDER_DEPLOYMENT.md](deployment/RENDER_DEPLOYMENT.md)
+
+### 📋 **Deployment Checklist**
+Lihat [deployment/README.md](deployment/README.md) untuk file yang perlu disiapkan untuk setiap platform.
+
+---
+
 ## 🚀 Quick Start
 
 ### Prasyarat

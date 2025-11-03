@@ -1,0 +1,13 @@
+{
+    "name": "prcf/prcf-keuangan",
+    "description": "PRCF Keuangan Management System",
+    "type": "project",
+    "require": {
+        "php": ">=8.1"
+    },
+    "config": {
+        "platform": {
+            "php": "8.1"
+        }
+    }
+}
