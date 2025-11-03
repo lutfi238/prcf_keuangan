@@ -199,10 +199,16 @@ $projects = $conn->query("SELECT * FROM proyek ORDER BY created_at DESC");
             <h2 class="text-2xl font-bold text-gray-800">
                 <i class="fas fa-project-diagram mr-2 text-blue-600"></i>Daftar Proyek
             </h2>
-            <button id="toggleCreateButton" type="button" onclick="toggleCreateForm()" 
-                class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-200 font-medium shadow-md">
-                <i class="fas fa-plus mr-2"></i> Buat Proyek Baru
-            </button>
+            <div class="flex space-x-3">
+                <a href="manage_place_codes.php" 
+                    class="px-6 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition duration-200 font-medium shadow-md">
+                    <i class="fas fa-map-marked-alt mr-2"></i> Kelola Kode Tempat
+                </a>
+                <button id="toggleCreateButton" type="button" onclick="toggleCreateForm()" 
+                    class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-200 font-medium shadow-md">
+                    <i class="fas fa-plus mr-2"></i> Buat Proyek Baru
+                </button>
+            </div>
         </div>
 
         <!-- Create Form (Hidden by default) -->
