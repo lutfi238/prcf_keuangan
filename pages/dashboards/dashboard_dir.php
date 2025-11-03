@@ -708,6 +708,6 @@ session_write_close();
     </script>
     
     <!-- Real-time Notifications -->
-    <script src="assets/js/realtime_notifications.js"></script>
+    <script src="../../assets/js/realtime_notifications.js"></script>
 </body>
 </html>

@@ -6,6 +6,14 @@ require_once '../includes/maintenance_config.php';
 // Check maintenance mode
 check_maintenance();
 
+// Check if registration is enabled
+if (!defined('REGISTRATION_ENABLED') || !REGISTRATION_ENABLED) {
+    // Registration disabled - show message
+    $registration_disabled = true;
+} else {
+    $registration_disabled = false;
+}
+
 $error = '';
 $success = '';
 
@@ -31,58 +39,74 @@ if (isset($_POST['check_phone'])) {
     exit();
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
-    $username = $_POST['username'];
+// Check email availability
+if (isset($_POST['check_email'])) {
     $email = $_POST['email'];
-    $password = $_POST['password'];
-    $confirm_password = $_POST['confirm_password'];
-    $phone = $_POST['phone'];
-    $role = $_POST['role'];
-    
-    // Validation
-    if (strlen($password) < 8) {
-        $error = 'Password minimal 8 karakter';
-    } elseif ($password !== $confirm_password) {
-        $error = 'Password tidak cocok';
+    $stmt = $conn->prepare("SELECT id_user FROM user WHERE email = ?");
+    $stmt->bind_param("s", $email);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    echo json_encode(['available' => $result->num_rows === 0]);
+    exit();
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
+    // Check if registration is disabled
+    if ($registration_disabled) {
+        $error = 'Pendaftaran akun baru saat ini dinonaktifkan oleh administrator. Silakan hubungi admin untuk membuat akun.';
     } else {
-        // Validate phone number jika diisi
-        $phone_validation = validate_phone_number_format($phone);
-        if (!$phone_validation['valid']) {
-            $error = $phone_validation['error'];
+        $username = $_POST['username'];
+        $email = $_POST['email'];
+        $password = $_POST['password'];
+        $confirm_password = $_POST['confirm_password'];
+        $phone = $_POST['phone'];
+        $role = $_POST['role'];
+        
+        // Validation
+        if (strlen($password) < 8) {
+            $error = 'Password minimal 8 karakter';
+        } elseif ($password !== $confirm_password) {
+            $error = 'Password tidak cocok';
         } else {
-            // Check if username exists
-            $stmt = $conn->prepare("SELECT id_user FROM user WHERE nama = ?");
-            $stmt->bind_param("s", $username);
-            $stmt->execute();
-            if ($stmt->get_result()->num_rows > 0) {
-                $error = 'Username sudah terdaftar';
+            // Validate phone number jika diisi
+            $phone_validation = validate_phone_number_format($phone);
+            if (!$phone_validation['valid']) {
+                $error = $phone_validation['error'];
             } else {
-                // Check if email exists
-                $stmt = $conn->prepare("SELECT id_user FROM user WHERE email = ?");
-                $stmt->bind_param("s", $email);
+                // Check if username exists
+                $stmt = $conn->prepare("SELECT id_user FROM user WHERE nama = ?");
+                $stmt->bind_param("s", $username);
                 $stmt->execute();
                 if ($stmt->get_result()->num_rows > 0) {
-                    $error = 'Email sudah terdaftar';
+                    $error = 'Username sudah terdaftar';
                 } else {
-                    // Format phone number for contact purposes
-                    $phone_formatted = format_phone_number($phone);
-                    
-                    // Check if phone number already exists
-                    $stmt = $conn->prepare("SELECT id_user FROM user WHERE no_HP = ?");
-                    $stmt->bind_param("s", $phone_formatted);
+                    // Check if email exists
+                    $stmt = $conn->prepare("SELECT id_user FROM user WHERE email = ?");
+                    $stmt->bind_param("s", $email);
                     $stmt->execute();
                     if ($stmt->get_result()->num_rows > 0) {
-                        $error = 'Nomor telepon sudah terdaftar';
+                        $error = 'Email sudah terdaftar';
                     } else {
-                        // Insert user
-                        $password_hash = password_hash($password, PASSWORD_DEFAULT);
-                        $stmt = $conn->prepare("INSERT INTO user (nama, email, password_hash, no_HP, role) VALUES (?, ?, ?, ?, ?)");
-                        $stmt->bind_param("sssss", $username, $email, $password_hash, $phone_formatted, $role);
+                        // Format phone number for contact purposes
+                        $phone_formatted = format_phone_number($phone);
                         
-                        if ($stmt->execute()) {
-                            $success = 'Akun berhasil dibuat! Silakan login.';
+                        // Check if phone number already exists
+                        $stmt = $conn->prepare("SELECT id_user FROM user WHERE no_HP = ?");
+                        $stmt->bind_param("s", $phone_formatted);
+                        $stmt->execute();
+                        if ($stmt->get_result()->num_rows > 0) {
+                            $error = 'Nomor telepon sudah terdaftar';
                         } else {
-                            $error = 'Gagal membuat akun: ' . $conn->error;
+                            // Insert user
+                            $password_hash = password_hash($password, PASSWORD_DEFAULT);
+                            $stmt = $conn->prepare("INSERT INTO user (nama, email, password_hash, no_HP, role) VALUES (?, ?, ?, ?, ?)");
+                            $stmt->bind_param("sssss", $username, $email, $password_hash, $phone_formatted, $role);
+                            
+                            if ($stmt->execute()) {
+                                $success = 'Akun berhasil dibuat! Silakan login.';
+                            } else {
+                                $error = 'Gagal membuat akun: ' . $conn->error;
+                            }
                         }
                     }
                 }
@@ -105,6 +129,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
             <h1 class="text-3xl font-bold text-gray-800 mb-2">Buat Akun Baru</h1>
             <p class="text-gray-600">PRCF INDONESIA Financial - Sistem Manajemen Keuangan</p>
         </div>
+
+        <?php if ($registration_disabled): ?>
+            <div class="bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded mb-4">
+                <div class="flex items-start">
+                    <i class="fas fa-exclamation-triangle text-2xl mr-3"></i>
+                    <div>
+                        <h3 class="font-bold mb-2">Pendaftaran Ditutup</h3>
+                        <p class="text-sm">Pendaftaran akun baru saat ini dinonaktifkan oleh administrator.</p>
+                        <p class="text-sm mt-2">Silakan hubungi admin untuk membuat akun baru.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-6 text-center">
+                <a href="login.php" class="inline-block bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition duration-200 font-medium">
+                    <i class="fas fa-arrow-left mr-2"></i>Kembali ke Login
+                </a>
+            </div>
+        <?php else: ?>
 
         <?php if ($error): ?>
             <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
@@ -133,9 +175,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
 
                 <div>
                     <label class="block text-gray-700 text-sm font-medium mb-2">Email</label>
-                    <input type="email" name="email" required 
+                    <input type="email" name="email" id="email" required 
                         class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
                         placeholder="Masukkan email">
+                    <p id="emailStatus" class="text-sm mt-1"></p>
                 </div>
 
                 <div>
@@ -201,15 +244,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                     Buat Akun
                 </button>
             </form>
-
-            <div class="mt-6 text-center">
-                <a href="login.php" class="text-blue-500 hover:text-blue-700 text-sm font-medium">
-                    Sudah punya akun? Login
-                </a>
-            </div>
-        <?php endif; ?>
+        <?php endif; ?>  <!-- End success message check -->
+        
+        <?php endif; ?>  <!-- End registration enabled check -->
     </div>
 
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script>
         // Check username availability
         document.getElementById('username').addEventListener('blur', function() {
@@ -224,11 +264,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                 .then(data => {
                     const status = document.getElementById('usernameStatus');
                     if (data.available) {
-                        status.textContent = 'Username available to use';
-                        status.className = 'text-green-600 text-sm mt-1';
+                        status.textContent = '✅ Username available';
+                        status.className = 'text-green-600 text-sm mt-1 font-medium';
                     } else {
-                        status.textContent = 'Username already use';
-                        status.className = 'text-red-600 text-sm mt-1';
+                        status.textContent = '❌ Username already taken';
+                        status.className = 'text-red-600 text-sm mt-1 font-medium';
+                    }
+                });
+            }
+        });
+
+        // Check email availability
+        document.getElementById('email').addEventListener('blur', function() {
+            const email = this.value;
+            if (email) {
+                fetch('register.php', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: 'check_email=1&email=' + encodeURIComponent(email)
+                })
+                .then(r => r.json())
+                .then(data => {
+                    const status = document.getElementById('emailStatus');
+                    if (data.available) {
+                        status.textContent = '✅ Email available';
+                        status.className = 'text-green-600 text-sm mt-1 font-medium';
+                    } else {
+                        status.textContent = '❌ Email already registered';
+                        status.className = 'text-red-600 text-sm mt-1 font-medium';
                     }
                 });
             }

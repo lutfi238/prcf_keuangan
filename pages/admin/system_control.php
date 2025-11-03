@@ -35,10 +35,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error_message = "❌ Failed to update maintenance config file. Check file permissions.";
         }
     }
+    
+    if (isset($_POST['toggle_registration'])) {
+        $new_status = ($_POST['registration_status'] === 'true');
+        
+        // Update maintenance config file
+        $config_content = file_get_contents('../../includes/maintenance_config.php');
+        $config_content = preg_replace(
+            '/define\(\'REGISTRATION_ENABLED\', (true|false)\);/',
+            "define('REGISTRATION_ENABLED', " . ($new_status ? 'true' : 'false') . ");",
+            $config_content
+        );
+        
+        if (file_put_contents('../../includes/maintenance_config.php', $config_content)) {
+            $success_message = $new_status ? 
+                "✅ Registration ENABLED! Public users can now create accounts." : 
+                "✅ Registration DISABLED! Only admins can create new accounts.";
+            error_log("ADMIN ACTION: User '{$user_name}' " . ($new_status ? 'enabled' : 'disabled') . " public registration");
+        } else {
+            $error_message = "❌ Failed to update registration config. Check file permissions.";
+        }
+    }
 }
 
 // Get current maintenance status
 $maintenance_enabled = defined('MAINTENANCE_MODE') && MAINTENANCE_MODE === true;
+$registration_enabled = defined('REGISTRATION_ENABLED') && REGISTRATION_ENABLED === true;
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -106,21 +128,20 @@ $maintenance_enabled = defined('MAINTENANCE_MODE') && MAINTENANCE_MODE === true;
                     </div>
                 </div>
 
-                <!-- Active Users -->
-                <div class="p-4 rounded-lg border-2 border-blue-300 bg-blue-50">
+                <!-- Registration Status -->
+                <div class="p-4 rounded-lg border-2 <?php echo $registration_enabled ? 'border-green-300 bg-green-50' : 'border-orange-300 bg-orange-50'; ?>">
                     <div class="flex items-center justify-between">
                         <div>
-                            <h3 class="font-bold text-gray-800 mb-1">Active Users</h3>
-                            <p class="text-sm text-gray-600">Currently logged in</p>
+                            <h3 class="font-bold text-gray-800 mb-1">Registration</h3>
+                            <p class="text-sm text-gray-600">Public account creation</p>
                         </div>
                         <div class="text-right">
-                            <div class="text-3xl font-bold text-blue-700 mb-1">
-                                <?php 
-                                // Count active sessions (simplified - you can improve this)
-                                echo "1+";
-                                ?>
+                            <div class="text-3xl mb-1">
+                                <?php echo $registration_enabled ? '✅' : '🚫'; ?>
                             </div>
-                            <span class="text-sm font-semibold text-blue-700">Users</span>
+                            <span class="text-sm font-semibold <?php echo $registration_enabled ? 'text-green-700' : 'text-orange-700'; ?>">
+                                <?php echo $registration_enabled ? 'ENABLED' : 'DISABLED'; ?>
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -178,6 +199,57 @@ $maintenance_enabled = defined('MAINTENANCE_MODE') && MAINTENANCE_MODE === true;
             </form>
         </div>
 
+        <!-- Registration Control -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-user-plus text-indigo-600 mr-2"></i> Registration Control
+            </h2>
+            
+            <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-info-circle text-blue-600 text-xl"></i>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-bold text-blue-800">Registration Control</h3>
+                        <div class="mt-2 text-sm text-blue-700">
+                            <p class="mb-2">Control public access to account registration:</p>
+                            <ul class="list-disc list-inside space-y-1 ml-2">
+                                <li><strong>Enabled:</strong> Anyone can create new accounts via registration page</li>
+                                <li><strong>Disabled:</strong> Only Admin can create accounts manually via User Management</li>
+                                <li>Existing users can still login normally</li>
+                                <li>Use this to prevent spam registrations or control user onboarding</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <form method="POST" class="space-y-4">
+                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <div>
+                        <h3 class="font-bold text-gray-800 mb-1">Current Status:</h3>
+                        <p class="text-sm text-gray-600">
+                            <?php echo $registration_enabled ? 
+                                '✅ Public registration is currently enabled' : 
+                                '🚫 Public registration is currently disabled'; 
+                            ?>
+                        </p>
+                    </div>
+                    <button type="button" 
+                            onclick="toggleRegistrationConfirm(<?php echo $registration_enabled ? 'false' : 'true'; ?>)"
+                            class="px-6 py-3 rounded-lg font-bold text-white transition duration-200 <?php echo $registration_enabled ? 'bg-orange-600 hover:bg-orange-700' : 'bg-green-600 hover:bg-green-700'; ?>">
+                        <i class="fas <?php echo $registration_enabled ? 'fa-user-slash' : 'fa-user-plus'; ?> mr-2"></i>
+                        <?php echo $registration_enabled ? 'Disable Registration' : 'Enable Registration'; ?>
+                    </button>
+                </div>
+
+                <!-- Hidden form for submission -->
+                <input type="hidden" name="registration_status" id="registration_status" value="">
+                <input type="hidden" name="toggle_registration" value="1">
+            </form>
+        </div>
+
         <!-- System Information -->
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
@@ -228,7 +300,27 @@ $maintenance_enabled = defined('MAINTENANCE_MODE') && MAINTENANCE_MODE === true;
                 document.querySelector('form').submit();
             }
         }
+        
+        function toggleRegistrationConfirm(enable) {
+            const message = enable ? 
+                '✅ Are you sure you want to ENABLE Public Registration?\n\n' +
+                '• Anyone can create new accounts via /auth/register.php\n' +
+                '• Users can choose their role during registration\n' +
+                '• Useful for open enrollment or public testing' :
+                '⚠️ Are you sure you want to DISABLE Public Registration?\n\n' +
+                '• Registration page will show "Closed" message\n' +
+                '• Only Admin can create accounts manually\n' +
+                '• Existing users can still login normally';
+            
+            if (confirm(message)) {
+                document.getElementById('registration_status').value = enable;
+                const forms = document.querySelectorAll('form');
+                forms[1].submit(); // Submit the second form (registration form)
+            }
+        }
     </script>
 </body>
 </html>
+
+
 

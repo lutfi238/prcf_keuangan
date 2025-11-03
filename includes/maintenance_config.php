@@ -29,6 +29,13 @@
 define('MAINTENANCE_MODE', false); // ← UBAH JADI true UNTUK MAINTENANCE
 
 // ============================================================================
+// REGISTRATION CONTROL
+// ============================================================================
+
+// Set TRUE untuk allow registration, FALSE untuk disable public registration
+define('REGISTRATION_ENABLED', true); // ← UBAH JADI false UNTUK DISABLE REGISTRATION
+
+// ============================================================================
 // IP WHITELIST (Optional)
 // ============================================================================
 // IP-IP ini tetap bisa akses website walau maintenance mode aktif
