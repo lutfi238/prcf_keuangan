@@ -173,10 +173,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </button>
             </form>
 
+            <?php if (defined('REGISTRATION_ENABLED') && REGISTRATION_ENABLED === true): ?>
             <div class="mt-6 text-center">
                 <a href="register.php" class="text-blue-500 hover:text-blue-700 text-sm font-medium">
                     Buat Akun Baru
                 </a>
             </div>
+            <?php endif; ?>
 </body>
 </html>

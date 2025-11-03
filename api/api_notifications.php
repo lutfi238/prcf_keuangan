@@ -58,16 +58,16 @@ switch ($user_role) {
         }
         
         // Get reports with unified timestamp field
-        $report_notifs = $conn->query("SELECT lh.id_laporan_keu, lh.nama_kegiatan, lh.updated_at as notification_time
-            FROM laporan_keuangan_header lh 
+        $report_notifs = $conn->query("SELECT lh.id_laporan_keu, lh.nama_projek, lh.updated_at as notification_time
+            FROM laporan_keuangan_header lh
             WHERE lh.status_lap = 'verified' AND (lh.approved_by IS NULL OR lh.approved_by = 0)
             ORDER BY lh.updated_at DESC");
-        
+
         while ($row = $report_notifs->fetch_assoc()) {
             $notifications[] = [
                 'type' => 'report',
                 'title' => 'Laporan Terverifikasi',
-                'message' => $row['nama_kegiatan'],
+                'message' => $row['nama_projek'],
                 'link' => 'approve_report.php?id=' . $row['id_laporan_keu'],
                 'time' => $row['notification_time'],
                 'sort_time' => strtotime($row['notification_time'])
@@ -108,16 +108,16 @@ switch ($user_role) {
         }
         
         // Get reports approved by FM (recent 30 days)
-        $report_notifs = $conn->query("SELECT lh.id_laporan_keu, lh.nama_kegiatan, lh.updated_at as notification_time
-            FROM laporan_keuangan_header lh 
+        $report_notifs = $conn->query("SELECT lh.id_laporan_keu, lh.nama_projek, lh.updated_at as notification_time
+            FROM laporan_keuangan_header lh
             WHERE lh.approved_by IS NOT NULL AND lh.approved_by > 0 AND lh.updated_at > DATE_SUB(NOW(), INTERVAL 30 DAY)
             ORDER BY lh.updated_at DESC");
-        
+
         while ($row = $report_notifs->fetch_assoc()) {
             $notifications[] = [
                 'type' => 'report',
                 'title' => 'Laporan Disetujui FM',
-                'message' => $row['nama_kegiatan'],
+                'message' => $row['nama_projek'],
                 'link' => 'approve_report_dir.php?id=' . $row['id_laporan_keu'],
                 'time' => $row['notification_time'],
                 'sort_time' => strtotime($row['notification_time'])
@@ -138,16 +138,16 @@ switch ($user_role) {
         $notif_reports = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'submitted'")->fetch_assoc()['count'];
         $total_count = $notif_reports;
         
-        $report_notifs = $conn->query("SELECT lh.id_laporan_keu, lh.nama_kegiatan, lh.created_at as notification_time
-            FROM laporan_keuangan_header lh 
-            WHERE lh.status_lap = 'submitted' 
+        $report_notifs = $conn->query("SELECT lh.id_laporan_keu, lh.nama_projek, lh.created_at as notification_time
+            FROM laporan_keuangan_header lh
+            WHERE lh.status_lap = 'submitted'
             ORDER BY lh.created_at DESC");
-        
+
         while ($row = $report_notifs->fetch_assoc()) {
             $notifications[] = [
                 'type' => 'report',
                 'title' => 'Laporan Baru',
-                'message' => $row['nama_kegiatan'],
+                'message' => $row['nama_projek'],
                 'link' => 'validate_report.php?id=' . $row['id_laporan_keu'],
                 'time' => $row['notification_time'],
                 'sort_time' => strtotime($row['notification_time'])
@@ -201,16 +201,16 @@ switch ($user_role) {
         }
         
         // Reports needing revision
-        $revision_reports = $conn->query("SELECT id_laporan_keu, nama_kegiatan, updated_at as notification_time
-            FROM laporan_keuangan_header 
+        $revision_reports = $conn->query("SELECT id_laporan_keu, nama_projek, updated_at as notification_time
+            FROM laporan_keuangan_header
             WHERE created_by = {$user_id} AND status_lap = 'revision_requested' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
             ORDER BY updated_at DESC");
-        
+
         while ($row = $revision_reports->fetch_assoc()) {
             $notifications[] = [
                 'type' => 'warning',
                 'title' => 'Laporan Perlu Revisi',
-                'message' => $row['nama_kegiatan'],
+                'message' => $row['nama_projek'],
                 'link' => '../reports/edit_financial_report.php?id=' . $row['id_laporan_keu'],
                 'time' => $row['notification_time'],
                 'sort_time' => strtotime($row['notification_time'])
@@ -218,17 +218,17 @@ switch ($user_role) {
         }
         
         // Verified or approved reports
-        $report_notifs = $conn->query("SELECT id_laporan_keu, nama_kegiatan, status_lap, updated_at as notification_time
-            FROM laporan_keuangan_header 
+        $report_notifs = $conn->query("SELECT id_laporan_keu, nama_projek, status_lap, updated_at as notification_time
+            FROM laporan_keuangan_header
             WHERE created_by = {$user_id} AND status_lap IN ('verified', 'approved') AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
             ORDER BY updated_at DESC");
-        
+
         while ($row = $report_notifs->fetch_assoc()) {
             $title = ($row['status_lap'] === 'approved') ? 'Laporan Disetujui' : 'Laporan Diverifikasi';
             $notifications[] = [
                 'type' => 'success',
                 'title' => $title,
-                'message' => $row['nama_kegiatan'],
+                'message' => $row['nama_projek'],
                 'link' => 'approve_report.php?id=' . $row['id_laporan_keu'],
                 'time' => $row['notification_time'],
                 'sort_time' => strtotime($row['notification_time'])

@@ -72,16 +72,16 @@ $total_notifications = $notif_pending_reports;
 $notifications = [];
 
 // Add pending report notifications
-$pending_reports = $conn->query("SELECT id_laporan_keu, nama_kegiatan, created_at, created_by 
-    FROM laporan_keuangan_header 
-    WHERE status_lap = 'submitted' 
+$pending_reports = $conn->query("SELECT id_laporan_keu, nama_projek, created_at, created_by
+    FROM laporan_keuangan_header
+    WHERE status_lap = 'submitted'
     ORDER BY created_at DESC LIMIT 10");
 while ($row = $pending_reports->fetch_assoc()) {
     $is_unread = (strtotime($row['created_at']) > strtotime($last_notification_check));
     $notifications[] = [
         'type' => 'report',
         'id' => $row['id_laporan_keu'],
-        'title' => 'Laporan baru perlu validasi: ' . $row['nama_kegiatan'],
+        'title' => 'Laporan baru perlu validasi: ' . $row['nama_projek'],
         'link' => '../reports/approve-report-sa.php?id=' . $row['id_laporan_keu'],
         'time' => time_elapsed_string($row['created_at']),
         'is_unread' => $is_unread
@@ -278,7 +278,7 @@ session_write_close();
                         ?>
                         <tr class="hover:bg-gray-50">
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><?php echo $no++; ?></td>
-                            <td class="px-6 py-4 text-sm text-gray-900"><?php echo $report['nama_kegiatan']; ?></td>
+                            <td class="px-6 py-4 text-sm text-gray-900"><?php echo $report['nama_projek']; ?></td>
                             <td class="px-6 py-4 text-sm text-gray-900"><?php echo $report['kode_projek']; ?></td>
                             <td class="px-6 py-4 text-sm text-gray-900"><?php echo $report['creator_name']; ?></td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">

@@ -36,21 +36,34 @@ document.addEventListener('DOMContentLoaded', function() {
         // Format on input
         input.addEventListener('input', function(e) {
             const cursorPosition = e.target.selectionStart;
-            const oldLength = e.target.value.length;
-            
+            const oldValue = e.target.value;
+
             // Get numeric value
             const numericValue = parseCurrency(e.target.value);
-            
+
             // Format the value
             const formatted = formatCurrency(numericValue);
-            
+
             // Update input value
             e.target.value = formatted;
-            
-            // Adjust cursor position
-            const newLength = formatted.length;
-            const diff = newLength - oldLength;
-            e.target.setSelectionRange(cursorPosition + diff, cursorPosition + diff);
+
+            // Adjust cursor position more carefully
+            // Calculate how many separator characters were added before cursor
+            const oldPart = oldValue.substring(0, cursorPosition);
+            const newPart = formatted.substring(0, cursorPosition);
+
+            // Count separators in both parts
+            const oldSeparators = (oldPart.match(/\./g) || []).length;
+            const newSeparators = (newPart.match(/\./g) || []).length;
+
+            // Adjust cursor position based on separator difference
+            let newCursorPosition = cursorPosition + (newSeparators - oldSeparators);
+
+            // Ensure cursor doesn't go beyond string length
+            newCursorPosition = Math.min(newCursorPosition, formatted.length);
+
+            // Set cursor position
+            e.target.setSelectionRange(newCursorPosition, newCursorPosition);
         });
         
         // Format on blur

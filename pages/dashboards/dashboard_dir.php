@@ -44,9 +44,12 @@ if ($check_notif_column && $check_notif_column->num_rows > 0) {
 
 // Get proposals for DIR approval (stage 2: approved by FM, waiting DIR)
 // Check if approved_by_fm column exists (2-stage approval feature)
+error_log("DIR Dashboard: Checking for approved_by_fm column...");
 $check_column = $conn->query("SHOW COLUMNS FROM proposal LIKE 'approved_by_fm'");
+
 if ($check_column && $check_column->num_rows > 0) {
     // 2-stage approval is active
+    error_log("DIR Dashboard: Using 2-stage approval query");
     $proposals = $conn->query("SELECT p.*, u.nama as creator_name,
         u2.nama as fm_name
         FROM proposal p 
@@ -54,27 +57,63 @@ if ($check_column && $check_column->num_rows > 0) {
         LEFT JOIN user u2 ON p.approved_by_fm = u2.id_user
         WHERE p.status IN ('approved_fm', 'approved') 
         ORDER BY p.created_at DESC");
+    
+    if (!$proposals) {
+        error_log("DIR Dashboard: Proposals query FAILED: " . $conn->error);
+    }
 } else {
     // Fallback: 2-stage approval not yet enabled
+    error_log("DIR Dashboard: Using fallback query (no 2-stage)");
     $proposals = $conn->query("SELECT p.*, u.nama as creator_name
         FROM proposal p 
         LEFT JOIN user u ON p.pemohon = u.nama 
         WHERE p.status = 'approved' 
         ORDER BY p.created_at DESC");
+    
+    if (!$proposals) {
+        error_log("DIR Dashboard: Proposals query FAILED: " . $conn->error);
+    }
+}
+
+// Debug logging for proposals
+if ($proposals) {
+    error_log("DIR Dashboard: Found " . $proposals->num_rows . " proposals");
+    if ($proposals->num_rows > 0) {
+        $proposals->data_seek(0);
+        while ($p = $proposals->fetch_assoc()) {
+            error_log("Proposal ID: " . $p['id_proposal'] . ", Status: '" . $p['status'] . "'");
+        }
+        $proposals->data_seek(0);
+    }
+} else {
+    error_log("DIR Dashboard: Proposals is FALSE/NULL!");
 }
 
 // Get validated financial reports (both pending and approved)
+// Debug: Show all reports to check what's in database
 $reports = $conn->query("SELECT lh.*, u.nama as creator_name,
     u2.nama as fm_name
     FROM laporan_keuangan_header lh
     LEFT JOIN user u ON lh.created_by = u.id_user
     LEFT JOIN user u2 ON lh.approved_by = u2.id_user
-    WHERE lh.status_lap IN ('verified', 'approved')
     ORDER BY lh.created_at DESC");
+
+// Log the query result for debugging
+if ($reports) {
+    error_log("DIR Dashboard: Found " . $reports->num_rows . " reports");
+    if ($reports->num_rows > 0) {
+        $reports->data_seek(0); // Reset pointer
+        while ($r = $reports->fetch_assoc()) {
+            error_log("Report ID: " . $r['id_laporan_keu'] . ", Status: '" . $r['status_lap'] . "'");
+        }
+        $reports->data_seek(0); // Reset pointer again for actual display
+    }
+}
 
 // Get notifications for Direktur (proposals waiting for stage 2 approval + reports waiting for approval)
 $notif_proposals = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status = 'approved_fm'")->fetch_assoc()['count'];
-$notif_reports = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'verified' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['count'];
+// Debug: Show all reports that are not yet approved by DIR
+$notif_reports = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap != 'approved' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['count'];
 $total_notifications = $notif_proposals + $notif_reports;
 
 // Get recent notifications with details
@@ -99,17 +138,18 @@ while ($row = $approved_proposals->fetch_assoc()) {
 }
 
 // Add report notifications (reports waiting for DIR approval)
-$report_notifs = $conn->query("SELECT lh.id_laporan_keu, lh.nama_kegiatan, lh.updated_at
+// Debug: Show all reports that are not approved yet
+$report_notifs = $conn->query("SELECT lh.id_laporan_keu, lh.nama_projek, lh.updated_at, lh.status_lap
     FROM laporan_keuangan_header lh
-    WHERE lh.status_lap = 'verified' AND lh.updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
+    WHERE lh.status_lap != 'approved' AND lh.updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
     ORDER BY lh.updated_at DESC LIMIT 5");
 while ($row = $report_notifs->fetch_assoc()) {
     $is_unread = (strtotime($row['updated_at']) > strtotime($last_notification_check));
     $notifications[] = [
         'type' => 'report',
         'id' => $row['id_laporan_keu'],
-        'title' => 'Laporan menunggu approval: ' . $row['nama_kegiatan'],
-        'link' => 'approve_report_dir.php?id=' . $row['id_laporan_keu'],
+        'title' => 'Laporan menunggu approval: ' . $row['nama_projek'],
+        'link' => '../reports/approve-report-dir.php?id=' . $row['id_laporan_keu'] . '&return_tab=reports',
         'time' => time_elapsed_string($row['updated_at']),
         'is_unread' => $is_unread
     ];
@@ -425,11 +465,13 @@ session_write_close();
                             <option value="">Semua Proyek</option>
                             <?php 
                             $projects = $conn->query("SELECT DISTINCT kode_projek FROM proyek ORDER BY kode_projek");
+                            if ($projects && $projects->num_rows > 0):
                             while ($proj = $projects->fetch_assoc()): ?>
                                 <option value="<?php echo htmlspecialchars($proj['kode_projek']); ?>">
                                     <?php echo htmlspecialchars($proj['kode_projek']); ?>
                                 </option>
-                            <?php endwhile; ?>
+                                <?php endwhile;
+                            endif; ?>
                         </select>
                         <button onclick="resetProposalFilters()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">
                             <i class="fas fa-redo mr-2"></i>Reset
@@ -453,16 +495,17 @@ session_write_close();
                         <tbody class="bg-white divide-y divide-gray-200">
                             <?php 
                             $no = 1;
+                            if ($proposals && $proposals->num_rows > 0):
                             while ($proposal = $proposals->fetch_assoc()): 
                             ?>
                             <tr class="hover:bg-gray-50 proposal-row"
-                                data-title="<?php echo strtolower(htmlspecialchars($proposal['judul_proposal'])); ?>"
-                                data-pj="<?php echo strtolower(htmlspecialchars($proposal['pj'])); ?>"
-                                data-project="<?php echo strtolower(htmlspecialchars($proposal['kode_projek'])); ?>">
+                                data-title="<?php echo strtolower(htmlspecialchars($proposal['judul_proposal'] ?? '')); ?>"
+                                data-pj="<?php echo strtolower(htmlspecialchars($proposal['pj'] ?? '')); ?>"
+                                data-project="<?php echo strtolower(htmlspecialchars($proposal['kode_projek'] ?? $proposal['kode_proyek'] ?? '')); ?>">
                                 <td class="px-6 py-4 text-sm text-gray-900"><?php echo $no++; ?></td>
-                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($proposal['judul_proposal']); ?></td>
-                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($proposal['pj']); ?></td>
-                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo $proposal['kode_proyek']; ?></td>
+                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($proposal['judul_proposal'] ?? ''); ?></td>
+                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($proposal['pj'] ?? ''); ?></td>
+                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($proposal['kode_projek'] ?? $proposal['kode_proyek'] ?? ''); ?></td>
                                 <td class="px-6 py-4 text-sm text-gray-900">
                                     <?php echo date('d/m/Y', strtotime($proposal['date'])); ?>
                                 </td>
@@ -482,20 +525,31 @@ session_write_close();
                                     <?php endif; ?>
                                 </td>
                                 <td class="px-6 py-4 text-sm">
-                                    <?php if ($proposal['status'] === 'approved_fm'): ?>
-                                        <a href="../proposals/approve_proposal.php?id=<?php echo $proposal['id_proposal']; ?>&return_tab=proposals" 
+                                    <?php if (isset($proposal['status']) && $proposal['status'] === 'approved_fm'): ?>
+                                        <a href="../proposals/approve_proposal.php?id=<?php echo $proposal['id_proposal'] ?? 0; ?>&return_tab=proposals" 
                                             class="text-purple-600 hover:text-purple-900 font-medium">
                                             <i class="fas fa-clipboard-check mr-1"></i> Approve Stage 2
                                         </a>
                                     <?php else: ?>
-                                        <a href="../proposals/review_proposal_dir.php?id=<?php echo $proposal['id_proposal']; ?>&return_tab=proposals" 
+                                        <a href="../proposals/review_proposal_dir.php?id=<?php echo $proposal['id_proposal'] ?? 0; ?>&return_tab=proposals" 
                                             class="text-gray-600 hover:text-gray-900">
                                             <i class="fas fa-eye mr-1"></i> View
                                         </a>
                                     <?php endif; ?>
                                 </td>
                             </tr>
-                            <?php endwhile; ?>
+                            <?php 
+                                endwhile;
+                            else: 
+                            ?>
+                            <tr>
+                                <td colspan="7" class="px-6 py-8 text-center text-gray-500">
+                                    <i class="fas fa-inbox text-4xl mb-3 block"></i>
+                                    <p class="text-lg font-medium">Tidak ada proposal</p>
+                                    <p class="text-sm mt-1">Belum ada proposal yang perlu di-approve</p>
+                                </td>
+                            </tr>
+                            <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
@@ -525,64 +579,72 @@ session_write_close();
                         <tbody class="bg-white divide-y divide-gray-200">
                             <?php
                             $no = 1;
+                            if ($reports && $reports->num_rows > 0):
                             while ($report = $reports->fetch_assoc()):
                             ?>
                             <tr class="hover:bg-gray-50">
                                 <td class="px-6 py-4 text-sm text-gray-900"><?php echo $no++; ?></td>
-                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo $report['nama_kegiatan']; ?></td>
-                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo $report['kode_projek']; ?></td>
-                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo $report['creator_name']; ?></td>
+                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($report['nama_projek'] ?? ''); ?></td>
+                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($report['kode_projek'] ?? ''); ?></td>
+                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($report['creator_name'] ?? ''); ?></td>
                                 <td class="px-6 py-4 text-sm text-gray-900">
-                                    <?php echo date('d/m/Y', strtotime($report['tanggal_laporan'])); ?>
+                                    <?php echo isset($report['tanggal_laporan']) ? date('d/m/Y', strtotime($report['tanggal_laporan'])) : ''; ?>
                                 </td>
                                 <td class="px-6 py-4">
-                                    <div class="flex items-center space-x-2">
-                                        <?php if ($report['approved_by']): ?>
-                                            <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                                ✓ FM
-                                            </span>
-                                        <?php else: ?>
-                                            <span class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">
-                                                ○ FM
-                                            </span>
-                                        <?php endif; ?>
-
-                                        <?php if ($report['status_lap'] === 'approved'): ?>
-                                            <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                                ✓ DIR (Final)
-                                            </span>
-                                        <?php else: ?>
-                                            <span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                                                ○ DIR
-                                            </span>
-                                        <?php endif; ?>
-                                    </div>
+                                    <?php 
+                                    $status = isset($report['status_lap']) ? trim($report['status_lap']) : '';
+                                    // Debug: Show actual status
+                                    switch ($status) {
+                                        case 'draft':
+                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">Draft</span>';
+                                            break;
+                                        case 'submitted':
+                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Pending SA</span>';
+                                            break;
+                                        case 'verified':
+                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Validated SA</span>';
+                                            break;
+                                        case 'approved_fm':
+                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">Approved FM</span>';
+                                            break;
+                                        case 'approved':
+                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">✓ Final Approved</span>';
+                                            break;
+                                        default:
+                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Unknown: ' . htmlspecialchars($status) . '</span>';
+                                    }
+                                    ?>
                                 </td>
                                 <td class="px-6 py-4 text-sm">
-                                    <?php if ($report['status_lap'] === 'approved'): ?>
+                                    <?php if ($status === 'approved'): ?>
                                         <!-- Already approved - show View action -->
-                                        <a href="../reports/view_report_dir.php?id=<?php echo $report['id_laporan_keu']; ?>&return_tab=reports"
+                                        <a href="../reports/view_report_dir.php?id=<?php echo $report['id_laporan_keu'] ?? 0; ?>&return_tab=reports"
                                             class="text-blue-600 hover:text-blue-900">
                                             <i class="fas fa-eye mr-1"></i> View
                                         </a>
                                     <?php else: ?>
                                         <!-- Still pending approval - show Approve action -->
-                                        <a href="../reports/approve-report-dir.php?id=<?php echo $report['id_laporan_keu']; ?>&return_tab=reports"
+                                        <a href="../reports/approve-report-dir.php?id=<?php echo $report['id_laporan_keu'] ?? 0; ?>&return_tab=reports"
                                             class="text-purple-600 hover:text-purple-900">
                                             <i class="fas fa-check-circle mr-1"></i> Approve
                                         </a>
                                     <?php endif; ?>
                                 </td>
                             </tr>
-                            <?php endwhile; ?>
+                            <?php 
+                                endwhile;
+                            else: 
+                            ?>
+                            <tr>
+                                <td colspan="7" class="px-6 py-8 text-center text-gray-500">
+                                    <i class="fas fa-inbox text-4xl mb-3 block"></i>
+                                    <p class="text-lg font-medium">Tidak ada laporan keuangan</p>
+                                    <p class="text-sm mt-1">Belum ada laporan keuangan di database</p>
+                                </td>
+                            </tr>
+                            <?php endif; ?>
                         </tbody>
                     </table>
-                    <?php if ($no === 1): ?>
-                    <div class="p-8 text-center text-gray-500">
-                        <i class="fas fa-inbox text-4xl mb-4"></i>
-                        <p class="text-lg">Tidak ada laporan keuangan</p>
-                    </div>
-                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -646,44 +708,20 @@ session_write_close();
         document.addEventListener('click', function(event) {
             const notifDropdown = document.getElementById('notificationDropdown');
             const profileDropdown = document.getElementById('profileDropdown');
-            const notifPanel = document.getElementById('notificationPanel');
-            const profilePanel = document.getElementById('profilePanel');
-            
-            if (notifDropdown && !notifDropdown.contains(event.target) && notifPanel) {
-                notifPanel.classList.add('hidden');
+            if (notifDropdown && !notifDropdown.contains(event.target)) {
+                document.getElementById('notificationPanel').classList.add('hidden');
             }
-            if (profileDropdown && !profileDropdown.contains(event.target) && profilePanel) {
-                profilePanel.classList.add('hidden');
+            if (profileDropdown && !profileDropdown.contains(event.target)) {
+                document.getElementById('profilePanel').classList.add('hidden');
             }
         });
 
         // Prevent dropdown from closing if click is inside notification panel or bell
-        document.addEventListener('DOMContentLoaded', function() {
-            const notifPanel = document.getElementById('notificationPanel');
-            const notifButton = document.querySelector('.notification-bell-button');
-            const profileBtn = document.querySelector('#profileDropdown button');
-            const profilePanel = document.getElementById('profilePanel');
-            
-            if (notifPanel) {
-                notifPanel.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                });
-            }
-            if (notifButton) {
-                notifButton.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                });
-            }
-            if (profileBtn) {
-                profileBtn.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                });
-            }
-            if (profilePanel) {
-                profilePanel.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                });
-            }
+        document.getElementById('notificationPanel').addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+        document.querySelector('.notification-bell-button').addEventListener('click', function(e) {
+            e.stopPropagation();
         });
         
         // Search and Filter for Proposals

@@ -46,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve'])) {
         send_notification_email(
             $report_data['email'],
             'Laporan Keuangan Telah Diapprove oleh FM',
-            'Laporan keuangan Anda untuk kegiatan "' . $report_data['nama_kegiatan'] . '" telah disetujui oleh Finance Manager.'
+            'Laporan keuangan Anda untuk kegiatan "' . $report_data['nama_projek'] . '" telah disetujui oleh Finance Manager.'
         );
         
         $success = 'Laporan berhasil di-approve!';
@@ -170,7 +170,7 @@ $items = $details->get_result();
                     </div>
                     <div>
                         <p class="text-gray-600">Nama Kegiatan:</p>
-                        <p class="font-medium text-gray-800"><?php echo $report['nama_kegiatan']; ?></p>
+                        <p class="font-medium text-gray-800"><?php echo $report['nama_projek']; ?></p>
                     </div>
                     <div>
                         <p class="text-gray-600">Pelaksana:</p>
@@ -197,36 +197,50 @@ $items = $details->get_result();
 
             <!-- Report Details -->
             <div class="p-8">
-                <h3 class="text-lg font-bold text-gray-800 mb-4">Rincian Pengeluaran</h3>
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold text-gray-800">Rincian Pengeluaran</h3>
+                    <div class="flex items-center space-x-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                        <i class="fas fa-calculator text-blue-600"></i>
+                        <span class="text-xs text-blue-800 font-medium">Formula: Actual Cost = Unit Total × Unit Cost</span>
+                    </div>
+                </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead class="bg-gray-100">
                             <tr>
                                 <th class="px-4 py-2 text-left">No</th>
+                                <th class="px-4 py-2 text-left">Invoice Date</th>
                                 <th class="px-4 py-2 text-left">Deskripsi</th>
                                 <th class="px-4 py-2 text-left">Penerima</th>
+                                <th class="px-4 py-2 text-right">Unit Total</th>
+                                <th class="px-4 py-2 text-right">Unit Cost</th>
                                 <th class="px-4 py-2 text-right">Budget</th>
-                                <th class="px-4 py-2 text-right">Realisasi</th>
-                                <th class="px-4 py-2 text-right">Selisih</th>
+                                <th class="px-4 py-2 text-right">Actual Cost</th>
+                                <th class="px-4 py-2 text-right">Balance</th>
                                 <th class="px-4 py-2 text-center">Nota</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200">
-                            <?php 
+                            <?php
                             $no = 1;
                             $total_budget = 0;
                             $total_actual = 0;
-                            while ($item = $items->fetch_assoc()): 
+                            while ($item = $items->fetch_assoc()):
+                                // Calculate actual cost as Unit Total × Unit Cost
+                                $calculated_actual = ($item['unit_total'] ?? 0) * ($item['unit_cost'] ?? 0);
                                 $total_budget += $item['requested'];
-                                $total_actual += $item['actual'];
+                                $total_actual += $calculated_actual;
                             ?>
                             <tr>
                                 <td class="px-4 py-2"><?php echo $no++; ?></td>
+                                <td class="px-4 py-2"><?php echo $item['invoice_date'] ? date('d/m/Y', strtotime($item['invoice_date'])) : '-'; ?></td>
                                 <td class="px-4 py-2"><?php echo $item['item_desc']; ?></td>
                                 <td class="px-4 py-2"><?php echo $item['recipient']; ?></td>
+                                <td class="px-4 py-2 text-right"><?php echo number_format($item['unit_total'] ?? 0, 0); ?></td>
+                                <td class="px-4 py-2 text-right"><?php echo number_format($item['unit_cost'] ?? 0, 2); ?></td>
                                 <td class="px-4 py-2 text-right"><?php echo number_format($item['requested'], 2); ?></td>
-                                <td class="px-4 py-2 text-right"><?php echo number_format($item['actual'], 2); ?></td>
-                                <td class="px-4 py-2 text-right"><?php echo number_format($item['balance'], 2); ?></td>
+                                <td class="px-4 py-2 text-right"><?php echo number_format($calculated_actual, 2); ?></td>
+                                <td class="px-4 py-2 text-right"><?php echo number_format($item['requested'] - $calculated_actual, 2); ?></td>
                                 <td class="px-4 py-2 text-center">
                                     <?php if (!empty($item['file_nota'])): ?>
                                         <?php $isImage = preg_match('/\.(jpg|jpeg|png|gif|bmp|webp|tif|tiff)$/i', $item['file_nota']); ?>

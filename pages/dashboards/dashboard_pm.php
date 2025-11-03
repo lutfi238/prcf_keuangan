@@ -105,8 +105,8 @@ while ($row = $rejected_proposals->fetch_assoc()) {
 }
 
 // Add revision report notifications
-$revision_reports = $conn->query("SELECT id_laporan_keu, nama_kegiatan, updated_at 
-    FROM laporan_keuangan_header 
+$revision_reports = $conn->query("SELECT id_laporan_keu, nama_projek, updated_at
+    FROM laporan_keuangan_header
     WHERE created_by = {$user_id} AND status_lap = 'revision_requested' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
     ORDER BY updated_at DESC LIMIT 5");
 while ($row = $revision_reports->fetch_assoc()) {
@@ -114,7 +114,7 @@ while ($row = $revision_reports->fetch_assoc()) {
     $notifications[] = [
         'type' => 'rejected',
         'id' => $row['id_laporan_keu'],
-        'title' => 'Laporan perlu revisi: ' . $row['nama_kegiatan'],
+        'title' => 'Laporan perlu revisi: ' . $row['nama_projek'],
         'link' => '../reports/edit_financial_report.php?id=' . $row['id_laporan_keu'],
         'time' => time_elapsed_string($row['updated_at']),
         'is_unread' => $is_unread
@@ -122,8 +122,8 @@ while ($row = $revision_reports->fetch_assoc()) {
 }
 
 // Add approved report notifications
-$approved_reports = $conn->query("SELECT id_laporan_keu, nama_kegiatan, updated_at 
-    FROM laporan_keuangan_header 
+$approved_reports = $conn->query("SELECT id_laporan_keu, nama_projek, updated_at
+    FROM laporan_keuangan_header
     WHERE created_by = {$user_id} AND status_lap = 'approved' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
     ORDER BY updated_at DESC LIMIT 5");
 while ($row = $approved_reports->fetch_assoc()) {
@@ -131,7 +131,7 @@ while ($row = $approved_reports->fetch_assoc()) {
     $notifications[] = [
         'type' => 'success',
         'id' => $row['id_laporan_keu'],
-        'title' => 'Laporan disetujui: ' . $row['nama_kegiatan'],
+        'title' => 'Laporan disetujui: ' . $row['nama_projek'],
         'link' => '../reports/approve_report.php?id=' . $row['id_laporan_keu'],
         'time' => time_elapsed_string($row['updated_at']),
         'is_unread' => $is_unread
@@ -182,10 +182,10 @@ if ($recent_proposals_query) {
 }
 
 // Get recent reports
-$recent_reports_query = $conn->query("SELECT 'report' as type, id_laporan_keu as id, nama_kegiatan as title, status_lap as status, created_at as activity_date 
-    FROM laporan_keuangan_header 
-    WHERE created_by = {$user_id} 
-    ORDER BY created_at DESC 
+$recent_reports_query = $conn->query("SELECT 'report' as type, id_laporan_keu as id, nama_projek as title, status_lap as status, created_at as activity_date
+    FROM laporan_keuangan_header
+    WHERE created_by = {$user_id}
+    ORDER BY created_at DESC
     LIMIT 3");
 if ($recent_reports_query) {
     while ($row = $recent_reports_query->fetch_assoc()) {

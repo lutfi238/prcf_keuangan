@@ -25,7 +25,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_report'])) {
     try {
         $kode_projek = $_POST['kode_projek'];
         $id_proposal = $_POST['id_proposal']; // Changed from nama_projek to id_proposal
-        $nama_kegiatan = $_POST['nama_kegiatan'];
         $pelaksana = $_POST['pelaksana'];
         $tanggal_pelaksanaan = $_POST['tanggal_pelaksanaan'];
         $tanggal_laporan = $_POST['tanggal_laporan'];
@@ -44,11 +43,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_report'])) {
         }
 
         // Insert header (no id_proposal column in header table)
-        $stmt = $conn->prepare("INSERT INTO laporan_keuangan_header (kode_projek, nama_projek, nama_kegiatan, pelaksana, tanggal_pelaksanaan, tanggal_laporan, mata_uang, exrate, created_by, status_lap) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted')");
+        $stmt = $conn->prepare("INSERT INTO laporan_keuangan_header (kode_projek, nama_projek, pelaksana, tanggal_pelaksanaan, tanggal_laporan, mata_uang, exrate, created_by, status_lap) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'submitted')");
         if (!$stmt) {
             throw new Exception('Gagal menyiapkan header laporan: ' . $conn->error);
         }
-        $stmt->bind_param("sssssssdi", $kode_projek, $nama_projek, $nama_kegiatan, $pelaksana, $tanggal_pelaksanaan, $tanggal_laporan, $mata_uang, $exrate, $user_id);
+        $stmt->bind_param("ssssssdi", $kode_projek, $nama_projek, $pelaksana, $tanggal_pelaksanaan, $tanggal_laporan, $mata_uang, $exrate, $user_id);
 
         if (!$stmt->execute()) {
             throw new Exception('Gagal menyimpan header laporan.');
@@ -153,7 +152,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_report'])) {
             send_notification_email(
                 $sa['email'],
                 'Laporan Keuangan Baru dari ' . $user_name,
-                'Laporan keuangan untuk kegiatan "' . $nama_kegiatan . '" telah dikirimkan oleh ' . $user_name . '. Mohon segera divalidasi.'
+                'Laporan keuangan untuk kegiatan "' . $nama_projek . '" telah dikirimkan oleh ' . $user_name . '. Mohon segera divalidasi.'
             );
         }
 
@@ -244,11 +243,6 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
                         </div>
                     </div>
 
-                    <div>
-                        <label class="block text-gray-700 text-sm font-medium mb-2">Nama Kegiatan *</label>
-                        <input type="text" name="nama_kegiatan" required 
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
-                    </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
@@ -398,7 +392,7 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
                 <div class="grid grid-cols-1 gap-4">
                     <div>
                         <label class="block text-gray-700 text-sm font-medium mb-2">Tanggal Invoice</label>
-                        <input type="date" name="items[${itemCount}][invoice_date]" 
+                        <input type="date" name="items[${itemCount}][invoice_date]"
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
                     </div>
                     <div class="md:col-span-2">
@@ -408,7 +402,7 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
                     </div>
                     <div>
                         <label class="block text-gray-700 text-sm font-medium mb-2">Penerima</label>
-                        <input type="text" name="items[${itemCount}][recipient]" 
+                        <input type="text" name="items[${itemCount}][recipient]"
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
                     </div>
                     <div class="relative">
@@ -432,17 +426,17 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
                     </div>
                     <div>
                         <label class="block text-gray-700 text-sm font-medium mb-2">Biaya per Unit</label>
-                        <input type="number" name="items[${itemCount}][unit_cost]" step="0.01" value="0"
+                        <input type="text" name="items[${itemCount}][unit_cost]" value="0"
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
                     </div>
                     <div>
                         <label class="block text-gray-700 text-sm font-medium mb-2">Budget Diajukan *</label>
-                        <input type="number" name="items[${itemCount}][requested]" step="0.01" value="0" required
+                        <input type="text" name="items[${itemCount}][requested]" value="0" required
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
                     </div>
                     <div>
                         <label class="block text-gray-700 text-sm font-medium mb-2">Realisasi *</label>
-                        <input type="number" name="items[${itemCount}][actual]" step="0.01" value="0" required
+                        <input type="text" name="items[${itemCount}][actual]" value="0" required
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
                     </div>
                     <div class="md:col-span-2">
@@ -467,6 +461,60 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
                 </div>
             `;
             container.appendChild(itemDiv);
+
+            // Apply currency formatting to the newly added item
+            applyCurrencyFormattingToItem(itemDiv);
+        }
+
+        function applyCurrencyFormattingToItem(itemDiv) {
+            // Find all currency input fields in the newly added item
+            const currencyInputs = itemDiv.querySelectorAll('input[name*="unit_cost"], input[name*="requested"], input[name*="actual"]');
+
+            currencyInputs.forEach(input => {
+                // Format on input
+                input.addEventListener('input', function(e) {
+                    const cursorPosition = e.target.selectionStart;
+                    const oldValue = e.target.value;
+
+                    // Get numeric value
+                    const numericValue = parseCurrency(e.target.value);
+
+                    // Format the value
+                    const formatted = formatCurrency(numericValue);
+
+                    // Update input value
+                    e.target.value = formatted;
+
+                    // Adjust cursor position more carefully
+                    // Calculate how many separator characters were added before cursor
+                    const oldPart = oldValue.substring(0, cursorPosition);
+                    const newPart = formatted.substring(0, cursorPosition);
+
+                    // Count separators in both parts
+                    const oldSeparators = (oldPart.match(/\./g) || []).length;
+                    const newSeparators = (newPart.match(/\./g) || []).length;
+
+                    // Adjust cursor position based on separator difference
+                    let newCursorPosition = cursorPosition + (newSeparators - oldSeparators);
+
+                    // Ensure cursor doesn't go beyond string length
+                    newCursorPosition = Math.min(newCursorPosition, formatted.length);
+
+                    // Set cursor position
+                    e.target.setSelectionRange(newCursorPosition, newCursorPosition);
+                });
+
+                // Format on blur
+                input.addEventListener('blur', function(e) {
+                    const numericValue = parseCurrency(e.target.value);
+                    e.target.value = formatCurrency(numericValue);
+                });
+
+                // Initial format if value exists
+                if (input.value) {
+                    input.value = formatCurrency(input.value);
+                }
+            });
         }
 
         function removeItem(button) {
@@ -641,6 +689,14 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
 
         // Add first item on page load
         addItem();
+
+        // Apply currency formatting to the first item as well
+        setTimeout(() => {
+            const firstItem = document.querySelector('#itemsContainer > .border');
+            if (firstItem) {
+                applyCurrencyFormattingToItem(firstItem);
+            }
+        }, 100);
         
         // Prepare currency fields for submission
         prepareCurrencyForSubmit('reportForm');

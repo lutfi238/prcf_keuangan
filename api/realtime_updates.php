@@ -118,17 +118,17 @@ while (true) {
             }
             
             // Pending reports
-            $report_notifs = $conn->query("SELECT lh.id_laporan_keu, lh.nama_kegiatan, lh.created_at, u.nama as creator 
-                FROM laporan_keuangan_header lh 
-                LEFT JOIN user u ON lh.created_by = u.id_user 
-                WHERE lh.status_lap = 'verified' 
+            $report_notifs = $conn->query("SELECT lh.id_laporan_keu, lh.nama_projek, lh.created_at, u.nama as creator
+                FROM laporan_keuangan_header lh
+                LEFT JOIN user u ON lh.created_by = u.id_user
+                WHERE lh.status_lap = 'verified'
                 ORDER BY lh.created_at DESC LIMIT 3");
-            
+
             while ($row = $report_notifs->fetch_assoc()) {
                 $notifications[] = [
                     'type' => 'report',
                     'id' => $row['id_laporan_keu'],
-                    'title' => 'Validated Report: ' . $row['nama_kegiatan'],
+                    'title' => 'Validated Report: ' . $row['nama_projek'],
                     'link' => '../reports/approve-report-fm.php?id=' . $row['id_laporan_keu'],
                     'time' => $row['created_at']
                 ];
@@ -152,17 +152,17 @@ while (true) {
             }
             
             // Approved reports waiting for Director
-            $report_notifs = $conn->query("SELECT lh.id_laporan_keu, lh.nama_kegiatan, lh.updated_at, u.nama as creator 
-                FROM laporan_keuangan_header lh 
-                LEFT JOIN user u ON lh.created_by = u.id_user 
-                WHERE lh.status_lap = 'approved_fm' 
+            $report_notifs = $conn->query("SELECT lh.id_laporan_keu, lh.nama_projek, lh.updated_at, u.nama as creator
+                FROM laporan_keuangan_header lh
+                LEFT JOIN user u ON lh.created_by = u.id_user
+                WHERE lh.status_lap = 'approved_fm'
                 ORDER BY lh.updated_at DESC LIMIT 3");
-            
+
             while ($row = $report_notifs->fetch_assoc()) {
                 $notifications[] = [
                     'type' => 'report',
                     'id' => $row['id_laporan_keu'],
-                    'title' => 'Report (FM Approved): ' . $row['nama_kegiatan'],
+                    'title' => 'Report (FM Approved): ' . $row['nama_projek'],
                     'link' => '../reports/approve-report-dir.php?id=' . $row['id_laporan_keu'],
                     'time' => $row['updated_at']
                 ];

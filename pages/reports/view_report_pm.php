@@ -96,7 +96,7 @@ if ($details_stmt) {
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-600">Nama Kegiatan</label>
-                    <p class="text-gray-800 font-medium"><?php echo htmlspecialchars($report['nama_kegiatan']); ?></p>
+                    <p class="text-gray-800 font-medium"><?php echo htmlspecialchars($report['nama_projek']); ?></p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-600">Pelaksana</label>
@@ -148,7 +148,6 @@ if ($details_stmt) {
                         <thead class="bg-gray-100">
                             <tr>
                                 <th class="border border-gray-200 px-3 py-2 text-left text-xs font-medium text-gray-700">No</th>
-                                <th class="border border-gray-200 px-3 py-2 text-left text-xs font-medium text-gray-700">Invoice No</th>
                                 <th class="border border-gray-200 px-3 py-2 text-left text-xs font-medium text-gray-700">Invoice Date</th>
                                 <th class="border border-gray-200 px-3 py-2 text-left text-xs font-medium text-gray-700">Item</th>
                                 <th class="border border-gray-200 px-3 py-2 text-left text-xs font-medium text-gray-700">Recipient</th>
@@ -170,14 +169,15 @@ if ($details_stmt) {
                             $total_actual = 0;
                             $total_balance = 0;
                             
-                            while ($detail = $details->fetch_assoc()): 
+                            while ($detail = $details->fetch_assoc()):
+                                // Calculate actual cost as Unit Total × Unit Cost
+                                $calculated_actual = $detail['unit_total'] * $detail['unit_cost'];
                                 $total_requested += $detail['requested'];
-                                $total_actual += $detail['actual'];
-                                $total_balance += $detail['balance'];
+                                $total_actual += $calculated_actual;
+                                $total_balance += ($detail['requested'] - $calculated_actual);
                             ?>
                             <tr class="hover:bg-gray-50">
                                 <td class="border border-gray-200 px-3 py-2 text-sm"><?php echo $no++; ?></td>
-                                <td class="border border-gray-200 px-3 py-2 text-sm"><?php echo htmlspecialchars($detail['invoice_no']); ?></td>
                                 <td class="border border-gray-200 px-3 py-2 text-sm"><?php echo $detail['invoice_date'] ? date('d/m/Y', strtotime($detail['invoice_date'])) : '-'; ?></td>
                                 <td class="border border-gray-200 px-3 py-2 text-sm"><?php echo htmlspecialchars($detail['item_desc']); ?></td>
                                 <td class="border border-gray-200 px-3 py-2 text-sm"><?php echo htmlspecialchars($detail['recipient']); ?></td>
@@ -186,9 +186,9 @@ if ($details_stmt) {
                                 <td class="border border-gray-200 px-3 py-2 text-sm text-right"><?php echo number_format($detail['unit_total'], 0); ?></td>
                                 <td class="border border-gray-200 px-3 py-2 text-sm text-right"><?php echo number_format($detail['unit_cost'], 2); ?></td>
                                 <td class="border border-gray-200 px-3 py-2 text-sm text-right"><?php echo number_format($detail['requested'], 2); ?></td>
-                                <td class="border border-gray-200 px-3 py-2 text-sm text-right"><?php echo number_format($detail['actual'], 2); ?></td>
-                                <td class="border border-gray-200 px-3 py-2 text-sm text-right <?php echo $detail['balance'] < 0 ? 'text-red-600 font-semibold' : ''; ?>">
-                                    <?php echo number_format($detail['balance'], 2); ?>
+                                <td class="border border-gray-200 px-3 py-2 text-sm text-right"><?php echo number_format($calculated_actual, 2); ?></td>
+                                <td class="border border-gray-200 px-3 py-2 text-sm text-right <?php echo ($detail['requested'] - $calculated_actual) < 0 ? 'text-red-600 font-semibold' : ''; ?>">
+                                    <?php echo number_format($detail['requested'] - $calculated_actual, 2); ?>
                                 </td>
                                 <td class="border border-gray-200 px-3 py-2 text-sm"><?php echo htmlspecialchars($detail['explanation']); ?></td>
                                 <td class="border border-gray-200 px-3 py-2 text-center text-sm">

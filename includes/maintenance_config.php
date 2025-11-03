@@ -29,11 +29,11 @@
 define('MAINTENANCE_MODE', false); // ← UBAH JADI true UNTUK MAINTENANCE
 
 // ============================================================================
-// REGISTRATION CONTROL
+// REGISTRATION CONTROL SETTING
 // ============================================================================
 
-// Set TRUE untuk allow registration, FALSE untuk disable public registration
-define('REGISTRATION_ENABLED', true); // ← UBAH JADI false UNTUK DISABLE REGISTRATION
+// Set TRUE untuk enable public registration, FALSE untuk disable (admin-only)
+define('REGISTRATION_ENABLED', false); // ← UBAH JADI true UNTUK BUKA REGISTRASI PUBLIK
 
 // ============================================================================
 // IP WHITELIST (Optional)

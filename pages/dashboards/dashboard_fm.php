@@ -62,11 +62,24 @@ $proposals = $conn->query("SELECT p.*, u.nama as creator_name
     WHERE p.status IN ('submitted', 'approved') 
     ORDER BY p.created_at DESC");
 
-// Get all financial reports (SHOW ALL, not just 'verified')
+// Get validated financial reports for approval
+// Debug: Show all reports to check what's in database
 $reports = $conn->query("SELECT lh.*, u.nama as creator_name 
     FROM laporan_keuangan_header lh 
     LEFT JOIN user u ON lh.created_by = u.id_user 
     ORDER BY lh.created_at DESC");
+
+// Log the query result for debugging
+if ($reports) {
+    error_log("FM Dashboard: Found " . $reports->num_rows . " reports");
+    if ($reports->num_rows > 0) {
+        $reports->data_seek(0); // Reset pointer
+        while ($r = $reports->fetch_assoc()) {
+            error_log("Report ID: " . $r['id_laporan_keu'] . ", Status: '" . $r['status_lap'] . "', Length: " . strlen($r['status_lap']));
+        }
+        $reports->data_seek(0); // Reset pointer again for actual display
+    }
+}
 
 // Get notifications (pending proposals + pending reports)
 $notif_proposals = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status = 'submitted'")->fetch_assoc()['count'];
@@ -95,18 +108,18 @@ while ($row = $proposal_notifs->fetch_assoc()) {
 }
 
 // Add report notifications (still only 'verified' for notifications)
-$report_notifs = $conn->query("SELECT lh.id_laporan_keu, lh.nama_kegiatan, lh.created_at, u.nama as creator 
-    FROM laporan_keuangan_header lh 
-    LEFT JOIN user u ON lh.created_by = u.id_user 
-    WHERE lh.status_lap = 'verified' 
+$report_notifs = $conn->query("SELECT lh.id_laporan_keu, lh.nama_projek, lh.created_at, u.nama as creator
+    FROM laporan_keuangan_header lh
+    LEFT JOIN user u ON lh.created_by = u.id_user
+    WHERE lh.status_lap = 'verified'
     ORDER BY lh.created_at DESC LIMIT 5");
 while ($row = $report_notifs->fetch_assoc()) {
     $is_unread = (strtotime($row['created_at']) > strtotime($last_notification_check));
     $notifications[] = [
         'type' => 'report',
         'id' => $row['id_laporan_keu'],
-        'title' => 'Laporan sudah diverifikasi: ' . $row['nama_kegiatan'],
-        'link' => '../reports/approve_report.php?id=' . $row['id_laporan_keu'],
+        'title' => 'Laporan sudah diverifikasi: ' . $row['nama_projek'],
+        'link' => '../reports/approve-report-fm.php?id=' . $row['id_laporan_keu'] . '&return_tab=reports',
         'time' => time_elapsed_string($row['created_at']),
         'is_unread' => $is_unread
     ];
@@ -382,39 +395,7 @@ session_write_close();
         <div id="reportsContent" class="tab-content hidden">
             <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
                 <div class="p-6 border-b border-gray-200">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-bold text-gray-800">Daftar Semua Laporan Keuangan</h3>
-                        <div class="relative">
-                            <input type="text" id="searchReports" placeholder="Cari kegiatan, proyek, atau pembuat..." 
-                                class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 w-80">
-                            <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
-                        </div>
-                    </div>
-                    <div class="flex gap-3">
-                        <select id="filterProject" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
-                            <option value="">Semua Proyek</option>
-                            <?php 
-                            $projects = $conn->query("SELECT DISTINCT kode_projek FROM proyek ORDER BY kode_projek");
-                            while ($proj = $projects->fetch_assoc()): ?>
-                                <option value="<?php echo htmlspecialchars($proj['kode_projek']); ?>">
-                                    <?php echo htmlspecialchars($proj['kode_projek']); ?>
-                                </option>
-                            <?php endwhile; ?>
-                        </select>
-                        <select id="filterStatus" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
-                            <option value="">Semua Status</option>
-                            <option value="draft">Draft</option>
-                            <option value="submitted">Pending SA</option>
-                            <option value="verified">Validated by SA</option>
-                            <option value="approved_fm">Approved by FM (1/2)</option>
-                            <option value="approved">Approved Final</option>
-                            <option value="revision_requested">Needs Revision</option>
-                            <option value="rejected">Rejected</option>
-                        </select>
-                        <button onclick="resetReportFilters()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">
-                            <i class="fas fa-redo mr-2"></i>Reset
-                        </button>
-                    </div>
+                    <h3 class="text-lg font-bold text-gray-800">Laporan Keuangan yang Perlu Diapprove</h3>
                 </div>
                 
                 <div class="overflow-x-auto">
@@ -435,67 +416,49 @@ session_write_close();
                             $no = 1;
                             while ($report = $reports->fetch_assoc()): 
                             ?>
-                            <tr class="hover:bg-gray-50 cursor-pointer report-row" 
-                                data-activity="<?php echo strtolower(htmlspecialchars($report['nama_kegiatan'])); ?>"
-                                data-project="<?php echo strtolower(htmlspecialchars($report['kode_projek'])); ?>"
-                                data-creator="<?php echo strtolower(htmlspecialchars($report['creator_name'])); ?>"
-                                data-status="<?php echo strtolower(trim($report['status_lap'] ?? '')); ?>"
-                                onclick="window.location.href='<?php 
-                                // Smart routing: if approved/rejected, go to view page; otherwise go to approval page
-                                $view_page = ($report['approved_by'] || in_array($report['status_lap'], ['approved', 'rejected', 'revision_requested'])) 
-                                    ? '../reports/view_report_fm.php' 
-                                    : '../reports/approve-report-fm.php';
-                                echo $view_page . '?id=' . $report['id_laporan_keu'] . '&return_tab=reports';
-                            ?>'">
+                            <tr class="hover:bg-gray-50">
                                 <td class="px-6 py-4 text-sm text-gray-900"><?php echo $no++; ?></td>
-                                <td class="px-6 py-4 text-sm text-gray-900 font-medium"><?php echo htmlspecialchars($report['nama_kegiatan']); ?></td>
+                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($report['nama_projek']); ?></td>
                                 <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($report['kode_projek']); ?></td>
                                 <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($report['creator_name']); ?></td>
                                 <td class="px-6 py-4 text-sm text-gray-900">
                                     <?php echo date('d/m/Y', strtotime($report['tanggal_laporan'])); ?>
                                 </td>
                                 <td class="px-6 py-4">
-                                    <?php
-                                    $status = strtolower(trim($report['status_lap'] ?? ''));
+                                    <?php 
+                                    $status = trim($report['status_lap']);
+                                    // Debug: Show actual status
                                     switch ($status) {
                                         case 'draft':
                                             echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">Draft</span>';
                                             break;
                                         case 'submitted':
-                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Pending SA Validation</span>';
+                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Pending SA</span>';
                                             break;
                                         case 'verified':
-                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800"><i class="fas fa-check mr-1"></i>Validated by SA</span>';
+                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Tervalidasi SA</span>';
                                             break;
                                         case 'approved_fm':
-                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800"><i class="fas fa-check mr-1"></i>Approved by FM (1/2)</span>';
+                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">Approved FM</span>';
                                             break;
                                         case 'approved':
-                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800"><i class="fas fa-check-double mr-1"></i>Approved Final</span>';
-                                            break;
-                                        case 'revision_requested':
-                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800"><i class="fas fa-edit mr-1"></i>Needs Revision</span>';
-                                            break;
-                                        case 'rejected':
-                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800"><i class="fas fa-times mr-1"></i>Rejected</span>';
+                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">Approved Final</span>';
                                             break;
                                         default:
-                                            error_log("⚠️ dashboard_fm.php - Unknown status_lap=" . ($report['status_lap'] ?? 'null') . " for laporan ID=" . ($report['id_laporan_keu'] ?? 'null'));
-                                            $label = $status ? htmlspecialchars($report['status_lap']) : 'Unknown Status';
-                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">' . $label . '</span>';
+                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Unknown: ' . htmlspecialchars($status) . '</span>';
                                     }
                                     ?>
                                 </td>
-                                <td class="px-6 py-4 text-sm" onclick="event.stopPropagation();">
-                                    <?php if ($report['approved_by'] || in_array($report['status_lap'], ['approved', 'approved_fm', 'rejected', 'revision_requested'])): ?>
-                                        <a href="../reports/view_report_fm.php?id=<?php echo $report['id_laporan_keu']; ?>&return_tab=reports" 
-                                            class="text-blue-600 hover:text-blue-900 font-medium">
-                                            <i class="fas fa-eye mr-1"></i> View
+                                <td class="px-6 py-4 text-sm">
+                                    <?php if ($status === 'verified' || $status === 'submitted'): ?>
+                                        <a href="../reports/approve-report-fm.php?id=<?php echo $report['id_laporan_keu']; ?>&return_tab=reports" 
+                                            class="text-blue-600 hover:text-blue-900">
+                                            <i class="fas fa-check-circle mr-1"></i> Approve
                                         </a>
                                     <?php else: ?>
-                                        <a href="../reports/approve-report-fm.php?id=<?php echo $report['id_laporan_keu']; ?>&return_tab=reports" 
-                                            class="text-green-600 hover:text-green-900 font-medium">
-                                            <i class="fas fa-check-circle mr-1"></i> Approve
+                                        <a href="../reports/view_report_fm.php?id=<?php echo $report['id_laporan_keu']; ?>&return_tab=reports" 
+                                            class="text-gray-600 hover:text-gray-900">
+                                            <i class="fas fa-eye mr-1"></i> View
                                         </a>
                                     <?php endif; ?>
                                 </td>
@@ -509,7 +472,7 @@ session_write_close();
     </main>
 
     <script>
-        function showTab(tabName, updateUrl = true) {
+        function showTab(tabName) {
             // Hide all content
             document.querySelectorAll('.tab-content').forEach(content => {
                 content.classList.add('hidden');
@@ -528,24 +491,7 @@ session_write_close();
             const activeButton = document.getElementById('tab' + tabName.charAt(0).toUpperCase() + tabName.slice(1));
             activeButton.classList.remove('border-transparent', 'text-gray-500');
             activeButton.classList.add('border-blue-500', 'text-blue-600');
-
-            // Update URL without reloading page
-            if (updateUrl) {
-                const url = new URL(window.location);
-                url.searchParams.set('tab', tabName);
-                window.history.replaceState({}, '', url);
-            }
         }
-
-        // On page load, check for tab parameter and restore it
-        document.addEventListener('DOMContentLoaded', function() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const activeTab = urlParams.get('tab');
-            
-            if (activeTab && (activeTab === 'proposals' || activeTab === 'reports')) {
-                showTab(activeTab, false);
-            }
-        });
 
         function toggleNotifications() {
             const panel = document.getElementById('notificationPanel');
@@ -579,91 +525,18 @@ session_write_close();
             }
         });
 
-        // Prevent dropdown from closing if click is inside notification panel or bell
-        document.addEventListener('DOMContentLoaded', function() {
-            const notifPanel = document.getElementById('notificationPanel');
-            const notifButton = document.querySelector('.notification-bell-button');
-            const profileBtn = document.querySelector('#profileDropdown button');
-            const profilePanel = document.getElementById('profilePanel');
-            
-            if (notifPanel) {
-                notifPanel.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                });
-            }
-            if (notifButton) {
-                notifButton.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                });
-            }
-            if (profileBtn) {
-                profileBtn.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                });
-            }
-            if (profilePanel) {
-                profilePanel.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                });
-            }
-        });
-        
-        // Search and Filter for Reports
-        function filterReports() {
-            const searchTerm = document.getElementById('searchReports').value.toLowerCase();
-            const filterProject = document.getElementById('filterProject').value.toLowerCase();
-            const filterStatus = document.getElementById('filterStatus').value.toLowerCase();
-            const rows = document.querySelectorAll('.report-row');
-            let visibleCount = 0;
-            
-            rows.forEach(row => {
-                const activity = row.dataset.activity || '';
-                const project = row.dataset.project || '';
-                const creator = row.dataset.creator || '';
-                const status = row.dataset.status || '';
-                
-                const matchesSearch = !searchTerm || 
-                    activity.includes(searchTerm) || 
-                    project.includes(searchTerm) || 
-                    creator.includes(searchTerm);
-                
-                const matchesProject = !filterProject || project === filterProject;
-                const matchesStatus = !filterStatus || status === filterStatus;
-                
-                if (matchesSearch && matchesProject && matchesStatus) {
-                    row.style.display = '';
-                    visibleCount++;
-                    // Update row numbers
-                    row.querySelector('td:first-child').textContent = visibleCount;
-                } else {
-                    row.style.display = 'none';
-                }
+        const notifPanelEl = document.getElementById('notificationPanel');
+        if (notifPanelEl) {
+            notifPanelEl.addEventListener('click', function(e) {
+                e.stopPropagation();
             });
         }
-        
-        function resetReportFilters() {
-            document.getElementById('searchReports').value = '';
-            document.getElementById('filterProject').value = '';
-            document.getElementById('filterStatus').value = '';
-            filterReports();
+        const notifButtonEl = document.querySelector('.notification-bell-button');
+        if (notifButtonEl) {
+            notifButtonEl.addEventListener('click', function(e) {
+                e.stopPropagation();
+            });
         }
-        
-        // Add event listeners for report filters
-        document.addEventListener('DOMContentLoaded', function() {
-            const searchInput = document.getElementById('searchReports');
-            const filterProject = document.getElementById('filterProject');
-            const filterStatus = document.getElementById('filterStatus');
-            
-            if (searchInput) {
-                searchInput.addEventListener('input', filterReports);
-            }
-            if (filterProject) {
-                filterProject.addEventListener('change', filterReports);
-            }
-            if (filterStatus) {
-                filterStatus.addEventListener('change', filterReports);
-            }
-        });
     </script>
     
     <!-- Real-time Notifications -->
