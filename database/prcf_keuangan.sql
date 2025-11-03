@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Oct 29, 2025 at 08:29 AM
+-- Generation Time: Nov 02, 2025 at 03:09 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.0.30
 
@@ -269,6 +269,54 @@ INSERT INTO `laporan_keuangan_header` (`id_laporan_keu`, `kode_projek`, `nama_pr
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `project_codes`
+--
+
+CREATE TABLE `project_codes` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `subcategory_id` int(10) UNSIGNED NOT NULL,
+  `kode_proyek` varchar(20) NOT NULL,
+  `place_code` varchar(50) NOT NULL COMMENT 'Full code e.g., 10101-PR-01, 20208-NJ-01',
+  `exp_code` varchar(20) NOT NULL COMMENT 'Expense code part e.g., 10101, 20208',
+  `activity_code` varchar(10) NOT NULL COMMENT 'Activity code part e.g., PR, NJ, RJ',
+  `description` text DEFAULT NULL COMMENT 'Activity description',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Project-specific place codes and expense codes';
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `project_code_categories`
+--
+
+CREATE TABLE `project_code_categories` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `kode_proyek` varchar(20) NOT NULL,
+  `category_number` varchar(10) NOT NULL COMMENT 'e.g., 1, 2, 3, 5, 11',
+  `category_name` varchar(255) NOT NULL COMMENT 'e.g., Forest Governance, Forest Protection',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Project code categories (top level hierarchy)';
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `project_code_subcategories`
+--
+
+CREATE TABLE `project_code_subcategories` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `category_id` int(10) UNSIGNED NOT NULL,
+  `subcategory_number` varchar(10) NOT NULL COMMENT 'e.g., 101, 102, 201, 202',
+  `subcategory_name` varchar(255) NOT NULL COMMENT 'e.g., Forest Management Institution, Legal Recognition',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Project code subcategories (second level hierarchy)';
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `proposal`
 --
 
@@ -334,7 +382,7 @@ INSERT INTO `proyek` (`kode_proyek`, `nama_proyek`, `status_proyek`, `donor`, `n
 CREATE TABLE `user` (
   `id_user` int(11) NOT NULL,
   `nama` varchar(255) NOT NULL,
-  `role` enum('Finance Manager','Project Manager','Staff Accountant','Direktur') NOT NULL,
+  `role` enum('Project Manager','Finance Manager','Staff Accountant','Direktur','Admin') NOT NULL COMMENT 'User role: PM, FM, SA, Direktur, or Admin',
   `email` varchar(255) NOT NULL,
   `no_HP` varchar(20) DEFAULT NULL,
   `password_hash` varchar(255) NOT NULL,
@@ -350,10 +398,11 @@ CREATE TABLE `user` (
 INSERT INTO `user` (`id_user`, `nama`, `role`, `email`, `no_HP`, `password_hash`, `created_at`, `updated_at`, `last_notification_check`) VALUES
 (1, 'Chandra', 'Project Manager', '12345c4n12345@gmail.com', '6283153505411', '$2y$10$771q172G/MaqwIXKE9nOVutIrnjC6BEat7lD0KAUsJWywfG8UdG0C', '2025-10-16 06:36:23', '2025-10-28 16:42:54', '2025-10-28 16:42:54'),
 (4, 'Ferrosi Pratama', 'Finance Manager', 'ferrosipratamaq@gmail.com', '6289521340602', '$2y$10$4Dc7kmGgHY5WxZDfGw2zm.KIegC1xrX7GirUlXyj40Rl4/RzsopZu', '2025-10-16 06:43:55', '2025-10-20 02:36:45', NULL),
-(5, 'zheamanda', 'Finance Manager', 'zheaamandavitaloka@gmail.com', '6283836609877', '$2y$10$aYQPYZIRplq3lYsN4s4TrOtR.UPafFF7zDCS/pF30MkABJ5G/Z/CW', '2025-10-16 06:50:22', '2025-10-19 13:06:36', NULL),
-(6, 'Mione', 'Staff Accountant', 'hermionepriciliaa@gmail.com', '6282192831013', '$2y$10$sScVPxccDeOJ7Vboy0YWBecj497e/kPVdmz3sLuR0eiAmfLFwn0qO', '2025-10-16 07:01:18', '2025-10-16 07:03:39', NULL),
+(5, 'zheamandaa', 'Finance Manager', 'zheaamandavitaloka@gmail.com', '6283836609877', '$2y$10$J6bFE0liRualyjXvQNyFqeksiunQ03inSjPLU.9bmLc9nnOMKLW4a', '2025-10-16 06:50:22', '2025-10-29 16:04:58', NULL),
+(6, 'Mione', 'Staff Accountant', 'hermionepriciliaa@gmail.com', '6282192831013', '$2y$10$6zHDDTYimU8p.jZfoEnu5eZCwQ.5NsTdZ8bOxmnKZtcKUJPbKgGO6', '2025-10-16 07:01:18', '2025-10-29 16:04:08', NULL),
 (8, 'Ferrosi', 'Staff Accountant', 'ferrosipratamaqu@gmail.com', '6282134812641', '$2y$10$c.kiil8chyMEiAqZgzpR7u5sqVVftQIJJLyKIckfatqprVRXNLuqO', '2025-10-19 13:22:11', '2025-10-27 06:17:28', NULL),
-(9, 'lutfi', 'Direktur', 'lutfifirdaus238@gmail.com', '6285752706608', '$2y$10$2fH773o5wxutvRZtlEKm2O/PNR6riXAOfdta1jT26dKhKyJnDFqnS', '2025-10-20 01:02:46', '2025-10-27 06:16:59', NULL);
+(9, 'lutfi', 'Admin', 'lutfifirdaus238@gmail.com', '6285752706608', '$2y$10$2fH773o5wxutvRZtlEKm2O/PNR6riXAOfdta1jT26dKhKyJnDFqnS', '2025-10-20 01:02:46', '2025-10-29 15:44:49', NULL),
+(11, 'lutfi2', 'Direktur', 'lutfifirdaus236@gmail.com', '0857', '$2y$10$jK44BH0KI2BwAoNXCEJ2Z.Yz6EaGl5TBfT7a6Up/N6xp3yizF3WL2', '2025-10-29 16:07:23', '2025-10-29 16:07:23', NULL);
 
 --
 -- Indexes for dumped tables
@@ -423,6 +472,31 @@ ALTER TABLE `laporan_keuangan_header`
   ADD KEY `approved_by` (`approved_by`);
 
 --
+-- Indexes for table `project_codes`
+--
+ALTER TABLE `project_codes`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `unique_place_code_per_project` (`kode_proyek`,`place_code`),
+  ADD KEY `subcategory_id` (`subcategory_id`),
+  ADD KEY `idx_kode_proyek` (`kode_proyek`),
+  ADD KEY `idx_place_code` (`place_code`),
+  ADD KEY `idx_exp_code_project` (`kode_proyek`,`exp_code`);
+
+--
+-- Indexes for table `project_code_categories`
+--
+ALTER TABLE `project_code_categories`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_kode_proyek` (`kode_proyek`);
+
+--
+-- Indexes for table `project_code_subcategories`
+--
+ALTER TABLE `project_code_subcategories`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_category_id` (`category_id`);
+
+--
 -- Indexes for table `proposal`
 --
 ALTER TABLE `proposal`
@@ -485,6 +559,24 @@ ALTER TABLE `laporan_keuangan_header`
   MODIFY `id_laporan_keu` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
+-- AUTO_INCREMENT for table `project_codes`
+--
+ALTER TABLE `project_codes`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `project_code_categories`
+--
+ALTER TABLE `project_code_categories`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+
+--
+-- AUTO_INCREMENT for table `project_code_subcategories`
+--
+ALTER TABLE `project_code_subcategories`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `proposal`
 --
 ALTER TABLE `proposal`
@@ -494,7 +586,7 @@ ALTER TABLE `proposal`
 -- AUTO_INCREMENT for table `user`
 --
 ALTER TABLE `user`
-  MODIFY `id_user` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id_user` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
 -- Constraints for dumped tables
@@ -554,6 +646,25 @@ ALTER TABLE `laporan_keuangan_header`
   ADD CONSTRAINT `laporan_keuangan_header_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `user` (`id_user`) ON DELETE SET NULL,
   ADD CONSTRAINT `laporan_keuangan_header_ibfk_3` FOREIGN KEY (`verified_by`) REFERENCES `user` (`id_user`) ON DELETE SET NULL,
   ADD CONSTRAINT `laporan_keuangan_header_ibfk_4` FOREIGN KEY (`approved_by`) REFERENCES `user` (`id_user`) ON DELETE SET NULL;
+
+--
+-- Constraints for table `project_codes`
+--
+ALTER TABLE `project_codes`
+  ADD CONSTRAINT `project_codes_ibfk_1` FOREIGN KEY (`subcategory_id`) REFERENCES `project_code_subcategories` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `project_codes_ibfk_2` FOREIGN KEY (`kode_proyek`) REFERENCES `proyek` (`kode_proyek`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `project_code_categories`
+--
+ALTER TABLE `project_code_categories`
+  ADD CONSTRAINT `project_code_categories_ibfk_1` FOREIGN KEY (`kode_proyek`) REFERENCES `proyek` (`kode_proyek`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `project_code_subcategories`
+--
+ALTER TABLE `project_code_subcategories`
+  ADD CONSTRAINT `project_code_subcategories_ibfk_1` FOREIGN KEY (`category_id`) REFERENCES `project_code_categories` (`id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `proposal`
