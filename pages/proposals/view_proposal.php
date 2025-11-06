@@ -229,6 +229,22 @@ session_write_close();
                     </div>
                 </div>
                 <?php endif; ?>
+
+                <?php if ($proposal['status'] === 'rejected' && !empty($proposal['catatan_fm'])): ?>
+                <div class="border-t pt-6">
+                    <label class="block text-sm font-medium text-gray-600 mb-3">
+                        <i class="fas fa-comment-alt mr-2 text-red-500"></i>Catatan Revisi dari Finance Manager
+                    </label>
+                    <div class="p-4 bg-red-50 rounded-lg border border-red-200">
+                        <div class="flex items-start">
+                            <i class="fas fa-exclamation-triangle text-red-500 text-xl mr-3 mt-1"></i>
+                            <div class="flex-1">
+                                <p class="text-gray-800 whitespace-pre-wrap"><?php echo htmlspecialchars($proposal['catatan_fm']); ?></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
             </div>
 
             <!-- Footer Info -->

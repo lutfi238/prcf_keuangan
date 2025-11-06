@@ -51,25 +51,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_proposal'])) {
     $stmt = $conn->prepare("INSERT INTO proposal (judul_proposal, pj, date, pemohon, kode_proyek, tor, file_budget, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'submitted')");
     $stmt->bind_param("sssssss", $judul, $pj, $date, $pemohon, $kode_proyek, $tor, $file_budget);
     
-    if ($stmt->execute()) {
-        // Get Finance Manager email
-        $fm_stmt = $conn->prepare("SELECT email, nama FROM user WHERE role = 'Finance Manager'");
-        $fm_stmt->execute();
-        $fm_result = $fm_stmt->get_result();
-        
-        while ($fm = $fm_result->fetch_assoc()) {
-            // Send notification
-            send_notification_email(
-                $fm['email'],
-                'Proposal Baru dari ' . $user_name,
-                'Proposal baru dengan judul "' . $judul . '" telah dikirimkan oleh ' . $user_name . '. Mohon segera di-review.'
-            );
+        if ($stmt->execute()) {
+            // Get Finance Manager email
+            $fm_stmt = $conn->prepare("SELECT email, nama FROM user WHERE role = 'Finance Manager'");
+            $fm_stmt->execute();
+            $fm_result = $fm_stmt->get_result();
+            
+            // Try to send notifications, but don't fail if email sending fails
+            if (function_exists('send_notification_email')) {
+                while ($fm = $fm_result->fetch_assoc()) {
+                    // Send notification
+                    send_notification_email(
+                        $fm['email'],
+                        'Proposal Baru dari ' . $user_name,
+                        'Proposal baru dengan judul "' . $judul . '" telah dikirimkan oleh ' . $user_name . '. Mohon segera di-review.'
+                    );
+                }
+            }
+            
+            $success = 'Proposal berhasil dikirimkan ke Finance Manager!';
+        } else {
+            $error = 'Gagal mengirimkan proposal';
         }
-        
-        $success = 'Proposal berhasil dikirimkan ke Finance Manager!';
-    } else {
-        $error = 'Gagal mengirimkan proposal';
-    }
 }
 
 // Get list of projects

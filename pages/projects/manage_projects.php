@@ -571,15 +571,30 @@ $projects = $conn->query("SELECT * FROM proyek ORDER BY created_at DESC");
             }
         }
 
-        // Clean URL after showing message
+        // Clean URL after showing message and replace POST in history
         (function() {
+            // Immediately replace current history entry to remove POST from history
+            // This must happen BEFORE checking URL params to ensure POST is replaced
+            const currentUrl = window.location.protocol + "//" + 
+                              window.location.host + 
+                              window.location.pathname + 
+                              window.location.search;
+            window.history.replaceState({}, document.title, currentUrl);
+            
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.has('success') || urlParams.has('info')) {
+                // Close the create form if it's open (since project was created)
+                const createForm = document.getElementById('createForm');
+                if (createForm && !createForm.classList.contains('hidden')) {
+                    toggleCreateForm(false);
+                }
+                
+                // Then clean query parameters after showing message
                 setTimeout(function() {
-                    const cleanUrl = window.location.protocol + "//" + 
-                                    window.location.host + 
-                                    window.location.pathname;
-                    window.history.replaceState({}, document.title, cleanUrl);
+                    const finalCleanUrl = window.location.protocol + "//" + 
+                                        window.location.host + 
+                                        window.location.pathname;
+                    window.history.replaceState({}, document.title, finalCleanUrl);
                 }, 3000);
             }
         })();

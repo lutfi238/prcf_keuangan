@@ -257,30 +257,86 @@ $items = $details->get_result();
 
             <!-- Validation Form -->
             <?php if ($report['status_lap'] === 'submitted'): ?>
-            <div class="p-8 border-t border-gray-200 bg-gray-50">
-                <h3 class="text-lg font-bold text-gray-800 mb-4">Validasi Laporan</h3>
+            <div class="p-8 border-t border-gray-200 bg-blue-50">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">
+                    <i class="fas fa-clipboard-check mr-2 text-blue-600"></i>Validasi Laporan
+                </h3>
                 
-                <form method="POST" class="space-y-4">
-                    <div>
-                        <label class="block text-gray-700 text-sm font-medium mb-2">Catatan untuk Project Manager</label>
-                        <textarea name="catatan_finance" rows="4" 
+                <div class="mb-4 p-3 bg-blue-100 border border-blue-300 rounded-lg">
+                    <p class="text-sm text-blue-800">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        <strong>Info:</strong> Validasi laporan keuangan. Jika laporan sudah valid, klik "Validasi & Kirim ke FM". Jika perlu revisi, klik "Minta Revisi" dan berikan catatan.
+                    </p>
+                </div>
+                
+                <form method="POST" class="space-y-4" id="validationForm">
+                    <div id="revisionNotesContainer" class="hidden">
+                        <label class="block text-gray-700 text-sm font-medium mb-2">Catatan untuk Project Manager *</label>
+                        <textarea name="catatan_finance" id="catatanField" rows="4" 
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
                             placeholder="Berikan catatan atau komentar terkait laporan ini..."></textarea>
                     </div>
 
                     <div class="flex justify-end space-x-4">
-                        <button type="submit" name="request_revision"
+                        <button type="button" id="revisionBtn"
                             class="px-6 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition duration-200 font-medium"
-                            onclick="return confirm('Apakah Anda yakin ingin meminta revisi laporan ini?')">
-                            <i class="fas fa-edit mr-2"></i> Minta Revisi
+                            onclick="toggleRevisionMode()">
+                            <i class="fas fa-edit mr-2"></i> <span id="revisionBtnText">Minta Revisi</span>
                         </button>
-                        <button type="submit" name="validate"
+                        <button type="submit" name="validate" id="validateBtn"
                             class="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition duration-200 font-medium"
                             onclick="return confirm('Apakah Anda yakin laporan ini sudah valid?')">
-                            <i class="fas fa-check-circle mr-2"></i> Validasi & Kirim ke FM
+                            <i class="fas fa-check-circle mr-2"></i> <span id="validateBtnText">Validasi & Kirim ke FM</span>
                         </button>
                     </div>
                 </form>
+                
+                <script>
+                let revisionMode = false;
+                
+                function toggleRevisionMode() {
+                    revisionMode = !revisionMode;
+                    const container = document.getElementById('revisionNotesContainer');
+                    const revisionBtn = document.getElementById('revisionBtn');
+                    const validateBtn = document.getElementById('validateBtn');
+                    const revisionBtnText = document.getElementById('revisionBtnText');
+                    const validateBtnText = document.getElementById('validateBtnText');
+                    const catatanField = document.getElementById('catatanField');
+                    
+                    if (revisionMode) {
+                        // Show revision notes
+                        container.classList.remove('hidden');
+                        catatanField.required = true;
+                        
+                        // Change button labels
+                        revisionBtnText.textContent = 'Batal';
+                        revisionBtn.classList.remove('bg-yellow-500', 'hover:bg-yellow-600');
+                        revisionBtn.classList.add('bg-gray-500', 'hover:bg-gray-600');
+                        
+                        validateBtnText.textContent = 'Kirim Revisi ke PM';
+                        validateBtn.setAttribute('name', 'request_revision');
+                        validateBtn.classList.remove('bg-green-500', 'hover:bg-green-600');
+                        validateBtn.classList.add('bg-red-500', 'hover:bg-red-600');
+                        validateBtn.onclick = function() { return confirm('Kirim permintaan revisi ke Project Manager?'); };
+                    } else {
+                        // Hide revision notes
+                        container.classList.add('hidden');
+                        catatanField.required = false;
+                        catatanField.value = '';
+                        
+                        // Restore button labels
+                        revisionBtnText.textContent = 'Minta Revisi';
+                        revisionBtn.classList.remove('bg-gray-500', 'hover:bg-gray-600');
+                        revisionBtn.classList.add('bg-yellow-500', 'hover:bg-yellow-600');
+                        
+                        validateBtnText.textContent = 'Validasi & Kirim ke FM';
+                        validateBtn.setAttribute('name', 'validate');
+                        validateBtn.classList.remove('bg-red-500', 'hover:bg-red-600');
+                        validateBtn.classList.add('bg-green-500', 'hover:bg-green-600');
+                        validateBtn.onclick = function() { return confirm('Apakah Anda yakin laporan ini sudah valid?'); };
+                    }
+                }
+                </script>
             </div>
             <?php elseif ($report['status_lap'] === 'verified'): ?>
             <div class="p-8 border-t border-gray-200 bg-green-50">

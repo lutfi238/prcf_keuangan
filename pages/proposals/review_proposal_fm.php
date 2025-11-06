@@ -73,8 +73,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (isset($_POST['request_revision'])) {
         $catatan = $_POST['catatan'] ?? '';
         
-        $stmt = $conn->prepare("UPDATE proposal SET status = 'rejected' WHERE id_proposal = ?");
-        $stmt->bind_param("i", $proposal_id);
+        // Update proposal status to rejected and save revision notes
+        $stmt = $conn->prepare("UPDATE proposal SET status = 'rejected', catatan_fm = ? WHERE id_proposal = ?");
+        $stmt->bind_param("si", $catatan, $proposal_id);
         
         if ($stmt->execute()) {
             // Get proposal and PM details

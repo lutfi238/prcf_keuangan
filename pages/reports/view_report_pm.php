@@ -220,6 +220,33 @@ if ($details_stmt) {
                 </div>
             </div>
 
+            <!-- Rejection Notes -->
+            <?php if ($report['status_lap'] === 'rejected' && !empty($report['catatan_finance'])): ?>
+            <div class="mt-6 border-t pt-6">
+                <label class="block text-sm font-medium text-gray-600 mb-3">
+                    <i class="fas fa-comment-alt mr-2 text-red-500"></i>Catatan Revisi
+                    <?php 
+                    // Determine who requested the revision:
+                    // If verified_by exists but approved_by is NULL, FM rejected it after SA verified
+                    // If verified_by is NULL, SA rejected it before verification
+                    if ($report['verified_by'] && !$report['approved_by']) {
+                        echo 'dari Finance Manager';
+                    } else {
+                        echo 'dari Staff Accountant';
+                    }
+                    ?>
+                </label>
+                <div class="p-4 bg-red-50 rounded-lg border border-red-200">
+                    <div class="flex items-start">
+                        <i class="fas fa-exclamation-triangle text-red-500 text-xl mr-3 mt-1"></i>
+                        <div class="flex-1">
+                            <p class="text-gray-800 whitespace-pre-wrap"><?php echo htmlspecialchars($report['catatan_finance']); ?></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+
             <!-- Back Button -->
             <div class="mt-6 flex justify-center">
                 <a href="<?php echo $return_dashboard; ?>" 

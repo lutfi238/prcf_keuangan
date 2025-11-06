@@ -173,6 +173,12 @@ function send_otp_email($email, $otp) {
 }
 
 function smtp_send_email($smtp_host, $smtp_port, $smtp_user, $smtp_pass, $from_email, $from_name, $to_email, $subject, $html_message) {
+    // Check if cURL extension is available
+    if (!function_exists('curl_init')) {
+        error_log("⚠️ cURL extension is not enabled. Email sending disabled. Please enable php_curl extension in php.ini");
+        return false;
+    }
+    
     try {
         $email_content = "From: " . $from_name . " <" . $from_email . ">\r\n";
         $email_content .= "To: <" . $to_email . ">\r\n";

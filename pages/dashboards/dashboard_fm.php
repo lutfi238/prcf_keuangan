@@ -56,15 +56,22 @@ if (isset($_GET['success'])) {
 }
 
 // Get pending proposals for review - store in array to avoid result set consumption
-$proposals_result = $conn->query("SELECT p.*, u.nama as creator_name 
+$proposals_result = $conn->query("SELECT DISTINCT p.*, u.nama as creator_name 
     FROM proposal p 
     LEFT JOIN user u ON p.pemohon = u.nama 
     WHERE p.status IN ('submitted', 'approved') 
     ORDER BY p.created_at DESC");
 $proposals_array = [];
 if ($proposals_result) {
+    // Use id_proposal as key to prevent duplicates
+    $seen_ids = [];
     while ($row = $proposals_result->fetch_assoc()) {
-        $proposals_array[] = $row;
+        $proposal_id = $row['id_proposal'];
+        // Only add if we haven't seen this proposal ID before
+        if (!isset($seen_ids[$proposal_id])) {
+            $proposals_array[] = $row;
+            $seen_ids[$proposal_id] = true;
+        }
     }
 }
 
