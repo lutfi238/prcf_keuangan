@@ -11,8 +11,14 @@ if (!isset($_SESSION['logged_in'])) {
     exit();
 }
 
-// Allow Finance Manager and Direktur only
-if (!in_array($_SESSION['user_role'], ['Finance Manager', 'Direktur'])) {
+// Only Finance Manager can approve - Direktur should use view page
+if ($_SESSION['user_role'] !== 'Finance Manager') {
+    if ($_SESSION['user_role'] === 'Direktur') {
+        // Redirect Direktur to view page - they only view, don't approve
+        $proposal_id = $_GET['id'] ?? 0;
+        header('Location: view_proposal.php?id=' . $proposal_id);
+        exit();
+    }
     header('Location: ../../auth/unauthorized.php');
     exit();
 }
@@ -94,37 +100,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve'])) {
             $error = 'Gagal menyetujui proposal. Error: ' . $stmt->error;
         }
         
-    } elseif ($user_role === 'Direktur' && $current['status'] === 'approved_fm') {
-        // STAGE 2: DIR Approve → status 'approved' (FINAL)
-        $stmt = $conn->prepare("UPDATE proposal SET status = 'approved', approved_by_dir = ?, dir_approval_date = NOW() WHERE id_proposal = ?");
-        $stmt->bind_param("ii", $user_id, $proposal_id);
-        
-        if ($stmt->execute()) {
-            // Get proposal details
-            $prop_stmt = $conn->prepare("SELECT p.*, u.email, u.nama FROM proposal p LEFT JOIN user u ON p.pemohon = u.nama WHERE id_proposal = ?");
-            $prop_stmt->bind_param("i", $proposal_id);
-            $prop_stmt->execute();
-            $prop_data = $prop_stmt->get_result()->fetch_assoc();
-            
-            // Notify PM and FM
-            send_notification_email(
-                $prop_data['email'],
-                'Proposal Disetujui FINAL oleh Direktur',
-                'Proposal Anda "' . $prop_data['judul_proposal'] . '" telah disetujui oleh Direktur. Status: APPROVED (Final).'
-            );
-            
-            $fm_stmt = $conn->query("SELECT email FROM user WHERE role = 'Finance Manager'");
-            while ($fm = $fm_stmt->fetch_assoc()) {
-                send_notification_email(
-                    $fm['email'],
-                    'Proposal Disetujui Final oleh Direktur',
-                    'Proposal "' . $prop_data['judul_proposal'] . '" telah mendapat final approval dari Direktur.'
-                );
-            }
-            
-            header('Location: ../dashboards/dashboard_dir.php?success=proposal_approved_final&tab=' . urlencode($return_tab));
-            exit();
-        }
     } else {
         $error = 'Status proposal tidak valid untuk approval Anda';
     }

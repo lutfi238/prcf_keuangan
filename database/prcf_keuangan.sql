@@ -278,11 +278,9 @@ CREATE TABLE `proposal` (
   `pj` varchar(255) NOT NULL COMMENT 'Penanggung Jawab',
   `date` date DEFAULT NULL,
   `pemohon` varchar(255) DEFAULT NULL,
-  `status` enum('draft','submitted','approved_fm','approved','rejected') DEFAULT 'draft' COMMENT 'draft=PM draft, submitted=waiting FM, approved_fm=FM approved waiting DIR, approved=DIR approved final, rejected=rejected',
+  `status` enum('draft','submitted','approved_fm','approved','rejected') DEFAULT 'draft' COMMENT 'draft=PM draft, submitted=waiting FM, approved_fm=FM approved (final), approved=FM approved (final), rejected=rejected',
   `approved_by_fm` int(11) DEFAULT NULL,
-  `approved_by_dir` int(11) DEFAULT NULL,
   `fm_approval_date` datetime DEFAULT NULL,
-  `dir_approval_date` datetime DEFAULT NULL,
   `kode_proyek` varchar(50) DEFAULT NULL,
   `tor` text DEFAULT NULL COMMENT 'Terms of Reference',
   `file_budget` varchar(255) DEFAULT NULL,
@@ -294,10 +292,10 @@ CREATE TABLE `proposal` (
 -- Dumping data for table `proposal`
 --
 
-INSERT INTO `proposal` (`id_proposal`, `judul_proposal`, `pj`, `date`, `pemohon`, `status`, `approved_by_fm`, `approved_by_dir`, `fm_approval_date`, `dir_approval_date`, `kode_proyek`, `tor`, `file_budget`, `created_at`, `updated_at`) VALUES
-(16, 'Training Fire Kontrols', 'Immanuel Huda', '2025-10-29', 'Chandra', 'approved', 4, 9, '2025-10-29 12:37:56', '2025-10-29 12:38:41', 'PRJ-2025-001', '../../uploads/tor/1761715669__Kelompok_2_-_Template_Penulisan_Proposal_Tugas_Akhir_(TA)_2025_[revisi_10_oktober].pdf', '../../uploads/budgets/1761715669__Kelompok_2_-_Template_Penulisan_Proposal_Tugas_Akhir_(TA)_2025_[revisi_10_oktober].pdf', '2025-10-29 05:27:49', '2025-10-29 05:38:41'),
-(17, 'training fire konttrol', 'immanual duda', '2025-10-29', 'Chandra', 'rejected', NULL, NULL, NULL, NULL, 'PRJ-2025-001', '../../uploads/tor/1761719311_KWU5_5E_3202316041_MUHAMMAD LUTFI FIRDAUS.pdf', '../../uploads/budgets/1761719311_KWU5_5E_3202316041_MUHAMMAD LUTFI FIRDAUS.pdf', '2025-10-29 06:28:31', '2025-10-29 06:29:26'),
-(18, 'training fire kontrol 3', 'immanual huda', '2025-10-29', 'Chandra', 'approved', 4, 9, '2025-10-29 13:39:06', '2025-10-29 13:39:55', 'PRJ-2025-001', '../../uploads/tor/1761719580_KWU5_5E_3202316041_MUHAMMAD LUTFI FIRDAUS.pdf', '../../uploads/budgets/1761719580_KWU5_5E_3202316041_MUHAMMAD LUTFI FIRDAUS.pdf', '2025-10-29 06:33:00', '2025-10-29 06:39:55');
+INSERT INTO `proposal` (`id_proposal`, `judul_proposal`, `pj`, `date`, `pemohon`, `status`, `approved_by_fm`, `fm_approval_date`, `kode_proyek`, `tor`, `file_budget`, `created_at`, `updated_at`) VALUES
+(16, 'Training Fire Kontrols', 'Immanuel Huda', '2025-10-29', 'Chandra', 'approved', 4, '2025-10-29 12:37:56', 'PRJ-2025-001', '../../uploads/tor/1761715669__Kelompok_2_-_Template_Penulisan_Proposal_Tugas_Akhir_(TA)_2025_[revisi_10_oktober].pdf', '../../uploads/budgets/1761715669__Kelompok_2_-_Template_Penulisan_Proposal_Tugas_Akhir_(TA)_2025_[revisi_10_oktober].pdf', '2025-10-29 05:27:49', '2025-10-29 05:38:41'),
+(17, 'training fire konttrol', 'immanual duda', '2025-10-29', 'Chandra', 'rejected', NULL, NULL, 'PRJ-2025-001', '../../uploads/tor/1761719311_KWU5_5E_3202316041_MUHAMMAD LUTFI FIRDAUS.pdf', '../../uploads/budgets/1761719311_KWU5_5E_3202316041_MUHAMMAD LUTFI FIRDAUS.pdf', '2025-10-29 06:28:31', '2025-10-29 06:29:26'),
+(18, 'training fire kontrol 3', 'immanual huda', '2025-10-29', 'Chandra', 'approved', 4, '2025-10-29 13:39:06', 'PRJ-2025-001', '../../uploads/tor/1761719580_KWU5_5E_3202316041_MUHAMMAD LUTFI FIRDAUS.pdf', '../../uploads/budgets/1761719580_KWU5_5E_3202316041_MUHAMMAD LUTFI FIRDAUS.pdf', '2025-10-29 06:33:00', '2025-10-29 06:39:55');
 
 -- --------------------------------------------------------
 
@@ -428,8 +426,7 @@ ALTER TABLE `laporan_keuangan_header`
 ALTER TABLE `proposal`
   ADD PRIMARY KEY (`id_proposal`),
   ADD KEY `kode_proyek` (`kode_proyek`),
-  ADD KEY `fk_proposal_fm` (`approved_by_fm`),
-  ADD KEY `fk_proposal_dir` (`approved_by_dir`);
+  ADD KEY `fk_proposal_fm` (`approved_by_fm`);
 
 --
 -- Indexes for table `proyek`
@@ -559,7 +556,6 @@ ALTER TABLE `laporan_keuangan_header`
 -- Constraints for table `proposal`
 --
 ALTER TABLE `proposal`
-  ADD CONSTRAINT `fk_proposal_dir` FOREIGN KEY (`approved_by_dir`) REFERENCES `user` (`id_user`) ON DELETE SET NULL,
   ADD CONSTRAINT `fk_proposal_fm` FOREIGN KEY (`approved_by_fm`) REFERENCES `user` (`id_user`) ON DELETE SET NULL,
   ADD CONSTRAINT `proposal_ibfk_1` FOREIGN KEY (`kode_proyek`) REFERENCES `proyek` (`kode_proyek`) ON DELETE SET NULL;
 COMMIT;

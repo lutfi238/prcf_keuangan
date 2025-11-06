@@ -61,15 +61,13 @@ if (!$proposal) {
 error_log("✅ view_proposal.php - User ($user_role) viewing proposal: ID = $proposal_id, Status = " . $proposal['status']);
 
 // Check if user can take action (redirect to appropriate review page)
+// Only FM can approve - Direktur only views
 $can_review = false;
 $review_link = '';
 
 if ($user_role === 'Finance Manager' && $proposal['status'] === 'submitted') {
     $can_review = true;
     $review_link = 'review_proposal_fm.php?id=' . $proposal_id;
-} elseif ($user_role === 'Direktur' && $proposal['status'] === 'approved_fm') {
-    $can_review = true;
-    $review_link = 'review_proposal_dir.php?id=' . $proposal_id;
 }
 
 // Close session writing
@@ -135,8 +133,8 @@ session_write_close();
                                 $status_text = [
                                     'draft' => 'Draft',
                                     'submitted' => 'Menunggu Review FM',
-                                    'approved_fm' => '1/2 Approved (Menunggu Direktur)',
-                                    'approved' => '2/2 Approved (Final)',
+                                    'approved_fm' => 'Disetujui FM (Final)',
+                                    'approved' => 'Disetujui FM (Final)',
                                     'rejected' => 'Ditolak'
                                 ];
                                 $status_class = [
@@ -239,7 +237,7 @@ session_write_close();
                     <i class="fas fa-info-circle text-xl mr-3"></i>
                     <div class="text-sm">
                         <p class="font-medium">Halaman View Only (Read-Only)</p>
-                        <p>Untuk melakukan approval, gunakan tombol "Review & Approve" di atas (jika tersedia).</p>
+                        <p>Halaman ini hanya untuk melihat detail proposal. Approval dilakukan oleh Finance Manager.</p>
                     </div>
                 </div>
             </div>

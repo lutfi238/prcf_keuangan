@@ -65,11 +65,11 @@ while (true) {
                 break;
                 
             case 'Direktur':
-                // Count approved proposals (by FM, waiting for Director)
+                // Count approved proposals (by FM - DIR only views, FM approval is final)
                 $pending_proposals = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status = 'approved_fm'")->fetch_assoc()['count'];
                 
-                // Count approved reports (by FM, waiting for Director)
-                $pending_reports = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'approved_fm'")->fetch_assoc()['count'];
+                // Count approved reports (by FM - DIR only views, FM approval is final)
+                $pending_reports = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'approved'")->fetch_assoc()['count'];
                 
                 $updates['pending_proposals'] = $pending_proposals;
                 $updates['pending_reports'] = $pending_reports;
@@ -151,11 +151,11 @@ while (true) {
                 ];
             }
             
-            // Approved reports waiting for Director
+            // Approved reports by FM (DIR only views, FM approval is final)
             $report_notifs = $conn->query("SELECT lh.id_laporan_keu, lh.nama_projek, lh.updated_at, u.nama as creator
                 FROM laporan_keuangan_header lh
                 LEFT JOIN user u ON lh.created_by = u.id_user
-                WHERE lh.status_lap = 'approved_fm'
+                WHERE lh.status_lap = 'approved'
                 ORDER BY lh.updated_at DESC LIMIT 3");
 
             while ($row = $report_notifs->fetch_assoc()) {

@@ -28,74 +28,11 @@ $user_id = $_SESSION['user_id'];
 $proposal_id = $_GET['id'] ?? 0;
 $return_tab = $_GET['return_tab'] ?? 'proposals'; // Default to proposals if not specified
 
-// Handle DIR Approval (Stage 2)
+// DIR only views - no approval functionality
+// Redirect any POST requests to view page
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['approve'])) {
-        // STAGE 2: DIR Approve → status 'approved' (FINAL)
-        $check_column = $conn->query("SHOW COLUMNS FROM proposal LIKE 'approved_by_fm'");
-        $is_2stage = ($check_column && $check_column->num_rows > 0);
-        
-        if ($is_2stage) {
-            $stmt = $conn->prepare("UPDATE proposal SET status = 'approved', approved_by_dir = ?, dir_approval_date = NOW() WHERE id_proposal = ?");
-            $stmt->bind_param("ii", $user_id, $proposal_id);
-        } else {
-            $stmt = $conn->prepare("UPDATE proposal SET status = 'approved' WHERE id_proposal = ?");
-            $stmt->bind_param("i", $proposal_id);
-        }
-        
-        if ($stmt->execute()) {
-            // Get proposal and PM details
-            $prop_stmt = $conn->prepare("SELECT p.*, u.email, u.nama FROM proposal p LEFT JOIN user u ON p.pemohon = u.nama WHERE id_proposal = ?");
-            $prop_stmt->bind_param("i", $proposal_id);
-            $prop_stmt->execute();
-            $prop_data = $prop_stmt->get_result()->fetch_assoc();
-            
-            // Notify PM
-            send_notification_email(
-                $prop_data['email'],
-                'Proposal Disetujui FINAL oleh Direktur (2/2)',
-                'Proposal Anda "' . $prop_data['judul_proposal'] . '" telah mendapat approval final dari Direktur. Status: APPROVED.'
-            );
-            
-            // Notify FM
-            $fm_stmt = $conn->query("SELECT email FROM user WHERE role = 'Finance Manager'");
-            while ($fm = $fm_stmt->fetch_assoc()) {
-                send_notification_email(
-                    $fm['email'],
-                    'Proposal Disetujui Final oleh Direktur',
-                    'Proposal "' . $prop_data['judul_proposal'] . '" telah mendapat final approval dari Direktur.'
-                );
-            }
-            
-            // Redirect with success param to avoid form re-submit and handle back behavior
-            header('Location: review_proposal_dir.php?id=' . $proposal_id . '&success=approved');
-            exit();
-        }
-    } elseif (isset($_POST['request_revision'])) {
-        $catatan = $_POST['catatan'] ?? '';
-        
-        $stmt = $conn->prepare("UPDATE proposal SET status = 'rejected' WHERE id_proposal = ?");
-        $stmt->bind_param("i", $proposal_id);
-        
-        if ($stmt->execute()) {
-            // Get proposal and PM details
-            $prop_stmt = $conn->prepare("SELECT p.*, u.email FROM proposal p LEFT JOIN user u ON p.pemohon = u.nama WHERE id_proposal = ?");
-            $prop_stmt->bind_param("i", $proposal_id);
-            $prop_stmt->execute();
-            $prop_data = $prop_stmt->get_result()->fetch_assoc();
-            
-            // Notify PM
-            send_notification_email(
-                $prop_data['email'],
-                'Proposal Perlu Revisi (dari Direktur)',
-                'Proposal Anda "' . $prop_data['judul_proposal'] . '" memerlukan perbaikan. Catatan dari Direktur: ' . $catatan
-            );
-            
-            // Redirect with success param to avoid form re-submit and handle back behavior
-            header('Location: review_proposal_dir.php?id=' . $proposal_id . '&success=revisi');
-            exit();
-        }
-    }
+    header('Location: view_proposal.php?id=' . $proposal_id . '&return_tab=' . urlencode($return_tab));
+    exit();
 }
 
 // Get proposal data with FM approval info
@@ -185,8 +122,8 @@ if (isset($_GET['success'])) {
                                 $status_text = [
                                     'draft' => 'Draft',
                                     'submitted' => 'Menunggu Review FM',
-                                    'approved_fm' => '1/2 Approved (Menunggu Direktur)',
-                                    'approved' => '2/2 Approved (Final)',
+                                    'approved_fm' => 'Disetujui FM (Final)',
+                                    'approved' => 'Disetujui FM (Final)',
                                     'rejected' => 'Ditolak'
                                 ];
                                 $status_class = [
@@ -291,116 +228,43 @@ if (isset($_GET['success'])) {
                 <?php endif; ?>
             </div>
 
-            <!-- DIR Review Form - Only for 'approved_fm' status -->
+            <!-- DIR View Only - FM approval is final -->
             <?php if ($proposal['status'] === 'approved_fm'): ?>
-            <div class="p-8 border-t border-gray-200 bg-purple-50">
-                <h3 class="text-lg font-bold text-gray-800 mb-4">
-                    <i class="fas fa-clipboard-check mr-2 text-purple-600"></i>Review Proposal (Stage 2/2)
-                </h3>
-                
-                <div class="mb-4 p-3 bg-purple-100 border border-purple-300 rounded-lg">
-                    <p class="text-sm text-purple-800">
-                        <i class="fas fa-info-circle mr-1"></i>
-                        <strong>Info:</strong> Proposal telah disetujui oleh Finance Manager 
-                        <?php if (!empty($proposal['fm_name'])): ?>
-                            (<?php echo $proposal['fm_name']; ?>) 
-                            <?php if ($proposal['fm_approval_date']): ?>
-                            pada <?php echo date('d/m/Y H:i', strtotime($proposal['fm_approval_date'])); ?>
-                            <?php endif; ?>
-                        <?php endif; ?>. 
-                        <br>Anda dapat memberikan final approval (Stage 2/2).
-                    </p>
+            <div class="p-8 border-t border-gray-200 bg-green-50">
+                <div class="flex items-center text-green-700">
+                    <i class="fas fa-check-circle text-2xl mr-3"></i>
+                    <div>
+                        <p class="font-bold">Proposal Disetujui oleh Finance Manager</p>
+                        <p class="text-sm mt-1">
+                            Proposal ini telah disetujui oleh Finance Manager 
+                            <?php if (!empty($proposal['fm_name'])): ?>
+                                (<strong><?php echo $proposal['fm_name']; ?></strong>)
+                                <?php if ($proposal['fm_approval_date']): ?>
+                                pada <?php echo date('d/m/Y H:i', strtotime($proposal['fm_approval_date'])); ?>
+                                <?php endif; ?>
+                            <?php endif; ?>.
+                            <br>Sebagai Direktur, Anda dapat melihat detail proposal ini untuk review. Approval dari Finance Manager adalah final.
+                        </p>
+                    </div>
                 </div>
-                
-                <form method="POST" class="space-y-4" id="reviewFormDir">
-                    <div id="revisionNotesContainerDir" class="hidden">
-                        <label class="block text-gray-700 text-sm font-medium mb-2">Catatan untuk Project Manager *</label>
-                        <textarea name="catatan" id="catatanFieldDir" rows="4" 
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400"
-                            placeholder="Berikan catatan atau komentar terkait proposal ini..."></textarea>
-                    </div>
-
-                    <div class="flex justify-end space-x-4">
-                        <button type="button" id="revisionBtnDir"
-                            class="px-6 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition duration-200 font-medium"
-                            onclick="toggleRevisionModeDir()">
-                            <i class="fas fa-edit mr-2"></i> <span id="revisionBtnTextDir">Minta Revisi</span>
-                        </button>
-                        <button type="submit" name="approve" id="approveBtnDir"
-                            class="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition duration-200 font-medium"
-                            onclick="return confirm('Setujui proposal ini? (Stage 2/2 - Final Approval)')">
-                            <i class="fas fa-check-double mr-2"></i> <span id="approveBtnTextDir">Approve Final (2/2)</span>
-                        </button>
-                    </div>
-                </form>
-                
-                <script>
-                let revisionModeDir = false;
-                
-                function toggleRevisionModeDir() {
-                    revisionModeDir = !revisionModeDir;
-                    const container = document.getElementById('revisionNotesContainerDir');
-                    const revisionBtn = document.getElementById('revisionBtnDir');
-                    const approveBtn = document.getElementById('approveBtnDir');
-                    const revisionBtnText = document.getElementById('revisionBtnTextDir');
-                    const approveBtnText = document.getElementById('approveBtnTextDir');
-                    const catatanField = document.getElementById('catatanFieldDir');
-                    
-                    if (revisionModeDir) {
-                        // Show revision notes
-                        container.classList.remove('hidden');
-                        catatanField.required = true;
-                        
-                        // Change button labels
-                        revisionBtnText.textContent = 'Batal';
-                        revisionBtn.classList.remove('bg-yellow-500', 'hover:bg-yellow-600');
-                        revisionBtn.classList.add('bg-gray-500', 'hover:bg-gray-600');
-                        
-                        approveBtnText.textContent = 'Kirim Revisi ke PM';
-                        approveBtn.setAttribute('name', 'request_revision');
-                        approveBtn.classList.remove('bg-purple-600', 'hover:bg-purple-700');
-                        approveBtn.classList.add('bg-red-500', 'hover:bg-red-600');
-                        approveBtn.onclick = function() { return confirm('Kirim permintaan revisi ke Project Manager?'); };
-                    } else {
-                        // Hide revision notes
-                        container.classList.add('hidden');
-                        catatanField.required = false;
-                        catatanField.value = '';
-                        
-                        // Restore button labels
-                        revisionBtnText.textContent = 'Minta Revisi';
-                        revisionBtn.classList.remove('bg-gray-500', 'hover:bg-gray-600');
-                        revisionBtn.classList.add('bg-yellow-500', 'hover:bg-yellow-600');
-                        
-                        approveBtnText.textContent = 'Approve Final (2/2)';
-                        approveBtn.setAttribute('name', 'approve');
-                        approveBtn.classList.remove('bg-red-500', 'hover:bg-red-600');
-                        approveBtn.classList.add('bg-purple-600', 'hover:bg-purple-700');
-                        approveBtn.onclick = function() { return confirm('Setujui proposal ini? (Stage 2/2 - Final Approval)'); };
-                    }
-                }
-                </script>
             </div>
             <?php elseif ($proposal['status'] === 'submitted'): ?>
             <div class="p-8 border-t border-gray-200 bg-yellow-50">
                 <div class="flex items-center text-yellow-700">
                     <i class="fas fa-clock text-2xl mr-3"></i>
                     <div>
-                        <p class="font-bold">Menunggu Approval Finance Manager (Stage 1/2)</p>
-                        <p class="text-sm">Proposal ini sedang menunggu approval dari Finance Manager terlebih dahulu.</p>
-                        <p class="text-xs mt-2 text-yellow-600">
-                            <i class="fas fa-info-circle mr-1"></i>Sistem 2-stage approval: FM approve dulu (1/2), baru Direktur approve final (2/2).
-                        </p>
+                        <p class="font-bold">Menunggu Approval Finance Manager</p>
+                        <p class="text-sm">Proposal ini sedang menunggu approval dari Finance Manager. Approval dari Finance Manager adalah final.</p>
                     </div>
                 </div>
             </div>
             <?php elseif ($proposal['status'] === 'approved'): ?>
             <div class="p-8 border-t border-gray-200 bg-green-50">
                 <div class="flex items-center text-green-700">
-                    <i class="fas fa-check-double text-2xl mr-3"></i>
+                    <i class="fas fa-check-circle text-2xl mr-3"></i>
                     <div>
-                        <p class="font-bold">Proposal Telah Disetujui (Final)</p>
-                        <p class="text-sm">Proposal telah mendapat final approval dan Project Manager telah diberitahu.</p>
+                        <p class="font-bold">Proposal Disetujui oleh Finance Manager (Final)</p>
+                        <p class="text-sm">Proposal telah disetujui oleh Finance Manager dan statusnya adalah final.</p>
                     </div>
                 </div>
             </div>

@@ -42,24 +42,21 @@ if ($check_notif_column && $check_notif_column->num_rows > 0) {
     $last_notification_check = '1970-01-01 00:00:00';
 }
 
-// Get proposals for DIR approval (stage 2: approved by FM, waiting DIR)
+// Get proposals approved by FM (DIR only views, no approval needed)
 // Check if approved_by_fm column exists (2-stage approval feature)
-error_log("DIR Dashboard: Checking for approved_by_fm column...");
 $check_column = $conn->query("SHOW COLUMNS FROM proposal LIKE 'approved_by_fm'");
 
 if ($check_column && $check_column->num_rows > 0) {
-    // 2-stage approval is active
-    error_log("DIR Dashboard: Using 2-stage approval query");
+    // Show only FM-approved proposals (DIR just views, FM approval is final)
     $proposals_result = $conn->query("SELECT p.*, u.nama as creator_name,
         u2.nama as fm_name
         FROM proposal p 
         LEFT JOIN user u ON p.pemohon = u.nama 
         LEFT JOIN user u2 ON p.approved_by_fm = u2.id_user
-        WHERE p.status IN ('approved_fm', 'approved') 
+        WHERE p.status = 'approved_fm' 
         ORDER BY p.created_at DESC");
     
     if (!$proposals_result) {
-        error_log("DIR Dashboard: Proposals query FAILED: " . $conn->error);
         $proposals_array = [];
     } else {
         // Store results in array to avoid result set issues
@@ -69,8 +66,7 @@ if ($check_column && $check_column->num_rows > 0) {
         }
     }
 } else {
-    // Fallback: 2-stage approval not yet enabled
-    error_log("DIR Dashboard: Using fallback query (no 2-stage)");
+    // Fallback: Show approved proposals (if 2-stage not enabled, FM approval = final)
     $proposals_result = $conn->query("SELECT p.*, u.nama as creator_name
         FROM proposal p 
         LEFT JOIN user u ON p.pemohon = u.nama 
@@ -78,7 +74,6 @@ if ($check_column && $check_column->num_rows > 0) {
         ORDER BY p.created_at DESC");
     
     if (!$proposals_result) {
-        error_log("DIR Dashboard: Proposals query FAILED: " . $conn->error);
         $proposals_array = [];
     } else {
         // Store results in array to avoid result set issues
@@ -89,16 +84,16 @@ if ($check_column && $check_column->num_rows > 0) {
     }
 }
 
-// Get validated financial reports (both pending and approved)
+// Get financial reports approved by FM (DIR only views, no approval needed)
 $reports_result = $conn->query("SELECT lh.*, u.nama as creator_name,
     u2.nama as fm_name
     FROM laporan_keuangan_header lh
     LEFT JOIN user u ON lh.created_by = u.id_user
     LEFT JOIN user u2 ON lh.approved_by = u2.id_user
+    WHERE lh.status_lap = 'approved'
     ORDER BY lh.created_at DESC");
 
 if (!$reports_result) {
-    error_log("DIR Dashboard: Reports query FAILED: " . $conn->error);
     $reports_array = [];
 } else {
     // Store results in array to avoid result set issues
@@ -108,19 +103,19 @@ if (!$reports_result) {
     }
 }
 
-// Get notifications for Direktur (proposals waiting for stage 2 approval + reports waiting for approval)
-$notif_proposals = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status = 'approved_fm'")->fetch_assoc()['count'];
-// Debug: Show all reports that are not yet approved by DIR
-$notif_reports = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap != 'approved' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['count'];
+// Get notifications for Direktur (newly approved by FM - for viewing only)
+$notif_proposals = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status = 'approved_fm' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['count'];
+$notif_reports = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'approved' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['count'];
 $total_notifications = $notif_proposals + $notif_reports;
 
 // Get recent notifications with details
 $notifications = [];
 
-// Add proposal notifications (waiting for DIR approval - stage 2)
-$approved_proposals = $conn->query("SELECT p.id_proposal, p.judul_proposal, p.updated_at, u.nama as creator 
+// Add proposal notifications (approved by FM - for DIR viewing)
+$approved_proposals = $conn->query("SELECT p.id_proposal, p.judul_proposal, p.updated_at, u.nama as creator, u2.nama as fm_name
     FROM proposal p 
     LEFT JOIN user u ON p.pemohon = u.nama 
+    LEFT JOIN user u2 ON p.approved_by_fm = u2.id_user
     WHERE p.status = 'approved_fm' 
     ORDER BY p.updated_at DESC LIMIT 5");
 while ($row = $approved_proposals->fetch_assoc()) {
@@ -128,26 +123,26 @@ while ($row = $approved_proposals->fetch_assoc()) {
     $notifications[] = [
         'type' => 'proposal',
         'id' => $row['id_proposal'],
-        'title' => 'Proposal disetujui FM (1/2): ' . $row['judul_proposal'],
-        'link' => '../proposals/review_proposal_dir.php?id=' . $row['id_proposal'],
+        'title' => 'Proposal disetujui FM: ' . $row['judul_proposal'],
+        'link' => '../proposals/view_proposal.php?id=' . $row['id_proposal'],
         'time' => time_elapsed_string($row['updated_at']),
         'is_unread' => $is_unread
     ];
 }
 
-// Add report notifications (reports waiting for DIR approval)
-// Debug: Show all reports that are not approved yet
-$report_notifs = $conn->query("SELECT lh.id_laporan_keu, lh.nama_projek, lh.updated_at, lh.status_lap
+// Add report notifications (approved by FM - for DIR viewing)
+$report_notifs = $conn->query("SELECT lh.id_laporan_keu, lh.nama_projek, lh.updated_at, lh.status_lap, u2.nama as fm_name
     FROM laporan_keuangan_header lh
-    WHERE lh.status_lap != 'approved' AND lh.updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
+    LEFT JOIN user u2 ON lh.approved_by = u2.id_user
+    WHERE lh.status_lap = 'approved' AND lh.updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
     ORDER BY lh.updated_at DESC LIMIT 5");
 while ($row = $report_notifs->fetch_assoc()) {
     $is_unread = (strtotime($row['updated_at']) > strtotime($last_notification_check));
     $notifications[] = [
         'type' => 'report',
         'id' => $row['id_laporan_keu'],
-        'title' => 'Laporan menunggu approval: ' . $row['nama_projek'],
-        'link' => '../reports/approve-report-dir.php?id=' . $row['id_laporan_keu'] . '&return_tab=reports',
+        'title' => 'Laporan disetujui FM: ' . $row['nama_projek'],
+        'link' => '../reports/view_report_dir.php?id=' . $row['id_laporan_keu'] . '&return_tab=reports',
         'time' => time_elapsed_string($row['updated_at']),
         'is_unread' => $is_unread
     ];
@@ -172,18 +167,18 @@ if (isset($_GET['success'])) {
         case 'password_changed':
             $success_message = 'Password berhasil diubah!';
             break;
-        case 'proposal_approved_final':
-            $success_message = 'Proposal berhasil disetujui secara final!';
-            break;
     }
 }
 
-// Get statistics for dashboard cards
-$total_proyek = $conn->query("SELECT COUNT(*) as count FROM proyek WHERE status_proyek != 'cancelled'")->fetch_assoc()['count'];
-$proposal_masuk = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status = 'approved_fm'")->fetch_assoc()['count'];
-$laporan_approved = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'approved'")->fetch_assoc()['count'];
-$pending_review = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status = 'approved_fm'")->fetch_assoc()['count'] +
-                  $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap IN ('verified', 'approved')")->fetch_assoc()['count'];
+// Get statistics for dashboard cards (store results properly to avoid result set consumption)
+$total_proyek_result = $conn->query("SELECT COUNT(*) as count FROM proyek WHERE status_proyek != 'cancelled'");
+$total_proyek = $total_proyek_result ? $total_proyek_result->fetch_assoc()['count'] : 0;
+
+$proposal_masuk_result = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status = 'approved_fm'");
+$proposal_masuk = $proposal_masuk_result ? $proposal_masuk_result->fetch_assoc()['count'] : 0;
+
+$laporan_approved_result = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'approved'");
+$laporan_approved = $laporan_approved_result ? $laporan_approved_result->fetch_assoc()['count'] : 0;
 
 // Close session writing to ensure session is fully saved before HTML output
 // This prevents session conflicts when user clicks notification links
@@ -420,27 +415,12 @@ session_write_close();
                     <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-lg border border-blue-200">
                         <div class="flex items-center justify-between">
                             <div>
-                                <p class="text-sm text-gray-600 mb-1">Incoming for Approval</p>
+                                <p class="text-sm text-gray-600 mb-1">Approved by FM</p>
                                 <p class="text-3xl font-bold text-gray-800" data-stat="pending_proposals"><?php echo $proposal_masuk; ?></p>
-                                <p class="text-xs text-gray-500 mt-1">Awaiting Director approval (Stage 2/2)</p>
+                                <p class="text-xs text-gray-500 mt-1">Ready for Director review</p>
                             </div>
                             <div class="bg-blue-500 p-3 rounded-full">
-                                <i class="fas fa-inbox text-white text-2xl"></i>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-lg border border-green-200">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <p class="text-sm text-gray-600 mb-1">Approved (Final)</p>
-                                <p class="text-3xl font-bold text-gray-800">
-                                    <?php echo $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status = 'approved'")->fetch_assoc()['count']; ?>
-                                </p>
-                                <p class="text-xs text-gray-500 mt-1">Finalized by Director</p>
-                            </div>
-                            <div class="bg-green-500 p-3 rounded-full">
-                                <i class="fas fa-check-double text-white text-2xl"></i>
+                                <i class="fas fa-check-circle text-white text-2xl"></i>
                             </div>
                         </div>
                     </div>
@@ -457,26 +437,11 @@ session_write_close();
                     <div class="bg-gradient-to-br from-purple-50 to-purple-100 p-6 rounded-lg border border-purple-200">
                         <div class="flex items-center justify-between">
                             <div>
-                                <p class="text-sm text-gray-600 mb-1">Submitted & Verified</p>
-                                <p class="text-3xl font-bold text-gray-800" data-stat="pending_reports">
-                                    <?php echo $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap IN ('verified', 'approved_fm')")->fetch_assoc()['count']; ?>
-                                </p>
-                                <p class="text-xs text-gray-500 mt-1">Ready for Director approval</p>
+                                <p class="text-sm text-gray-600 mb-1">Approved by FM</p>
+                                <p class="text-3xl font-bold text-gray-800" data-stat="pending_reports"><?php echo $laporan_approved; ?></p>
+                                <p class="text-xs text-gray-500 mt-1">Ready for Director review</p>
                             </div>
                             <div class="bg-purple-500 p-3 rounded-full">
-                                <i class="fas fa-file-invoice-dollar text-white text-2xl"></i>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="bg-gradient-to-br from-teal-50 to-teal-100 p-6 rounded-lg border border-teal-200">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <p class="text-sm text-gray-600 mb-1">Approved (Final)</p>
-                                <p class="text-3xl font-bold text-gray-800" data-stat="approved_reports"><?php echo $laporan_approved; ?></p>
-                                <p class="text-xs text-gray-500 mt-1">Finalized by Director</p>
-                            </div>
-                            <div class="bg-teal-500 p-3 rounded-full">
                                 <i class="fas fa-check-circle text-white text-2xl"></i>
                             </div>
                         </div>
@@ -555,7 +520,7 @@ session_write_close();
             <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
                 <div class="p-6 border-b border-gray-200">
                     <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-bold text-gray-800">Proposal untuk Approval</h3>
+                        <h3 class="text-lg font-bold text-gray-800">Proposal yang Disetujui FM</h3>
                         <div class="relative">
                             <input type="text" id="searchProposals" placeholder="Cari judul atau PJ..." 
                                 class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 w-64">
@@ -612,32 +577,21 @@ session_write_close();
                                     <?php echo !empty($proposal['date']) ? date('d/m/Y', strtotime($proposal['date'])) : (!empty($proposal['created_at']) ? date('d/m/Y', strtotime($proposal['created_at'])) : '-'); ?>
                                 </td>
                                 <td class="px-6 py-4">
-                                    <?php if ($proposal['status'] === 'submitted'): ?>
-                                        <span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                                            Pending FM Approval
-                                        </span>
-                                    <?php elseif ($proposal['status'] === 'approved_fm'): ?>
-                                        <span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                                            <i class="fas fa-check mr-1"></i> 1/2 Approved (FM)
+                                    <?php if ($proposal['status'] === 'approved_fm'): ?>
+                                        <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                            <i class="fas fa-check-circle mr-1"></i> Approved by FM
                                         </span>
                                     <?php elseif ($proposal['status'] === 'approved'): ?>
                                         <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                            <i class="fas fa-check-double mr-1"></i> 2/2 Approved (Final)
+                                            <i class="fas fa-check-circle mr-1"></i> Approved by FM
                                         </span>
                                     <?php endif; ?>
                                 </td>
                                 <td class="px-6 py-4 text-sm">
-                                    <?php if (isset($proposal['status']) && $proposal['status'] === 'approved_fm'): ?>
-                                        <a href="../proposals/approve_proposal.php?id=<?php echo $proposal['id_proposal'] ?? 0; ?>&return_tab=proposals" 
-                                            class="text-purple-600 hover:text-purple-900 font-medium">
-                                            <i class="fas fa-clipboard-check mr-1"></i> Approve Stage 2
-                                        </a>
-                                    <?php else: ?>
-                                        <a href="../proposals/review_proposal_dir.php?id=<?php echo $proposal['id_proposal'] ?? 0; ?>&return_tab=proposals" 
-                                            class="text-gray-600 hover:text-gray-900">
-                                            <i class="fas fa-eye mr-1"></i> View
-                                        </a>
-                                    <?php endif; ?>
+                                    <a href="../proposals/view_proposal.php?id=<?php echo $proposal['id_proposal'] ?? 0; ?>&return_tab=proposals" 
+                                        class="text-blue-600 hover:text-blue-900">
+                                        <i class="fas fa-eye mr-1"></i> View
+                                    </a>
                                 </td>
                             </tr>
                             <?php 
@@ -648,7 +602,7 @@ session_write_close();
                                 <td colspan="7" class="px-6 py-8 text-center text-gray-500">
                                     <i class="fas fa-inbox text-4xl mb-3 block"></i>
                                     <p class="text-lg font-medium">Tidak ada proposal</p>
-                                    <p class="text-sm mt-1">Belum ada proposal yang perlu di-approve</p>
+                                    <p class="text-sm mt-1">Belum ada proposal yang disetujui oleh Finance Manager</p>
                                 </td>
                             </tr>
                             <?php endif; ?>
@@ -662,7 +616,7 @@ session_write_close();
         <div id="reportsContent" class="tab-content hidden">
             <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
                 <div class="p-6 border-b border-gray-200">
-                    <h3 class="text-lg font-bold text-gray-800">Laporan Keuangan</h3>
+                    <h3 class="text-lg font-bold text-gray-800">Laporan Keuangan yang Disetujui FM</h3>
                 </div>
 
                 <div class="overflow-x-auto">
@@ -710,7 +664,7 @@ session_write_close();
                                             echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">Approved FM</span>';
                                             break;
                                         case 'approved':
-                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">✓ Final Approved</span>';
+                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800"><i class="fas fa-check-circle mr-1"></i> Approved by FM</span>';
                                             break;
                                         default:
                                             echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Unknown: ' . htmlspecialchars($status) . '</span>';
@@ -718,19 +672,11 @@ session_write_close();
                                     ?>
                                 </td>
                                 <td class="px-6 py-4 text-sm">
-                                    <?php if ($status === 'approved'): ?>
-                                        <!-- Already approved - show View action -->
-                                        <a href="../reports/view_report_dir.php?id=<?php echo $report['id_laporan_keu'] ?? 0; ?>&return_tab=reports"
-                                            class="text-blue-600 hover:text-blue-900">
-                                            <i class="fas fa-eye mr-1"></i> View
-                                        </a>
-                                    <?php else: ?>
-                                        <!-- Still pending approval - show Approve action -->
-                                        <a href="../reports/approve-report-dir.php?id=<?php echo $report['id_laporan_keu'] ?? 0; ?>&return_tab=reports"
-                                            class="text-purple-600 hover:text-purple-900">
-                                            <i class="fas fa-check-circle mr-1"></i> Approve
-                                        </a>
-                                    <?php endif; ?>
+                                    <!-- DIR only views - no approval needed -->
+                                    <a href="../reports/view_report_dir.php?id=<?php echo $report['id_laporan_keu'] ?? 0; ?>&return_tab=reports"
+                                        class="text-blue-600 hover:text-blue-900">
+                                        <i class="fas fa-eye mr-1"></i> View
+                                    </a>
                                 </td>
                             </tr>
                             <?php 
@@ -741,7 +687,7 @@ session_write_close();
                                 <td colspan="7" class="px-6 py-8 text-center text-gray-500">
                                     <i class="fas fa-inbox text-4xl mb-3 block"></i>
                                     <p class="text-lg font-medium">Tidak ada laporan keuangan</p>
-                                    <p class="text-sm mt-1">Belum ada laporan keuangan di database</p>
+                                    <p class="text-sm mt-1">Belum ada laporan keuangan yang disetujui oleh Finance Manager</p>
                                 </td>
                             </tr>
                             <?php endif; ?>

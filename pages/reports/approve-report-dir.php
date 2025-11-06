@@ -27,53 +27,11 @@ $user_id = $_SESSION['user_id'];
 $report_id = $_GET['id'] ?? 0;
 $return_tab = $_GET['return_tab'] ?? 'reports'; // Default to reports if not specified
 
-// Handle final approval
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['final_approve'])) {
-    // Update to final approved status
-    $stmt = $conn->prepare("UPDATE laporan_keuangan_header SET status_lap = 'approved' WHERE id_laporan_keu = ? AND approved_by IS NOT NULL");
-    $stmt->bind_param("i", $report_id);
-    
-    if ($stmt->execute() && $stmt->affected_rows > 0) {
-        // Get report details
-        $report_stmt = $conn->prepare("SELECT lh.*, u.email as pm_email, u.nama as pm_name, 
-            u2.email as fm_email, u2.nama as fm_name,
-            u3.email as sa_email, u3.nama as sa_name
-            FROM laporan_keuangan_header lh 
-            LEFT JOIN user u ON lh.created_by = u.id_user 
-            LEFT JOIN user u2 ON lh.approved_by = u2.id_user
-            LEFT JOIN user u3 ON lh.verified_by = u3.id_user
-            WHERE id_laporan_keu = ?");
-        $report_stmt->bind_param("i", $report_id);
-        $report_stmt->execute();
-        $report_data = $report_stmt->get_result()->fetch_assoc();
-        
-        // Notify PM, FM, and SA
-        send_notification_email(
-            $report_data['pm_email'],
-            'Laporan Keuangan Telah Disetujui Direktur',
-            'Laporan keuangan Anda untuk kegiatan "' . $report_data['nama_projek'] . '" telah disetujui oleh Direktur. Laporan telah final.'
-        );
-        
-        if ($report_data['fm_email']) {
-            send_notification_email(
-                $report_data['fm_email'],
-                'Laporan Keuangan Telah Disetujui Direktur',
-                'Laporan keuangan untuk kegiatan "' . $report_data['nama_projek'] . '" telah disetujui oleh Direktur.'
-            );
-        }
-        
-        if ($report_data['sa_email']) {
-            send_notification_email(
-                $report_data['sa_email'],
-                'Laporan Keuangan Telah Disetujui Direktur',
-                'Laporan keuangan untuk kegiatan "' . $report_data['nama_projek'] . '" telah disetujui oleh Direktur.'
-            );
-        }
-        
-        $success = 'Laporan berhasil di-approve! Status final telah ditetapkan.';
-    } else {
-        $error = 'Laporan belum di-approve oleh Finance Manager atau sudah di-approve sebelumnya.';
-    }
+// DIR only views - no approval functionality
+// Redirect any POST requests to view page
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    header('Location: view_report_dir.php?id=' . $report_id . '&return_tab=' . urlencode($return_tab));
+    exit();
 }
 
 // Get report data
@@ -104,7 +62,7 @@ $items = $details->get_result();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Approve Laporan - Direktur</title>
+    <title>View Laporan - Direktur</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -116,7 +74,7 @@ $items = $details->get_result();
                     <a href="../dashboards/dashboard_dir.php?tab=<?php echo urlencode($return_tab); ?>" class="text-gray-600 hover:text-gray-800">
                         <i class="fas fa-arrow-left"></i>
                     </a>
-                    <h1 class="text-xl font-bold text-gray-800">Final Approval - Direktur</h1>
+                    <h1 class="text-xl font-bold text-gray-800">View Laporan Keuangan</h1>
                 </div>
                 <span class="text-gray-700 font-medium"><?php echo $user_name; ?></span>
             </div>
@@ -180,26 +138,7 @@ $items = $details->get_result();
                                     </p>
                                 </div>
                             </div>
-                            <div class="w-16 h-1 <?php echo $report['approved_by'] ? 'bg-green-400' : 'bg-gray-300'; ?>"></div>
-                            
-                            <!-- DIR Approval -->
-                            <div class="flex items-center">
-                                <?php if ($report['status_lap'] === 'approved' && $report['approved_by']): ?>
-                                    <div class="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-white">
-                                        <i class="fas fa-check"></i>
-                                    </div>
-                                <?php else: ?>
-                                    <div class="w-10 h-10 rounded-full bg-purple-400 flex items-center justify-center text-white animate-pulse">
-                                        <i class="fas fa-clock"></i>
-                                    </div>
-                                <?php endif; ?>
-                                <div class="ml-3">
-                                    <p class="text-sm font-medium text-gray-800">Direktur</p>
-                                    <p class="text-xs text-gray-600">
-                                        <?php echo ($report['status_lap'] === 'approved' && $report['approved_by']) ? 'Approved' : 'Pending'; ?>
-                                    </p>
-                                </div>
-                            </div>
+                            <!-- FM Approval is Final - No DIR step needed -->
                         </div>
                     </div>
                 </div>
@@ -274,72 +213,20 @@ $items = $details->get_result();
                 </div>
             </div>
 
-            <!-- Final Approval Section -->
-            <?php if ($report['approved_by'] && $report['status_lap'] !== 'approved'): ?>
-            <div class="p-8 border-t border-gray-200 bg-purple-50">
-                <h3 class="text-lg font-bold text-gray-800 mb-4">Final Approval - Direktur (Stage 2/2)</h3>
-                
-                <form method="POST" class="space-y-4">
-                    <div class="bg-white p-6 rounded-lg border border-purple-200">
-                        <div class="flex items-start space-x-4">
-                            <div class="flex-shrink-0">
-                                <div class="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center">
-                                    <i class="fas fa-signature text-purple-600 text-xl"></i>
-                                </div>
-                            </div>
-                            <div class="flex-1">
-                                <p class="font-medium text-gray-800 mb-2">Tanda Tangan Digital - Direktur</p>
-                                <p class="text-sm text-gray-600 mb-4">Sebagai Direktur, approval Anda akan menjadikan laporan ini berstatus FINAL dan tidak dapat diubah lagi.</p>
-                                <div class="flex items-center space-x-2 text-sm text-gray-600">
-                                    <i class="fas fa-user"></i>
-                                    <span><?php echo $user_name; ?></span>
-                                    <span>•</span>
-                                    <span><?php echo date('d/m/Y H:i'); ?></span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                        <div class="flex items-start">
-                            <i class="fas fa-info-circle text-blue-600 mt-1 mr-3"></i>
-                            <div class="text-sm text-blue-800">
-                                <p class="font-medium mb-1">Informasi Penting:</p>
-                                <ul class="list-disc list-inside space-y-1">
-                                    <li>Laporan telah divalidasi oleh Staff Accounting</li>
-                                    <li>Laporan telah di-approve oleh Finance Manager</li>
-                                    <li>Approval Anda akan finalisasi dokumen ini</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="flex justify-end">
-                        <button type="submit" name="final_approve"
-                            class="px-8 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition duration-200 font-medium text-lg shadow-lg"
-                            onclick="return confirm('KONFIRMASI FINAL APPROVAL (Stage 2/2)\n\nApakah Anda yakin ingin memberikan approval final?\n\nSetelah di-approve, laporan tidak dapat diubah lagi.')">
-                            <i class="fas fa-check-double mr-2"></i> Approve (Stage 2/2)
-                        </button>
-                    </div>
-                </form>
-            </div>
-            <?php elseif ($report['status_lap'] === 'approved'): ?>
+            <!-- DIR View Only - FM approval is final -->
+            <?php if ($report['status_lap'] === 'approved'): ?>
             <div class="p-8 border-t border-gray-200 bg-green-50">
                 <div class="flex items-center text-green-700">
-                    <i class="fas fa-check-double text-3xl mr-3"></i>
+                    <i class="fas fa-check-circle text-3xl mr-3"></i>
                     <div>
-                        <p class="font-bold text-lg">Laporan Telah Mendapat Final Approval</p>
-                        <p class="text-sm">Status: FINAL - Laporan tidak dapat diubah lagi.</p>
-                    </div>
-                </div>
-            </div>
-            <?php else: ?>
-            <div class="p-8 border-t border-gray-200 bg-yellow-50">
-                <div class="flex items-center text-yellow-700">
-                    <i class="fas fa-exclamation-triangle text-2xl mr-3"></i>
-                    <div>
-                        <p class="font-bold">Menunggu Approval Finance Manager</p>
-                        <p class="text-sm">Laporan belum dapat di-approve karena masih menunggu approval dari Finance Manager.</p>
+                        <p class="font-bold text-lg">Laporan Disetujui oleh Finance Manager</p>
+                        <p class="text-sm mt-1">
+                            Laporan ini telah disetujui oleh Finance Manager 
+                            <?php if (!empty($report['approver_name'])): ?>
+                                (<strong><?php echo $report['approver_name']; ?></strong>)
+                            <?php endif; ?>.
+                            <br>Sebagai Direktur, Anda dapat melihat detail laporan ini untuk review. Approval dari Finance Manager adalah final.
+                        </p>
                     </div>
                 </div>
             </div>
