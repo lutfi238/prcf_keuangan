@@ -12,22 +12,12 @@ require_once '../../includes/maintenance_config.php';
 // Check maintenance mode (admin with whitelisted IP can bypass)
 check_maintenance();
 
-// Debug: Log session state on dashboard access
-error_log("🔍 dashboard_pm.php - Session check: " . json_encode([
-    'logged_in' => $_SESSION['logged_in'] ?? false,
-    'user_id' => $_SESSION['user_id'] ?? null,
-    'user_role' => $_SESSION['user_role'] ?? null,
-    'session_id' => session_id()
-]));
-
 if (!isset($_SESSION['logged_in'])) {
-    error_log("⚠️ dashboard_pm.php - Not logged in, redirecting to login.php");
     header('Location: ../../auth/login.php');
     exit();
 }
 
 if ($_SESSION['user_role'] !== 'Project Manager') {
-    error_log("⚠️ dashboard_pm.php - Wrong role: " . ($_SESSION['user_role'] ?? 'none'));
     header('Location: ../../auth/unauthorized.php');
     exit();
 }
@@ -369,8 +359,8 @@ session_write_close();
                             $status_text = [
                                 'draft' => 'Draft',
                                 'submitted' => 'Pending FM Approval',
-                                'approved_fm' => 'Approved by FM (1/2)',
-                                'approved' => 'Approved (Final)',
+                                'approved_fm' => 'Approved by FM (Final)',
+                                'approved' => 'Approved by FM (Final)',
                                 'rejected' => 'Rejected'
                             ];
                             $link = '../proposals/view_proposal.php?id=' . $activity['id']; // READ-ONLY for PM
@@ -408,10 +398,10 @@ session_write_close();
                         </a>
                     <?php endforeach; ?>
                 <?php else: ?>
-                    <div class="text-center py-8 text-gray-500">
-                        <i class="fas fa-inbox text-4xl mb-3"></i>
-                        <p>Belum ada aktivitas</p>
-                        <p class="text-sm mt-1">Mulai dengan membuat proposal atau laporan keuangan</p>
+                    <div class="flex flex-col items-center justify-center py-12">
+                        <i class="fas fa-history text-gray-400 text-5xl mb-4"></i>
+                        <p class="text-gray-500 text-lg font-medium mb-2">Belum ada aktivitas</p>
+                        <p class="text-gray-400 text-sm">Mulai dengan membuat proposal atau laporan keuangan</p>
                     </div>
                 <?php endif; ?>
             </div>

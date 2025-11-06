@@ -273,8 +273,9 @@ session_write_close();
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
                         <?php 
-                        $no = 1;
-                        while ($report = $reports->fetch_assoc()): 
+                        if ($reports && $reports->num_rows > 0):
+                            $no = 1;
+                            while ($report = $reports->fetch_assoc()): 
                         ?>
                         <tr class="hover:bg-gray-50">
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><?php echo $no++; ?></td>
@@ -302,7 +303,20 @@ session_write_close();
                                 </a>
                             </td>
                         </tr>
-                        <?php endwhile; ?>
+                        <?php 
+                            endwhile;
+                        else:
+                        ?>
+                        <tr>
+                            <td colspan="7" class="px-6 py-12 text-center">
+                                <div class="flex flex-col items-center justify-center">
+                                    <i class="fas fa-file-invoice text-gray-400 text-5xl mb-4"></i>
+                                    <p class="text-gray-500 text-lg font-medium mb-2">Belum ada laporan keuangan</p>
+                                    <p class="text-gray-400 text-sm">Tidak ada laporan keuangan yang perlu divalidasi saat ini.</p>
+                                </div>
+                            </td>
+                        </tr>
+                        <?php endif; ?>
                     </tbody>
                 </table>
             </div>

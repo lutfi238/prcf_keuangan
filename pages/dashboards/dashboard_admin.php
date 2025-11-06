@@ -226,8 +226,12 @@ if (!$recent_users) {
                             <?php endwhile; ?>
                         <?php else: ?>
                             <tr>
-                                <td colspan="5" class="px-6 py-8 text-center text-gray-500">
-                                    <i class="fas fa-info-circle mr-2"></i>No recent users to display.
+                                <td colspan="5" class="px-6 py-12 text-center">
+                                    <div class="flex flex-col items-center justify-center">
+                                        <i class="fas fa-users text-gray-400 text-5xl mb-4"></i>
+                                        <p class="text-gray-500 text-lg font-medium mb-2">Belum ada pengguna baru</p>
+                                        <p class="text-gray-400 text-sm">Tidak ada pengguna baru yang terdaftar saat ini.</p>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endif; ?>

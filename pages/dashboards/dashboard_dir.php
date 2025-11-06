@@ -112,12 +112,13 @@ $total_notifications = $notif_proposals + $notif_reports;
 $notifications = [];
 
 // Add proposal notifications (approved by FM - for DIR viewing)
+// Get all notifications, then limit display to 5 initially
 $approved_proposals = $conn->query("SELECT p.id_proposal, p.judul_proposal, p.updated_at, u.nama as creator, u2.nama as fm_name
     FROM proposal p 
     LEFT JOIN user u ON p.pemohon = u.nama 
     LEFT JOIN user u2 ON p.approved_by_fm = u2.id_user
     WHERE p.status = 'approved_fm' 
-    ORDER BY p.updated_at DESC LIMIT 5");
+    ORDER BY p.updated_at DESC");
 while ($row = $approved_proposals->fetch_assoc()) {
     $is_unread = (strtotime($row['updated_at']) > strtotime($last_notification_check));
     $notifications[] = [
@@ -126,6 +127,7 @@ while ($row = $approved_proposals->fetch_assoc()) {
         'title' => 'Proposal disetujui FM: ' . $row['judul_proposal'],
         'link' => '../proposals/view_proposal.php?id=' . $row['id_proposal'],
         'time' => time_elapsed_string($row['updated_at']),
+        'sort_time' => strtotime($row['updated_at']),
         'is_unread' => $is_unread
     ];
 }
@@ -135,7 +137,7 @@ $report_notifs = $conn->query("SELECT lh.id_laporan_keu, lh.nama_projek, lh.upda
     FROM laporan_keuangan_header lh
     LEFT JOIN user u2 ON lh.approved_by = u2.id_user
     WHERE lh.status_lap = 'approved' AND lh.updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
-    ORDER BY lh.updated_at DESC LIMIT 5");
+    ORDER BY lh.updated_at DESC");
 while ($row = $report_notifs->fetch_assoc()) {
     $is_unread = (strtotime($row['updated_at']) > strtotime($last_notification_check));
     $notifications[] = [
@@ -144,20 +146,39 @@ while ($row = $report_notifs->fetch_assoc()) {
         'title' => 'Laporan disetujui FM: ' . $row['nama_projek'],
         'link' => '../reports/view_report_dir.php?id=' . $row['id_laporan_keu'] . '&return_tab=reports',
         'time' => time_elapsed_string($row['updated_at']),
+        'sort_time' => strtotime($row['updated_at']),
         'is_unread' => $is_unread
     ];
 }
 
+// Sort notifications by time (newest first)
+usort($notifications, function($a, $b) {
+    $timeA = isset($a['sort_time']) ? $a['sort_time'] : 0;
+    $timeB = isset($b['sort_time']) ? $b['sort_time'] : 0;
+    return $timeB - $timeA;
+});
+$total_notifications_count = count($notifications);
+$notifications_display = array_slice($notifications, 0, 5); // Show first 5
+$has_more_notifications = $total_notifications_count > 5;
+
 // Function to calculate time elapsed
 function time_elapsed_string($datetime) {
-    $now = new DateTime;
-    $ago = new DateTime($datetime);
-    $diff = $now->diff($ago);
+    if (empty($datetime)) {
+        return 'Tidak diketahui';
+    }
+    
+    try {
+        $now = new DateTime;
+        $ago = new DateTime($datetime);
+        $diff = $now->diff($ago);
 
-    if ($diff->d > 0) return $diff->d . ' hari yang lalu';
-    if ($diff->h > 0) return $diff->h . ' jam yang lalu';
-    if ($diff->i > 0) return $diff->i . ' menit yang lalu';
-    return 'Baru saja';
+        if ($diff->d > 0) return $diff->d . ' hari yang lalu';
+        if ($diff->h > 0) return $diff->h . ' jam yang lalu';
+        if ($diff->i > 0) return $diff->i . ' menit yang lalu';
+        return 'Baru saja';
+    } catch (Exception $e) {
+        return 'Tidak diketahui';
+    }
 }
 
 // Handle success messages from redirects
@@ -328,17 +349,17 @@ session_write_close();
                                     <span class="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full"><span class="notification-count-text"><?php echo $total_notifications; ?></span> baru</span>
                                 <?php endif; ?>
                             </div>
-                            <div class="max-h-96 overflow-y-auto">
-                                <?php if (empty($notifications)): ?>
+                            <div class="max-h-96 overflow-y-auto" id="notificationList">
+                                <?php if (empty($notifications_display)): ?>
                                     <div class="p-4 text-center text-gray-500 text-sm">
                                         <i class="fas fa-inbox text-3xl mb-2"></i>
                                         <p>Tidak ada notifikasi</p>
                                     </div>
                                 <?php else: ?>
-                                    <?php foreach ($notifications as $notif): ?>
+                                    <?php foreach ($notifications_display as $notif): ?>
                                         <!-- Fix: add onclick handler to notification. It closes dropdown before navigation. -->
                                         <a href="<?php echo $notif['link']; ?>" 
-                                           class="block p-4 border-b border-gray-100 transition <?php echo $notif['is_unread'] ? 'bg-blue-50 hover:bg-blue-100' : 'bg-white hover:bg-gray-50'; ?>"
+                                           class="notification-item block p-4 border-b border-gray-100 transition <?php echo $notif['is_unread'] ? 'bg-blue-50 hover:bg-blue-100' : 'bg-white hover:bg-gray-50'; ?>"
                                            onclick="closeNotificationsPanel()">
                                             <div class="flex items-start">
                                                 <div class="flex-shrink-0 mr-3">
@@ -350,10 +371,10 @@ session_write_close();
                                                 </div>
                                                 <div class="flex-1">
                                                     <p class="text-sm <?php echo $notif['is_unread'] ? 'text-gray-900 font-bold' : 'text-gray-700 font-normal'; ?>">
-                                                        <?php echo $notif['title']; ?>
+                                                        <?php echo htmlspecialchars($notif['title']); ?>
                                                     </p>
                                                     <p class="text-xs text-gray-500 mt-1">
-                                                        <i class="far fa-clock mr-1"></i><?php echo $notif['time']; ?>
+                                                        <i class="far fa-clock mr-1"></i><?php echo htmlspecialchars($notif['time'] ?? 'Tidak diketahui'); ?>
                                                     </p>
                                                 </div>
                                                 <?php if ($notif['is_unread']): ?>
@@ -364,8 +385,81 @@ session_write_close();
                                             </div>
                                         </a>
                                     <?php endforeach; ?>
+                                    <?php if ($has_more_notifications): ?>
+                                        <div class="p-3 border-t border-gray-200 bg-gray-50">
+                                            <button type="button" 
+                                                onclick="loadMoreNotifications(<?php echo count($notifications_display); ?>, <?php echo $total_notifications_count; ?>)" 
+                                                class="w-full text-center text-sm text-purple-600 hover:text-purple-800 font-medium py-2">
+                                                <i class="fas fa-chevron-down mr-1"></i> Tampilkan Lebih Banyak (<?php echo $total_notifications_count - count($notifications_display); ?> lagi)
+                                            </button>
+                                        </div>
+                                    <?php endif; ?>
                                 <?php endif; ?>
                             </div>
+                            <script>
+                                // Store all notifications for "Show More" functionality
+                                window.allNotifications = <?php echo json_encode($notifications); ?>;
+                                
+                                function loadMoreNotifications(currentCount, totalCount) {
+                                    const container = document.getElementById('notificationList');
+                                    const currentItems = container.querySelectorAll('.notification-item').length;
+                                    const nextBatch = Math.min(currentItems + 10, totalCount);
+                                    
+                                    // Remove "Show More" button
+                                    const showMoreBtn = container.querySelector('button');
+                                    if (showMoreBtn) {
+                                        showMoreBtn.parentElement.remove();
+                                    }
+                                    
+                                    // Add next batch of notifications
+                                    const notificationsToAdd = window.allNotifications.slice(currentItems, nextBatch);
+                                    notificationsToAdd.forEach(notif => {
+                                        const iconClass = notif.type === 'proposal' ? 'fa-file-alt text-blue-500' : 'fa-chart-line text-green-500';
+                                        const bgClass = notif.is_unread ? 'bg-blue-50 hover:bg-blue-100' : 'bg-white hover:bg-gray-50';
+                                        const textClass = notif.is_unread ? 'text-gray-900 font-bold' : 'text-gray-700 font-normal';
+                                        
+                                        const notifElement = document.createElement('a');
+                                        notifElement.href = notif.link;
+                                        notifElement.className = `notification-item block p-4 border-b border-gray-100 transition ${bgClass}`;
+                                        notifElement.onclick = () => closeNotificationsPanel();
+                                        notifElement.innerHTML = `
+                                            <div class="flex items-start">
+                                                <div class="flex-shrink-0 mr-3">
+                                                    <i class="fas ${iconClass} text-lg"></i>
+                                                </div>
+                                                <div class="flex-1">
+                                                    <p class="text-sm ${textClass}">${escapeHtml(notif.title || 'Tidak ada judul')}</p>
+                                                    <p class="text-xs text-gray-500 mt-1">
+                                                        <i class="far fa-clock mr-1"></i>${escapeHtml(notif.time || 'Tidak diketahui')}
+                                                    </p>
+                                                </div>
+                                                ${notif.is_unread ? '<div class="flex-shrink-0 ml-2"><span class="w-2 h-2 bg-blue-600 rounded-full inline-block"></span></div>' : ''}
+                                            </div>
+                                        `;
+                                        container.appendChild(notifElement);
+                                    });
+                                    
+                                    // Add "Show More" button again if there are more notifications
+                                    if (nextBatch < totalCount) {
+                                        const showMoreDiv = document.createElement('div');
+                                        showMoreDiv.className = 'p-3 border-t border-gray-200 bg-gray-50';
+                                        showMoreDiv.innerHTML = `
+                                            <button type="button" 
+                                                onclick="loadMoreNotifications(${nextBatch}, ${totalCount})" 
+                                                class="w-full text-center text-sm text-purple-600 hover:text-purple-800 font-medium py-2">
+                                                <i class="fas fa-chevron-down mr-1"></i> Tampilkan Lebih Banyak (${totalCount - nextBatch} lagi)
+                                            </button>
+                                        `;
+                                        container.appendChild(showMoreDiv);
+                                    }
+                                }
+                                
+                                function escapeHtml(text) {
+                                    const div = document.createElement('div');
+                                    div.textContent = text;
+                                    return div.innerHTML;
+                                }
+                            </script>
                         </div>
                     </div>
                     
@@ -599,10 +693,12 @@ session_write_close();
                             else: 
                             ?>
                             <tr>
-                                <td colspan="7" class="px-6 py-8 text-center text-gray-500">
-                                    <i class="fas fa-inbox text-4xl mb-3 block"></i>
-                                    <p class="text-lg font-medium">Tidak ada proposal</p>
-                                    <p class="text-sm mt-1">Belum ada proposal yang disetujui oleh Finance Manager</p>
+                                <td colspan="7" class="px-6 py-12 text-center">
+                                    <div class="flex flex-col items-center justify-center">
+                                        <i class="fas fa-inbox text-gray-400 text-5xl mb-4"></i>
+                                        <p class="text-gray-500 text-lg font-medium mb-2">Belum ada proposal</p>
+                                        <p class="text-gray-400 text-sm">Belum ada proposal yang disetujui oleh Finance Manager</p>
+                                    </div>
                                 </td>
                             </tr>
                             <?php endif; ?>
@@ -684,10 +780,12 @@ session_write_close();
                             else: 
                             ?>
                             <tr>
-                                <td colspan="7" class="px-6 py-8 text-center text-gray-500">
-                                    <i class="fas fa-inbox text-4xl mb-3 block"></i>
-                                    <p class="text-lg font-medium">Tidak ada laporan keuangan</p>
-                                    <p class="text-sm mt-1">Belum ada laporan keuangan yang disetujui oleh Finance Manager</p>
+                                <td colspan="7" class="px-6 py-12 text-center">
+                                    <div class="flex flex-col items-center justify-center">
+                                        <i class="fas fa-file-invoice text-gray-400 text-5xl mb-4"></i>
+                                        <p class="text-gray-500 text-lg font-medium mb-2">Belum ada laporan keuangan</p>
+                                        <p class="text-gray-400 text-sm">Belum ada laporan keuangan yang disetujui oleh Finance Manager</p>
+                                    </div>
                                 </td>
                             </tr>
                             <?php endif; ?>

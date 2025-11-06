@@ -108,18 +108,14 @@ function createNotificationElement(notif) {
             </div>
             <div class="flex-1">
                 <p class="text-sm text-gray-900 font-bold">
-                    ${notif.title}
+                    ${notif.title || 'Tidak ada judul'}
                 </p>
-                <p class="text-xs text-gray-600 mt-1">
-                    ${notif.message}
-                </p>
+                ${notif.message ? `<p class="text-xs text-gray-600 mt-1">${notif.message}</p>` : ''}
                 <p class="text-xs text-gray-500 mt-1">
-                    <i class="far fa-clock mr-1"></i>${formatTime(notif.time)}
+                    <i class="far fa-clock mr-1"></i>${formatTime(notif.time || 'Tidak diketahui')}
                 </p>
             </div>
-            <div class="flex-shrink-0 ml-2">
-                <span class="w-2 h-2 bg-blue-600 rounded-full inline-block"></span>
-            </div>
+            ${notif.is_unread ? '<div class="flex-shrink-0 ml-2"><span class="w-2 h-2 bg-blue-600 rounded-full inline-block"></span></div>' : ''}
         </div>
     `;
     
@@ -133,19 +129,38 @@ function createNotificationElement(notif) {
 
 // Format time for display
 function formatTime(timeString) {
-    const date = new Date(timeString);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
+    // If time is undefined or null, return default
+    if (!timeString) {
+        return 'Tidak diketahui';
+    }
     
-    if (diffMins < 1) return 'Baru saja';
-    if (diffMins < 60) return diffMins + ' menit lalu';
-    if (diffHours < 24) return diffHours + ' jam lalu';
-    if (diffDays < 7) return diffDays + ' hari lalu';
+    // If it's already a formatted string (contains "yang lalu" or "lalu" or "Baru saja"), return as is
+    if (typeof timeString === 'string' && (timeString.includes('yang lalu') || timeString.includes('lalu') || timeString.includes('Baru saja') || timeString.includes('Tidak diketahui'))) {
+        return timeString;
+    }
     
-    return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+    // Otherwise, try to parse as date and format
+    try {
+        const date = new Date(timeString);
+        if (isNaN(date.getTime())) {
+            return timeString; // Return as-is if not a valid date
+        }
+        
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+        
+        if (diffMins < 1) return 'Baru saja';
+        if (diffMins < 60) return diffMins + ' menit yang lalu';
+        if (diffHours < 24) return diffHours + ' jam yang lalu';
+        if (diffDays < 7) return diffDays + ' hari yang lalu';
+        
+        return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+    } catch (e) {
+        return timeString || 'Tidak diketahui';
+    }
 }
 
 // Mark notifications as read

@@ -34,6 +34,26 @@ function sendSSE($event, $data) {
     flush();
 }
 
+// Function to calculate time elapsed (same as dashboard)
+function time_elapsed_string($datetime) {
+    if (empty($datetime)) {
+        return 'Tidak diketahui';
+    }
+    
+    try {
+        $now = new DateTime;
+        $ago = new DateTime($datetime);
+        $diff = $now->diff($ago);
+
+        if ($diff->d > 0) return $diff->d . ' hari yang lalu';
+        if ($diff->h > 0) return $diff->h . ' jam yang lalu';
+        if ($diff->i > 0) return $diff->i . ' menit yang lalu';
+        return 'Baru saja';
+    } catch (Exception $e) {
+        return 'Tidak diketahui';
+    }
+}
+
 // Keep connection alive and send updates every 5 seconds
 $last_check = time();
 
@@ -113,7 +133,9 @@ while (true) {
                     'id' => $row['id_proposal'],
                     'title' => 'New Proposal: ' . $row['judul_proposal'],
                     'link' => '../proposals/review_proposal_fm.php?id=' . $row['id_proposal'],
-                    'time' => $row['created_at']
+                    'time' => time_elapsed_string($row['created_at']),
+                    'sort_time' => strtotime($row['created_at']),
+                    'is_unread' => true
                 ];
             }
             
@@ -130,7 +152,9 @@ while (true) {
                     'id' => $row['id_laporan_keu'],
                     'title' => 'Validated Report: ' . $row['nama_projek'],
                     'link' => '../reports/approve-report-fm.php?id=' . $row['id_laporan_keu'],
-                    'time' => $row['created_at']
+                    'time' => time_elapsed_string($row['created_at']),
+                    'sort_time' => strtotime($row['created_at']),
+                    'is_unread' => true
                 ];
             }
         } elseif ($user_role === 'Direktur') {
@@ -146,8 +170,10 @@ while (true) {
                     'type' => 'proposal',
                     'id' => $row['id_proposal'],
                     'title' => 'Proposal (FM Approved): ' . $row['judul_proposal'],
-                    'link' => '../proposals/review_proposal_dir.php?id=' . $row['id_proposal'],
-                    'time' => $row['updated_at']
+                    'link' => '../proposals/view_proposal.php?id=' . $row['id_proposal'],
+                    'time' => time_elapsed_string($row['updated_at']),
+                    'sort_time' => strtotime($row['updated_at']),
+                    'is_unread' => true
                 ];
             }
             
@@ -163,8 +189,10 @@ while (true) {
                     'type' => 'report',
                     'id' => $row['id_laporan_keu'],
                     'title' => 'Report (FM Approved): ' . $row['nama_projek'],
-                    'link' => '../reports/approve-report-dir.php?id=' . $row['id_laporan_keu'],
-                    'time' => $row['updated_at']
+                    'link' => '../reports/view_report_dir.php?id=' . $row['id_laporan_keu'] . '&return_tab=reports',
+                    'time' => time_elapsed_string($row['updated_at']),
+                    'sort_time' => strtotime($row['updated_at']),
+                    'is_unread' => true
                 ];
             }
         }

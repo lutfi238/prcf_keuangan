@@ -54,21 +54,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Notify PM
             send_notification_email(
                 $prop_data['email'],
-                'Proposal Disetujui oleh Finance Manager (Stage 1/2)',
-                'Proposal Anda "' . $prop_data['judul_proposal'] . '" telah disetujui oleh Finance Manager. Menunggu approval dari Direktur.'
+                'Proposal Disetujui oleh Finance Manager',
+                'Proposal Anda "' . $prop_data['judul_proposal'] . '" telah disetujui oleh Finance Manager (Final).'
             );
             
-            // Notify DIR
+            // Notify DIR (for viewing only, no approval needed)
             $dir_stmt = $conn->query("SELECT email FROM user WHERE role = 'Direktur'");
             while ($dir = $dir_stmt->fetch_assoc()) {
                 send_notification_email(
                     $dir['email'],
-                    'Proposal Menunggu Approval Direktur (Stage 2/2)',
-                    'Proposal "' . $prop_data['judul_proposal'] . '" telah disetujui FM dan menunggu approval final Anda.'
+                    'Proposal Disetujui FM - Siap untuk Review',
+                    'Proposal "' . $prop_data['judul_proposal'] . '" telah disetujui FM (Final). Silakan review.'
                 );
             }
             
-            $success = 'Proposal berhasil disetujui (Stage 1/2). Menunggu approval Direktur.';
+            $success = 'Proposal berhasil disetujui (Final).';
         }
     } elseif (isset($_POST['request_revision'])) {
         $catatan = $_POST['catatan'] ?? '';
@@ -165,8 +165,8 @@ session_write_close();
                                 $status_text = [
                                     'draft' => 'Draft',
                                     'submitted' => 'Menunggu Review FM',
-                                    'approved_fm' => '1/2 Approved (Menunggu Direktur)',
-                                    'approved' => '2/2 Approved (Final)',
+                                    'approved_fm' => 'Disetujui FM (Final)',
+                                    'approved' => 'Disetujui FM (Final)',
                                     'rejected' => 'Ditolak'
                                 ];
                                 $status_class = [
@@ -267,13 +267,13 @@ session_write_close();
             <?php if ($proposal['status'] === 'submitted'): ?>
             <div class="p-8 border-t border-gray-200 bg-blue-50">
                 <h3 class="text-lg font-bold text-gray-800 mb-4">
-                    <i class="fas fa-clipboard-check mr-2 text-blue-600"></i>Review Proposal (Stage 1/2)
+                    <i class="fas fa-clipboard-check mr-2 text-blue-600"></i>Review Proposal
                 </h3>
                 
                 <div class="mb-4 p-3 bg-blue-100 border border-blue-300 rounded-lg">
                     <p class="text-sm text-blue-800">
                         <i class="fas fa-info-circle mr-1"></i>
-                        <strong>Info:</strong> Approval Stage 1 oleh Finance Manager. Setelah disetujui, akan menunggu approval Direktur (Stage 2).
+                        <strong>Info:</strong> Approval oleh Finance Manager adalah final. Setelah disetujui, proposal akan tersedia untuk Direktur review.
                     </p>
                 </div>
                 
@@ -293,8 +293,8 @@ session_write_close();
                         </button>
                         <button type="submit" name="approve" id="approveBtn"
                             class="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition duration-200 font-medium"
-                            onclick="return confirm('Setujui proposal ini? (Stage 1/2 - menunggu Direktur)')">
-                            <i class="fas fa-check-circle mr-2"></i> <span id="approveBtnText">Setujui (Stage 1/2)</span>
+                            onclick="return confirm('Setujui proposal ini? (Final Approval)')">
+                            <i class="fas fa-check-circle mr-2"></i> <span id="approveBtnText">Setujui (Final)</span>
                         </button>
                     </div>
                 </form>
@@ -338,11 +338,11 @@ session_write_close();
                         revisionBtn.classList.remove('bg-gray-500', 'hover:bg-gray-600');
                         revisionBtn.classList.add('bg-yellow-500', 'hover:bg-yellow-600');
                         
-                        approveBtnText.textContent = 'Setujui (Stage 1/2)';
+                        approveBtnText.textContent = 'Setujui (Final)';
                         approveBtn.setAttribute('name', 'approve');
                         approveBtn.classList.remove('bg-red-500', 'hover:bg-red-600');
                         approveBtn.classList.add('bg-green-500', 'hover:bg-green-600');
-                        approveBtn.onclick = function() { return confirm('Setujui proposal ini? (Stage 1/2 - menunggu Direktur)'); };
+                        approveBtn.onclick = function() { return confirm('Setujui proposal ini? (Final Approval)'); };
                     }
                 }
                 </script>
@@ -352,8 +352,8 @@ session_write_close();
                 <div class="flex items-center text-green-700">
                     <i class="fas fa-check-circle text-2xl mr-3"></i>
                     <div>
-                        <p class="font-bold">Proposal Sudah Anda Setujui (Stage 1/2)</p>
-                        <p class="text-sm">Menunggu approval final dari Direktur.</p>
+                        <p class="font-bold">Proposal Sudah Anda Setujui (Final)</p>
+                        <p class="text-sm">Proposal telah disetujui dan tersedia untuk Direktur review.</p>
                     </div>
                 </div>
             </div>
