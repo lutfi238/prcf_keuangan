@@ -116,21 +116,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif (!empty($_POST['resend_otp'])) {
         $current_time = time();
-        if ($current_time - ($_SESSION['otp_time'] ?? 0) < 15) {
-            $error = 'Tunggu sebentar sebelum meminta OTP baru';
+        $time_since_last = $current_time - ($_SESSION['otp_time'] ?? 0);
+        
+        error_log("🔄 Resend OTP Request - Time since last: {$time_since_last} seconds");
+        
+        // Reduced cooldown to 5 seconds for better UX (was 15)
+        if ($time_since_last < 5) {
+            $error = 'Tunggu sebentar sebelum meminta OTP baru (' . (5 - $time_since_last) . ' detik lagi)';
+            error_log("⚠️ Resend OTP: Too soon, wait required");
         } else {
-            $_SESSION['otp'] = rand(100000, 999999);
-            $_SESSION['otp_time'] = $current_time;
-            $_SESSION['otp_attempts'] = 0;
+            $new_otp = rand(100000, 999999);
+            
+            error_log("🔄 Resend OTP: Generating new OTP: $new_otp");
+            error_log("🔄 Resend OTP: User email: " . ($_SESSION['user_email'] ?? 'NOT SET'));
+            error_log("🔄 Resend OTP: EMAIL_OTP_ENABLED: " . (defined('EMAIL_OTP_ENABLED') ? (EMAIL_OTP_ENABLED ? 'TRUE' : 'FALSE') : 'NOT_DEFINED'));
 
             if (!empty($_SESSION['user_email']) && EMAIL_OTP_ENABLED) {
-                if (send_otp_email($_SESSION['user_email'], $_SESSION['otp'])) {
-                    $success = 'Kode OTP baru telah dikirim ke email Anda.';
+                // Try to send email BEFORE updating session
+                $email_sent = send_otp_email($_SESSION['user_email'], $new_otp);
+                
+                error_log("🔄 Resend OTP: Email send result: " . ($email_sent ? 'SUCCESS' : 'FAILED'));
+                
+                if ($email_sent) {
+                    // Only update session if email was sent successfully
+                    $_SESSION['otp'] = $new_otp;
+                    $_SESSION['otp_time'] = $current_time;
+                    $_SESSION['otp_attempts'] = 0;
+                    $success = 'Kode OTP baru telah dikirim ke email Anda: ' . htmlspecialchars($_SESSION['user_email']);
+                    error_log("✅ Resend OTP: Success - New OTP stored in session");
                 } else {
-                    $error = 'Gagal mengirim OTP email. Silakan coba lagi.';
+                    // Keep old OTP if email failed
+                    $error = 'Gagal mengirim OTP email. Silakan coba lagi atau hubungi administrator.';
+                    error_log("❌ Resend OTP: Failed - Keeping old OTP in session");
                 }
             } else {
                 $error = 'OTP email saat ini tidak tersedia. Hubungi administrator.';
+                error_log("❌ Resend OTP: Email not configured or user_email missing");
             }
         }
     }
@@ -169,11 +190,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php endif; ?>
 
             <!-- DEBUG MODE: Show OTP (REMOVE IN PRODUCTION!) -->
-            <?php if (defined('DEVELOPER_MODE') && DEVELOPER_MODE): ?>
+            <?php if ((defined('DEVELOPER_MODE') && DEVELOPER_MODE) || (defined('SKIP_OTP_FOR_ALL') && SKIP_OTP_FOR_ALL)): ?>
             <div class="mb-6 bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded-lg text-sm" role="alert">
                 <strong>🔧 DEBUG MODE:</strong><br>
-                OTP: <strong class="text-2xl font-mono"><?php echo $_SESSION['otp'] ?? 'NOT SET'; ?></strong><br>
-                <small>Time remaining: <?php echo max(0, 300 - (time() - ($_SESSION['otp_time'] ?? time()))); ?> seconds</small>
+                Current OTP: <strong class="text-2xl font-mono"><?php echo $_SESSION['otp'] ?? 'NOT SET'; ?></strong><br>
+                <small>Time remaining: <?php echo max(0, 300 - (time() - ($_SESSION['otp_time'] ?? time()))); ?> seconds</small><br>
+                <small>Email: <?php echo htmlspecialchars($_SESSION['user_email'] ?? 'NOT SET'); ?></small><br>
+                <small class="text-red-600 font-semibold">⚠️ Email sending is disabled in Developer Mode - Use OTP above</small>
             </div>
             <?php endif; ?>
 
@@ -189,8 +212,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
                 <div class="flex items-center justify-between text-sm">
-                    <button type="submit" name="resend_otp" value="1" formnovalidate class="text-blue-600 hover:text-blue-700 font-medium">
-                        Kirim ulang kode
+                    <button type="button" id="resendOtpBtn" class="text-blue-600 hover:text-blue-700 font-medium cursor-pointer underline hover:no-underline transition-all">
+                        🔄 Kirim ulang kode
                     </button>
                     <span class="text-gray-400">Kode berlaku selama 5 menit</span>
                 </div>
@@ -199,6 +222,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition duration-200 shadow-lg">
                     <i class="fas fa-check mr-2"></i> Verifikasi & Masuk
                 </button>
+            </form>
+            
+            <!-- Hidden form for resend OTP -->
+            <form method="POST" id="resendOtpForm" style="display: none;">
+                <input type="hidden" name="resend_otp" value="1">
             </form>
         </div>
 
@@ -210,6 +238,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <!-- DEBUG: Form submission logger -->
     <script>
+        // Handle resend OTP button click
+        const resendBtn = document.getElementById('resendOtpBtn');
+        const resendForm = document.getElementById('resendOtpForm');
+        
+        if (resendBtn && resendForm) {
+            resendBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('🔄 Resend OTP button clicked');
+                
+                // Show loading state
+                const originalText = this.textContent;
+                this.disabled = true;
+                this.textContent = '⏳ Mengirim...';
+                this.style.opacity = '0.6';
+                this.style.cursor = 'not-allowed';
+                this.style.pointerEvents = 'none';
+                
+                // Submit the hidden resend form
+                console.log('🔄 Submitting resend form...');
+                resendForm.submit();
+            });
+            
+            console.log('✅ Resend OTP button handler attached');
+        } else {
+            console.error('❌ Resend OTP button or form not found!', {
+                button: resendBtn,
+                form: resendForm
+            });
+        }
+
         document.getElementById('otpForm').addEventListener('submit', function(e) {
             console.log('🔍 Form submitting...');
             console.log('OTP value:', document.querySelector('input[name="otp"]').value);
@@ -219,7 +278,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         });
 
         // Auto-focus OTP input
-        document.querySelector('input[name="otp"]').focus();
+        const otpInput = document.querySelector('input[name="otp"]');
+        if (otpInput) {
+            otpInput.focus();
+        }
 
         // Debug: Log when page loads
         console.log('✅ verify_otp.php loaded');

@@ -9,11 +9,11 @@ define('DB_NAME', getenv('MYSQLDATABASE') ?: 'prcf_keuangan');
 // OTP Configuration (Email only)
 
 // Developer Mode Configuration
-define('DEVELOPER_MODE', false);
+define('DEVELOPER_MODE', false); // Set to true for debugging - Shows OTP on screen
 $DEVELOPER_EMAILS = [
     '',
 ];
-define('SKIP_OTP_FOR_ALL', true); // true for skip OTP email
+define('SKIP_OTP_FOR_ALL', false); // true for skip OTP email
 
 // Email SMTP Configuration
 define('SMTP_HOST', 'smtp.gmail.com');
@@ -87,6 +87,13 @@ date_default_timezone_set('Asia/Jakarta');
 
 // Email OTP Function
 function send_otp_email($email, $otp) {
+    // If developer mode is enabled, skip actual email sending but log it
+    if (defined('DEVELOPER_MODE') && DEVELOPER_MODE) {
+        error_log("🔧 DEVELOPER MODE: OTP email would be sent to $email with OTP: $otp");
+        error_log("🔧 DEVELOPER MODE: Email sending skipped - OTP visible on screen");
+        return true; // Return true so it doesn't show error to user
+    }
+
     if (!defined('EMAIL_OTP_ENABLED') || EMAIL_OTP_ENABLED !== true) {
         error_log("ℹ️ Email OTP disabled - skipping send to $email");
         return true;
@@ -163,91 +170,206 @@ function send_otp_email($email, $otp) {
             return true;
         } else {
             error_log("❌ Failed to send OTP email to: $email");
-            return false;
+            
+            // Try fallback: PHP mail() function
+            error_log("🔄 Attempting fallback: PHP mail() function");
+            $headers = "MIME-Version: 1.0\r\n";
+            $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+            $headers .= "From: " . FROM_NAME . " <" . FROM_EMAIL . ">\r\n";
+            $headers .= "Reply-To: " . FROM_EMAIL . "\r\n";
+            
+            $fallback_sent = @mail($email, $subject, $message, $headers);
+            
+            if ($fallback_sent) {
+                error_log("✅ Fallback email sent via PHP mail() to: $email");
+                return true;
+            } else {
+                error_log("❌ Fallback email also failed for: $email");
+                // If developer mode is enabled, return true anyway
+                if (defined('DEVELOPER_MODE') && DEVELOPER_MODE) {
+                    error_log("🔧 Developer mode: Returning true despite email failure");
+                    return true;
+                }
+                return false;
+            }
         }
         
     } catch (Exception $e) {
         error_log("❌ OTP Email error: " . $e->getMessage());
+        // If developer mode is enabled, return true anyway
+        if (defined('DEVELOPER_MODE') && DEVELOPER_MODE) {
+            error_log("🔧 Developer mode: Returning true despite exception");
+            return true;
+        }
         return false;
     }
 }
 
 function smtp_send_email($smtp_host, $smtp_port, $smtp_user, $smtp_pass, $from_email, $from_name, $to_email, $subject, $html_message) {
-    // Check if cURL extension is available
-    if (!function_exists('curl_init')) {
-        error_log("⚠️ cURL extension is not enabled. Email sending disabled. Please enable php_curl extension in php.ini");
-        return false;
+    // Try PHPMailer first if available
+    if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
+        require_once __DIR__ . '/../vendor/autoload.php';
+        try {
+            $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+            $mail->isSMTP();
+            $mail->Host = $smtp_host;
+            $mail->SMTPAuth = true;
+            $mail->Username = $smtp_user;
+            $mail->Password = $smtp_pass;
+            $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->Port = $smtp_port;
+            $mail->CharSet = 'UTF-8';
+            
+            $mail->setFrom($from_email, $from_name);
+            $mail->addAddress($to_email);
+            $mail->isHTML(true);
+            $mail->Subject = $subject;
+            $mail->Body = $html_message;
+            
+            $mail->send();
+            error_log("✅ Email sent successfully via PHPMailer to: $to_email");
+            return true;
+        } catch (Exception $e) {
+            error_log("❌ PHPMailer Error: " . $e->getMessage());
+            // Fall through to socket method
+        }
     }
     
+    // Use socket-based SMTP (more reliable than cURL)
     try {
+        // Use stream_context for SSL/TLS support
+        $context = stream_context_create([
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+                'allow_self_signed' => true
+            ]
+        ]);
+        
+        // Connect to SMTP server
+        $smtp = stream_socket_client(
+            $smtp_host . ':' . $smtp_port,
+            $errno,
+            $errstr,
+            30,
+            STREAM_CLIENT_CONNECT,
+            $context
+        );
+        
+        if (!$smtp) {
+            error_log("❌ SMTP Connection Failed: $errstr ($errno)");
+            return false;
+        }
+        
+        // Read server greeting
+        $response = fgets($smtp, 515);
+        error_log("📧 SMTP Greeting: " . trim($response));
+        
+        // Send EHLO
+        fputs($smtp, "EHLO " . $smtp_host . "\r\n");
+        $response = '';
+        while ($line = fgets($smtp, 515)) {
+            $response .= $line;
+            if (substr($line, 3, 1) == ' ') break;
+        }
+        error_log("📧 SMTP EHLO Response: " . trim($response));
+        
+        // Start TLS if port is 587
+        if ($smtp_port == 587) {
+            fputs($smtp, "STARTTLS\r\n");
+            $response = fgets($smtp, 515);
+            error_log("📧 SMTP STARTTLS: " . trim($response));
+            
+            if (substr($response, 0, 3) == '220') {
+                if (!stream_socket_enable_crypto($smtp, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
+                    error_log("❌ Failed to enable TLS encryption");
+                    fclose($smtp);
+                    return false;
+                }
+                // Send EHLO again after TLS
+                fputs($smtp, "EHLO " . $smtp_host . "\r\n");
+                $response = '';
+                while ($line = fgets($smtp, 515)) {
+                    $response .= $line;
+                    if (substr($line, 3, 1) == ' ') break;
+                }
+                error_log("📧 SMTP EHLO After TLS: " . trim($response));
+            }
+        }
+        
+        // Authenticate
+        fputs($smtp, "AUTH LOGIN\r\n");
+        $response = fgets($smtp, 515);
+        error_log("📧 SMTP AUTH LOGIN: " . trim($response));
+        
+        fputs($smtp, base64_encode($smtp_user) . "\r\n");
+        $response = fgets($smtp, 515);
+        error_log("📧 SMTP Username: " . trim($response));
+        
+        fputs($smtp, base64_encode($smtp_pass) . "\r\n");
+        $response = fgets($smtp, 515);
+        error_log("📧 SMTP Password: " . trim($response));
+        
+        if (substr($response, 0, 3) != '235') {
+            error_log("❌ SMTP Authentication Failed: " . trim($response));
+            fclose($smtp);
+            return false;
+        }
+        
+        // Send email
+        fputs($smtp, "MAIL FROM: <" . $from_email . ">\r\n");
+        $response = fgets($smtp, 515);
+        error_log("📧 SMTP MAIL FROM: " . trim($response));
+        
+        fputs($smtp, "RCPT TO: <" . $to_email . ">\r\n");
+        $response = fgets($smtp, 515);
+        error_log("📧 SMTP RCPT TO: " . trim($response));
+        
+        fputs($smtp, "DATA\r\n");
+        $response = fgets($smtp, 515);
+        error_log("📧 SMTP DATA: " . trim($response));
+        
+        // Email headers and body
         $email_content = "From: " . $from_name . " <" . $from_email . ">\r\n";
         $email_content .= "To: <" . $to_email . ">\r\n";
         $email_content .= "Subject: " . $subject . "\r\n";
         $email_content .= "MIME-Version: 1.0\r\n";
         $email_content .= "Content-Type: text/html; charset=UTF-8\r\n";
         $email_content .= "\r\n";
-        $email_content .= $html_message;
+        $email_content .= $html_message . "\r\n";
+        $email_content .= ".\r\n";
         
-        $temp_file = tmpfile();
-        fwrite($temp_file, $email_content);
-        rewind($temp_file);
-        $file_stat = fstat($temp_file);
-        $email_size = $file_stat['size'] ?? 0;
+        fputs($smtp, $email_content);
+        $response = fgets($smtp, 515);
+        error_log("📧 SMTP Email Sent: " . trim($response));
         
-        $ch = curl_init();
-        $verbose_log = fopen('php://temp', 'rw+');
+        fputs($smtp, "QUIT\r\n");
+        fclose($smtp);
         
-        curl_setopt($ch, CURLOPT_URL, "smtp://" . $smtp_host . ":" . $smtp_port);
-        curl_setopt($ch, CURLOPT_USE_SSL, CURLUSESSL_TRY);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-        curl_setopt($ch, CURLOPT_USERNAME, $smtp_user);
-        curl_setopt($ch, CURLOPT_PASSWORD, $smtp_pass);
-        curl_setopt($ch, CURLOPT_MAIL_FROM, $from_email);
-        curl_setopt($ch, CURLOPT_MAIL_RCPT, array($to_email));
-        curl_setopt($ch, CURLOPT_READDATA, $temp_file);
-        curl_setopt($ch, CURLOPT_UPLOAD, true);
-        if ($email_size > 0) {
-            curl_setopt($ch, CURLOPT_INFILESIZE, $email_size);
-        }
-        curl_setopt($ch, CURLOPT_VERBOSE, true);
-        curl_setopt($ch, CURLOPT_STDERR, $verbose_log);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        
-        $result = curl_exec($ch);
-        $error = curl_error($ch);
-        $curl_info = curl_getinfo($ch);
-        
-        rewind($verbose_log);
-        $verbose_output = stream_get_contents($verbose_log);
-        
-        curl_close($ch);
-        fclose($temp_file);
-        fclose($verbose_log);
-        
-        error_log("📧 SMTP Debug Info:");
-        error_log("  To: $to_email");
-        error_log("  SMTP: $smtp_host:$smtp_port");
-        error_log("  Response Code: " . $curl_info['http_code']);
-        error_log("  Total Time: " . round($curl_info['total_time'], 2) . "s");
-        
-        if ($error) {
-            error_log("❌ SMTP cURL Error: " . $error);
-            error_log("Verbose Output: " . substr($verbose_output, 0, 500));
+        if (substr($response, 0, 3) == '250') {
+            error_log("✅ Email sent successfully via Socket SMTP to: $to_email");
+            return true;
+        } else {
+            error_log("⚠️ Email send response unclear: " . trim($response));
             return false;
         }
         
-        if (strpos($verbose_output, '250') !== false) {
-            error_log("✅ Email ACCEPTED by SMTP server: $to_email");
-            return true;
-        } else {
-            error_log("⚠️ Email sent but unclear status: $to_email");
-            error_log("Verbose Output: " . substr($verbose_output, 0, 500));
+    } catch (Exception $e) {
+        error_log("❌ Socket SMTP Error: " . $e->getMessage());
+        
+        // Final fallback: PHP mail() function
+        error_log("🔄 Attempting final fallback: PHP mail() function");
+        $headers = "MIME-Version: 1.0\r\n";
+        $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+        $headers .= "From: " . $from_name . " <" . $from_email . ">\r\n";
+        $headers .= "Reply-To: " . $from_email . "\r\n";
+        
+        $fallback_sent = @mail($to_email, $subject, $html_message, $headers);
+        if ($fallback_sent) {
+            error_log("✅ Fallback email sent via PHP mail() to: $to_email");
             return true;
         }
         
-    } catch (Exception $e) {
-        error_log("❌ SMTP Error: " . $e->getMessage());
         return false;
     }
 }
