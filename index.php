@@ -1,4 +1,5 @@
 <?php
+ob_start();
 session_start();
 require_once 'includes/maintenance_config.php';
 
@@ -27,10 +28,11 @@ if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
         default:
             header('Location: auth/login.php');
     }
-    exit();
 } else {
     // Jika belum login, redirect ke halaman login
     header('Location: auth/login.php');
     exit();
 }
+ob_end_flush();
+?>
 ?>
