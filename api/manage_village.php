@@ -24,7 +24,7 @@ if (!isset($_SESSION['user_id'])) {
 
 // Role check: Admin or Finance Manager only
 $allowed_roles = ['Admin', 'Finance Manager'];
-if (!in_array($_SESSION['role'], $allowed_roles)) {
+if (!in_array($_SESSION['user_role'], $allowed_roles)) {
     echo json_encode(['success' => false, 'message' => 'Access denied. Finance Manager access required.']);
     exit;
 }
