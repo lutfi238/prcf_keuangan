@@ -3,9 +3,9 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Oct 29, 2025 at 08:29 AM
+-- Generation Time: Nov 22, 2025 at 12:57 PM
 -- Server version: 10.4.32-MariaDB
--- PHP Version: 8.0.30
+-- PHP Version: 8.2.12
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -224,15 +224,6 @@ CREATE TABLE `laporan_keuangan_detail` (
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
---
--- Dumping data for table `laporan_keuangan_detail`
---
-
-INSERT INTO `laporan_keuangan_detail` (`id_detail_keu`, `id_laporan_keu`, `invoice_no`, `invoice_date`, `item_desc`, `recipient`, `place_code`, `exp_code`, `unit_total`, `unit_cost`, `requested`, `actual`, `balance`, `explanation`, `file_nota`, `created_at`, `updated_at`) VALUES
-(6, 5, '', '2025-10-30', 'Travel TO Nangga Jemah', 'LUTFI TRAVEL', '20208-NJ-01', '20208', 1, 400000.00, 0.00, 0.00, 0.00, '', '../../uploads/receipts/1761718308_1_RobloxScreenShot20251020_225818585.png', '2025-10-29 06:11:48', '2025-10-29 06:11:48'),
-(7, 6, '', '2025-10-31', 'Travel', 'Elmeanual', '20208-RJ-01', '20208', 1, 400000.00, 0.00, 0.00, 0.00, '', '../../uploads/receipts/1761720169_1_RobloxScreenShot20251020_225818585.png', '2025-10-29 06:42:49', '2025-10-29 06:42:49'),
-(8, 6, '', '0000-00-00', 'eat', 'rumah makan pak de', '20208-RJ-01', '20208', 5, 60000.00, 0.00, 0.00, 0.00, '', '../../uploads/receipts/1761720169_2_RobloxScreenShot20251020_225818585.png', '2025-10-29 06:42:49', '2025-10-29 06:42:49');
-
 -- --------------------------------------------------------
 
 --
@@ -258,13 +249,53 @@ CREATE TABLE `laporan_keuangan_header` (
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- --------------------------------------------------------
+
 --
--- Dumping data for table `laporan_keuangan_header`
+-- Table structure for table `project_codes`
 --
 
-INSERT INTO `laporan_keuangan_header` (`id_laporan_keu`, `kode_projek`, `nama_projek`, `nama_kegiatan`, `pelaksana`, `tanggal_pelaksanaan`, `tanggal_laporan`, `mata_uang`, `exrate`, `created_by`, `verified_by`, `approved_by`, `status_lap`, `catatan_finance`, `created_at`, `updated_at`) VALUES
-(5, 'PRJ-2025-001', 'Training Fire Kontrols', '-', 'Chandra', '2025-10-30', '2025-10-29', 'IDR', 16000.0000, 1, 8, 4, 'approved', '', '2025-10-29 06:11:48', '2025-10-29 06:20:22'),
-(6, 'PRJ-2025-001', 'training fire kontrol 3', '0', 'Chandra', '2025-10-30', '2025-10-29', 'IDR', 16000.0000, 1, 8, NULL, 'rejected', 'nota travel tidak jelas', '2025-10-29 06:42:49', '2025-10-29 06:53:04');
+CREATE TABLE `project_codes` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `subcategory_id` int(10) UNSIGNED NOT NULL,
+  `kode_proyek` varchar(20) NOT NULL,
+  `place_code` varchar(50) NOT NULL COMMENT 'Full code e.g., 10101-PR-01, 20208-NJ-01',
+  `exp_code` varchar(20) NOT NULL COMMENT 'Expense code part e.g., 10101, 20208',
+  `activity_code` varchar(10) NOT NULL COMMENT 'Activity code part e.g., PR, NJ, RJ',
+  `description` text DEFAULT NULL COMMENT 'Activity description',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Project-specific place codes and expense codes';
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `project_code_categories`
+--
+
+CREATE TABLE `project_code_categories` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `kode_proyek` varchar(20) NOT NULL,
+  `category_number` varchar(10) NOT NULL COMMENT 'e.g., 1, 2, 3, 5, 11',
+  `category_name` varchar(255) NOT NULL COMMENT 'e.g., Forest Governance, Forest Protection',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Project code categories (top level hierarchy)';
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `project_code_subcategories`
+--
+
+CREATE TABLE `project_code_subcategories` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `category_id` int(10) UNSIGNED NOT NULL,
+  `subcategory_number` varchar(10) NOT NULL COMMENT 'e.g., 101, 102, 201, 202',
+  `subcategory_name` varchar(255) NOT NULL COMMENT 'e.g., Forest Management Institution, Legal Recognition',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Project code subcategories (second level hierarchy)';
 
 -- --------------------------------------------------------
 
@@ -278,7 +309,8 @@ CREATE TABLE `proposal` (
   `pj` varchar(255) NOT NULL COMMENT 'Penanggung Jawab',
   `date` date DEFAULT NULL,
   `pemohon` varchar(255) DEFAULT NULL,
-  `status` enum('draft','submitted','approved_fm','approved','rejected') DEFAULT 'draft' COMMENT 'draft=PM draft, submitted=waiting FM, approved_fm=FM approved (final), approved=FM approved (final), rejected=rejected',
+  `status` enum('draft','submitted','approved_fm','approved','rejected') DEFAULT 'draft' COMMENT 'draft=PM draft, submitted=waiting FM, approved_fm=FM approved waiting DIR, approved=DIR approved final, rejected=rejected',
+  `catatan_fm` text DEFAULT NULL,
   `approved_by_fm` int(11) DEFAULT NULL,
   `fm_approval_date` datetime DEFAULT NULL,
   `kode_proyek` varchar(50) DEFAULT NULL,
@@ -292,10 +324,13 @@ CREATE TABLE `proposal` (
 -- Dumping data for table `proposal`
 --
 
-INSERT INTO `proposal` (`id_proposal`, `judul_proposal`, `pj`, `date`, `pemohon`, `status`, `approved_by_fm`, `fm_approval_date`, `kode_proyek`, `tor`, `file_budget`, `created_at`, `updated_at`) VALUES
-(16, 'Training Fire Kontrols', 'Immanuel Huda', '2025-10-29', 'Chandra', 'approved', 4, '2025-10-29 12:37:56', 'PRJ-2025-001', '../../uploads/tor/1761715669__Kelompok_2_-_Template_Penulisan_Proposal_Tugas_Akhir_(TA)_2025_[revisi_10_oktober].pdf', '../../uploads/budgets/1761715669__Kelompok_2_-_Template_Penulisan_Proposal_Tugas_Akhir_(TA)_2025_[revisi_10_oktober].pdf', '2025-10-29 05:27:49', '2025-10-29 05:38:41'),
-(17, 'training fire konttrol', 'immanual duda', '2025-10-29', 'Chandra', 'rejected', NULL, NULL, 'PRJ-2025-001', '../../uploads/tor/1761719311_KWU5_5E_3202316041_MUHAMMAD LUTFI FIRDAUS.pdf', '../../uploads/budgets/1761719311_KWU5_5E_3202316041_MUHAMMAD LUTFI FIRDAUS.pdf', '2025-10-29 06:28:31', '2025-10-29 06:29:26'),
-(18, 'training fire kontrol 3', 'immanual huda', '2025-10-29', 'Chandra', 'approved', 4, '2025-10-29 13:39:06', 'PRJ-2025-001', '../../uploads/tor/1761719580_KWU5_5E_3202316041_MUHAMMAD LUTFI FIRDAUS.pdf', '../../uploads/budgets/1761719580_KWU5_5E_3202316041_MUHAMMAD LUTFI FIRDAUS.pdf', '2025-10-29 06:33:00', '2025-10-29 06:39:55');
+INSERT INTO `proposal` (`id_proposal`, `judul_proposal`, `pj`, `date`, `pemohon`, `status`, `catatan_fm`, `approved_by_fm`, `fm_approval_date`, `kode_proyek`, `tor`, `file_budget`, `created_at`, `updated_at`) VALUES
+(19, 'Tes - Alur Kerja PM - Near Final Test', 'Chandra', '2025-11-03', 'Chandra', 'approved_fm', NULL, 5, '2025-11-03 02:04:40', 'PRJ-2025-001', '../../uploads/tor/1762109982_1605-Article Text-10164-1-10-20250130.pdf', '../../uploads/budgets/1762109982_1605-Article Text-10164-1-10-20250130.pdf', '2025-11-02 18:59:42', '2025-11-02 19:04:40'),
+(20, 'Tes - Alur Kerja - Progress 90%', 'Chandra', '2025-11-03', 'Chandra', 'approved_fm', NULL, 5, '2025-11-03 09:42:11', 'PRJ-2025-001', '../../uploads/tor/1762137600_LAPORAN_UAS_WEBPRO_PCRFI_KEL-1_5-E (1).docx', '../../uploads/budgets/1762137600_LAPORAN_UAS_WEBPRO_PCRFI_KEL-1_5-E (1).docx', '2025-11-03 02:40:00', '2025-11-03 02:42:11'),
+(21, 'Test Judul Proposal 1', 'Situs', '2025-11-06', 'Chandra', 'approved_fm', NULL, 5, '2025-11-07 00:04:46', 'PRJ-2025-002', '../../uploads/tor/1762447717_KWU5_5E_3202316041_MUHAMMAD LUTFI FIRDAUS.pdf', '../../uploads/budgets/1762447717_3202316041_MUHAMMAD_LUTFI_FIRDAUS_5E_proposal_bab_1-2-3.pdf', '2025-11-06 16:48:37', '2025-11-06 17:04:46'),
+(23, 'Test Judul Proposal 1', 'Situs', '2025-11-06', 'Chandra', 'rejected', 'revisi ya', NULL, NULL, 'PRJ-2025-002', '../../uploads/tor/1762447859_KWU5_5E_3202316041_MUHAMMAD LUTFI FIRDAUS.pdf', '../../uploads/budgets/1762447859_3202316041_MUHAMMAD_LUTFI_FIRDAUS_5E_proposal_bab_1-2-3.pdf', '2025-11-06 16:50:59', '2025-11-06 17:01:55'),
+(24, 'Test Judul Proposal 2', 'Kincai', '2025-11-06', 'Chandra', 'rejected', NULL, NULL, NULL, 'PRJ-2025-002', '../../uploads/tor/1762448144_3202316041_MUHAMMAD_LUTFI_FIRDAUS_5E_proposal_bab_1-2-3.pdf', '../../uploads/budgets/1762448144_KWU7_5E_KELOMPOK_chandra.pdf', '2025-11-06 16:55:44', '2025-11-06 16:57:39'),
+(25, 'Test Judul Proposal 3', 'yubi', '2025-11-07', 'Chandra', 'submitted', NULL, NULL, NULL, 'PRJ-2026-012', '../../uploads/tor/1762448800_KWU7_5E_KELOMPOK_chandra.pdf', '../../uploads/budgets/1762448800_3202316041_MUHAMMAD_LUTFI_FIRDAUS_5E_proposal_bab_1-2-3.pdf', '2025-11-06 17:06:40', '2025-11-06 17:06:40');
 
 -- --------------------------------------------------------
 
@@ -321,7 +356,12 @@ CREATE TABLE `proyek` (
 --
 
 INSERT INTO `proyek` (`kode_proyek`, `nama_proyek`, `status_proyek`, `donor`, `nilai_anggaran`, `periode_mulai`, `periode_selesai`, `rekening_khusus`, `created_at`, `updated_at`) VALUES
-('PRJ-2025-001', 'Tes - Prototype 1', 'ongoing', 'Chandra', 9999999999999.99, '2025-10-16', '2025-10-31', '12345678', '2025-10-16 07:16:31', '2025-10-16 07:16:31');
+('PRJ-2025-001', 'Tes - Prototype 1', 'ongoing', 'Chandra', 9999999999999.99, '2025-10-16', '2025-10-31', '12345678', '2025-10-16 07:16:31', '2025-10-16 07:16:31'),
+('PRJ-2025-002', 'Test Proyek 2', 'ongoing', 'Fyz', 9999999999999.99, '2025-11-12', '2025-11-27', '123456789 (BCA)', '2025-11-06 16:41:53', '2025-11-06 16:41:53'),
+('PRJ-2025-005', 'Proyek Keterampilan Digital Komunitas', 'ongoing', 'Yayasan Cahaya Masa Depan', 75000000.00, '2025-11-06', '2025-11-20', '123456789 (BCA)', '2025-11-06 16:35:45', '2025-11-06 16:35:45'),
+('PRJ-2025-008', 'Test Proyek 3', 'ongoing', 'Fsu', 9999999999999.99, '2025-11-14', '2025-11-28', '123456789 (BCA)', '2025-11-06 16:45:48', '2025-11-06 16:45:48'),
+('PRJ-2026-012', 'Inisiatif Konservasi Hutan Bakau Pesisir Nusantara', 'ongoing', 'Global Green Fund (GGF)', 150000000.00, '2025-11-13', '2025-12-06', '9876543219 (Bank Mandiri)', '2025-11-06 16:37:22', '2025-11-06 16:37:22'),
+('PRJ-2027-020', 'Proyek Gamer Tournament MPL Mobile Legend', 'ongoing', 'Montoon', 2000000000.00, '2025-11-09', '2025-12-01', '12394829342 (Bank Mandiri)', '2025-11-06 16:40:32', '2025-11-06 16:40:32');
 
 -- --------------------------------------------------------
 
@@ -332,7 +372,8 @@ INSERT INTO `proyek` (`kode_proyek`, `nama_proyek`, `status_proyek`, `donor`, `n
 CREATE TABLE `user` (
   `id_user` int(11) NOT NULL,
   `nama` varchar(255) NOT NULL,
-  `role` enum('Finance Manager','Project Manager','Staff Accountant','Direktur') NOT NULL,
+  `role` enum('Project Manager','Finance Manager','Staff Accountant','Direktur','Admin') NOT NULL COMMENT 'User role: PM, FM, SA, Direktur, or Admin',
+  `status` enum('active','inactive','pending') NOT NULL DEFAULT 'inactive' COMMENT 'Account status: active=can login, inactive=deactivated by admin, pending=awaiting admin approval',
   `email` varchar(255) NOT NULL,
   `no_HP` varchar(20) DEFAULT NULL,
   `password_hash` varchar(255) NOT NULL,
@@ -345,13 +386,15 @@ CREATE TABLE `user` (
 -- Dumping data for table `user`
 --
 
-INSERT INTO `user` (`id_user`, `nama`, `role`, `email`, `no_HP`, `password_hash`, `created_at`, `updated_at`, `last_notification_check`) VALUES
-(1, 'Chandra', 'Project Manager', '12345c4n12345@gmail.com', '6283153505411', '$2y$10$771q172G/MaqwIXKE9nOVutIrnjC6BEat7lD0KAUsJWywfG8UdG0C', '2025-10-16 06:36:23', '2025-10-28 16:42:54', '2025-10-28 16:42:54'),
-(4, 'Ferrosi Pratama', 'Finance Manager', 'ferrosipratamaq@gmail.com', '6289521340602', '$2y$10$4Dc7kmGgHY5WxZDfGw2zm.KIegC1xrX7GirUlXyj40Rl4/RzsopZu', '2025-10-16 06:43:55', '2025-10-20 02:36:45', NULL),
-(5, 'zheamanda', 'Finance Manager', 'zheaamandavitaloka@gmail.com', '6283836609877', '$2y$10$aYQPYZIRplq3lYsN4s4TrOtR.UPafFF7zDCS/pF30MkABJ5G/Z/CW', '2025-10-16 06:50:22', '2025-10-19 13:06:36', NULL),
-(6, 'Mione', 'Staff Accountant', 'hermionepriciliaa@gmail.com', '6282192831013', '$2y$10$sScVPxccDeOJ7Vboy0YWBecj497e/kPVdmz3sLuR0eiAmfLFwn0qO', '2025-10-16 07:01:18', '2025-10-16 07:03:39', NULL),
-(8, 'Ferrosi', 'Staff Accountant', 'ferrosipratamaqu@gmail.com', '6282134812641', '$2y$10$c.kiil8chyMEiAqZgzpR7u5sqVVftQIJJLyKIckfatqprVRXNLuqO', '2025-10-19 13:22:11', '2025-10-27 06:17:28', NULL),
-(9, 'lutfi', 'Direktur', 'lutfifirdaus238@gmail.com', '6285752706608', '$2y$10$2fH773o5wxutvRZtlEKm2O/PNR6riXAOfdta1jT26dKhKyJnDFqnS', '2025-10-20 01:02:46', '2025-10-27 06:16:59', NULL);
+INSERT INTO `user` (`id_user`, `nama`, `role`, `status`, `email`, `no_HP`, `password_hash`, `created_at`, `updated_at`, `last_notification_check`) VALUES
+(1, 'Chandra', 'Project Manager', 'active', '12345c4n12345@gmail.com', '6283153505411', '$2y$10$cT3VuBv4Meofh8h69fPWKOCLt/Ym5qVvNNX79huxDwso69Io7sTBG', '2025-10-16 06:36:23', '2025-11-06 16:12:12', '2025-10-28 16:42:54'),
+(4, 'Ferrosi Pratama', 'Finance Manager', 'active', 'ferrosipratamaq@gmail.com', '6289521340602', '$2y$10$4Dc7kmGgHY5WxZDfGw2zm.KIegC1xrX7GirUlXyj40Rl4/RzsopZu', '2025-10-16 06:43:55', '2025-11-03 09:24:14', NULL),
+(5, 'zheamandaa', 'Finance Manager', 'active', 'zheaamandavitaloka@gmail.com', '6283836609877', '$2y$10$J6bFE0liRualyjXvQNyFqeksiunQ03inSjPLU.9bmLc9nnOMKLW4a', '2025-10-16 06:50:22', '2025-11-03 09:24:14', NULL),
+(6, 'Mione', 'Staff Accountant', 'active', 'hermionepriciliaa@gmail.com', '6282192831013', '$2y$10$fKZ11m.6VhV88ciUKB0wheMWP0fbpBos/0WsTas/aOivd5IhEBxH2', '2025-10-16 07:01:18', '2025-11-06 16:12:07', NULL),
+(8, 'Ferrosi', 'Staff Accountant', 'active', 'ferrosipratamaqu@gmail.com', '6282134812641', '$2y$10$c.kiil8chyMEiAqZgzpR7u5sqVVftQIJJLyKIckfatqprVRXNLuqO', '2025-10-19 13:22:11', '2025-11-03 09:24:14', NULL),
+(9, 'lutfi', 'Admin', 'active', 'lutfifirdaus238@gmail.com', '6285752706608', '$2y$10$84faVqe4dv045JPvdigeJeQjXVg2ZEsOjtnykqKnCbexOJevAMFLi', '2025-10-20 01:02:46', '2025-11-22 11:36:40', NULL),
+(11, 'lutfi2', 'Direktur', 'active', 'lutfifirdaus236@gmail.com', '0857', '$2y$10$FW1HOjE/m4IWGULT7hSyM.SpkLqJ0HaOrEot1F6DKqyc5aV0yuMBm', '2025-10-29 16:07:23', '2025-11-22 11:39:37', NULL),
+(13, 'SA', 'Staff Accountant', 'active', '12345cc4nn12345@gmail.com', '6283154567881', '$2y$10$lTLvJFdopBIPuVmM61NqEuTq3KG3XA2364XnLM2Eu66lBFdPDJr5K', '2025-11-02 18:57:27', '2025-11-06 16:12:39', NULL);
 
 --
 -- Indexes for dumped tables
@@ -421,6 +464,31 @@ ALTER TABLE `laporan_keuangan_header`
   ADD KEY `approved_by` (`approved_by`);
 
 --
+-- Indexes for table `project_codes`
+--
+ALTER TABLE `project_codes`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `unique_place_code_per_project` (`kode_proyek`,`place_code`),
+  ADD KEY `subcategory_id` (`subcategory_id`),
+  ADD KEY `idx_kode_proyek` (`kode_proyek`),
+  ADD KEY `idx_place_code` (`place_code`),
+  ADD KEY `idx_exp_code_project` (`kode_proyek`,`exp_code`);
+
+--
+-- Indexes for table `project_code_categories`
+--
+ALTER TABLE `project_code_categories`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_kode_proyek` (`kode_proyek`);
+
+--
+-- Indexes for table `project_code_subcategories`
+--
+ALTER TABLE `project_code_subcategories`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_category_id` (`category_id`);
+
+--
 -- Indexes for table `proposal`
 --
 ALTER TABLE `proposal`
@@ -439,7 +507,8 @@ ALTER TABLE `proyek`
 --
 ALTER TABLE `user`
   ADD PRIMARY KEY (`id_user`),
-  ADD UNIQUE KEY `email` (`email`);
+  ADD UNIQUE KEY `email` (`email`),
+  ADD KEY `idx_user_status` (`status`);
 
 --
 -- AUTO_INCREMENT for dumped tables
@@ -482,16 +551,34 @@ ALTER TABLE `laporan_keuangan_header`
   MODIFY `id_laporan_keu` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
+-- AUTO_INCREMENT for table `project_codes`
+--
+ALTER TABLE `project_codes`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `project_code_categories`
+--
+ALTER TABLE `project_code_categories`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+
+--
+-- AUTO_INCREMENT for table `project_code_subcategories`
+--
+ALTER TABLE `project_code_subcategories`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `proposal`
 --
 ALTER TABLE `proposal`
-  MODIFY `id_proposal` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
+  MODIFY `id_proposal` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=26;
 
 --
 -- AUTO_INCREMENT for table `user`
 --
 ALTER TABLE `user`
-  MODIFY `id_user` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id_user` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
 
 --
 -- Constraints for dumped tables
@@ -551,6 +638,25 @@ ALTER TABLE `laporan_keuangan_header`
   ADD CONSTRAINT `laporan_keuangan_header_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `user` (`id_user`) ON DELETE SET NULL,
   ADD CONSTRAINT `laporan_keuangan_header_ibfk_3` FOREIGN KEY (`verified_by`) REFERENCES `user` (`id_user`) ON DELETE SET NULL,
   ADD CONSTRAINT `laporan_keuangan_header_ibfk_4` FOREIGN KEY (`approved_by`) REFERENCES `user` (`id_user`) ON DELETE SET NULL;
+
+--
+-- Constraints for table `project_codes`
+--
+ALTER TABLE `project_codes`
+  ADD CONSTRAINT `project_codes_ibfk_1` FOREIGN KEY (`subcategory_id`) REFERENCES `project_code_subcategories` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `project_codes_ibfk_2` FOREIGN KEY (`kode_proyek`) REFERENCES `proyek` (`kode_proyek`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `project_code_categories`
+--
+ALTER TABLE `project_code_categories`
+  ADD CONSTRAINT `project_code_categories_ibfk_1` FOREIGN KEY (`kode_proyek`) REFERENCES `proyek` (`kode_proyek`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `project_code_subcategories`
+--
+ALTER TABLE `project_code_subcategories`
+  ADD CONSTRAINT `project_code_subcategories_ibfk_1` FOREIGN KEY (`category_id`) REFERENCES `project_code_categories` (`id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `proposal`
