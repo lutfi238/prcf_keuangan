@@ -58,11 +58,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             $desc = "Advance for: " . $prop_data['judul_proposal'];
             $cost_curr = $prop_data['currency'];
-            $exrate = $prop_data['exchange_rate'];
+
+            // Get current exchange rate from settings or use default
+            $exrate = 15500.00; // Default fallback
+            $exrate_check = $conn->query("SHOW TABLES LIKE 'settings'");
+            if ($exrate_check && $exrate_check->num_rows > 0) {
+                $exrate_res = $conn->query("SELECT value FROM settings WHERE `key` = 'usd_idr_rate'");
+                if ($exrate_res && $exrate_res->num_rows > 0) {
+                    $exrate = floatval($exrate_res->fetch_assoc()['value']);
+                }
+            }
+
             $credit_idr = $prop_data['total_budget_idr'];
             $credit_usd = $prop_data['total_budget_usd'];
-            
-            $bank_stmt->bind_param("ssssssssdddd", $id_detail_bank, $id_bank_header, $voucher_no, $prop_data['judul_proposal'], $desc, $prop_data['pj'], $exrate, $cost_curr, $credit_idr, $credit_usd);
+
+            // Fixed bind_param: 10 placeholders need 10 types (ssssssdsdd)
+            // s=string, d=double: 8 strings + 2 doubles = 10 parameters
+            $bank_stmt->bind_param("ssssssdsdd", $id_detail_bank, $id_bank_header, $voucher_no, $prop_data['judul_proposal'], $desc, $prop_data['pj'], $exrate, $cost_curr, $credit_idr, $credit_usd);
             $bank_stmt->execute();
             
             update_bank_header_balance($conn, $id_bank_header, $credit_idr, $credit_usd, true);

@@ -31,14 +31,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $no_HP = $_POST['no_HP'];
         $password = $_POST['password'];
         $password_hash = password_hash($password, PASSWORD_DEFAULT);
-        
-        $stmt = $conn->prepare("INSERT INTO user (nama, role, email, no_HP, password_hash) VALUES (?, ?, ?, ?, ?)");
-        $stmt->bind_param("ssss", $nama, $role, $email, $no_HP, $password_hash);
-        
-        if ($stmt->execute()) {
-            $success_message = "User berhasil ditambahkan!";
+
+        // Pre-check: Verify email doesn't already exist
+        $check_stmt = $conn->prepare("SELECT id_user FROM user WHERE email = ?");
+        $check_stmt->bind_param("s", $email);
+        $check_stmt->execute();
+        $check_result = $check_stmt->get_result();
+
+        if ($check_result->num_rows > 0) {
+            // Email already exists - show error and stop
+            $error_message = "❌ Email sudah terdaftar! Silakan gunakan email yang berbeda.";
         } else {
-            $error_message = "Gagal menambahkan user: " . $conn->error;
+            // Email is unique - proceed with insertion
+            $stmt = $conn->prepare("INSERT INTO user (nama, role, email, no_HP, password_hash) VALUES (?, ?, ?, ?, ?)");
+            $stmt->bind_param("sssss", $nama, $role, $email, $no_HP, $password_hash);
+
+            if ($stmt->execute()) {
+                $success_message = "✅ User berhasil ditambahkan!";
+            } else {
+                $error_message = "❌ Gagal menambahkan user: " . $conn->error;
+            }
         }
     } elseif (isset($_POST['update_user'])) {
         $id_user = $_POST['id_user'];
@@ -51,35 +63,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($id_user == $current_user_id) {
             $error_message = "❌ Tidak dapat mengubah akun Anda sendiri! Minta admin lain untuk mengubah akun Anda.";
         } else {
-            // 🔒 PROTECTION 2: Check if demoting last admin
-            $check_user = $conn->query("SELECT role FROM user WHERE id_user = $id_user");
-            $current_role = $check_user->fetch_assoc()['role'];
-            
-            if ($current_role === 'Admin' && $role !== 'Admin') {
-                $admin_count = countAdmins($conn);
-                if ($admin_count <= 1) {
-                    $error_message = "❌ Tidak dapat mengubah role Admin terakhir! Sistem harus memiliki minimal 1 Admin.";
+            // 🔒 PROTECTION 3: Check if email already exists for another user
+            $email_check_stmt = $conn->prepare("SELECT id_user FROM user WHERE email = ? AND id_user != ?");
+            $email_check_stmt->bind_param("si", $email, $id_user);
+            $email_check_stmt->execute();
+            $email_check_result = $email_check_stmt->get_result();
+
+            if ($email_check_result->num_rows > 0) {
+                $error_message = "❌ Email sudah digunakan oleh user lain! Silakan gunakan email yang berbeda.";
+            } else {
+                // 🔒 PROTECTION 2: Check if demoting last admin
+                $check_user = $conn->query("SELECT role FROM user WHERE id_user = $id_user");
+                $current_role = $check_user->fetch_assoc()['role'];
+
+                if ($current_role === 'Admin' && $role !== 'Admin') {
+                    $admin_count = countAdmins($conn);
+                    if ($admin_count <= 1) {
+                        $error_message = "❌ Tidak dapat mengubah role Admin terakhir! Sistem harus memiliki minimal 1 Admin.";
+                    } else {
+                        // Safe to demote, proceed with update
+                        $stmt = $conn->prepare("UPDATE user SET nama = ?, role = ?, email = ?, no_HP = ? WHERE id_user = ?");
+                        $stmt->bind_param("ssssi", $nama, $role, $email, $no_HP, $id_user);
+
+                        if ($stmt->execute()) {
+                            $success_message = "✅ User berhasil diupdate!";
+                            error_log("ADMIN ACTION: User ID $current_user_id updated user ID $id_user (role changed: $current_role → $role)");
+                        } else {
+                            $error_message = "Gagal mengupdate user: " . $conn->error;
+                        }
+                    }
                 } else {
-                    // Safe to demote, proceed with update
+                    // Normal update (not affecting admin role)
                     $stmt = $conn->prepare("UPDATE user SET nama = ?, role = ?, email = ?, no_HP = ? WHERE id_user = ?");
                     $stmt->bind_param("ssssi", $nama, $role, $email, $no_HP, $id_user);
-                    
+
                     if ($stmt->execute()) {
                         $success_message = "✅ User berhasil diupdate!";
-                        error_log("ADMIN ACTION: User ID $current_user_id updated user ID $id_user (role changed: $current_role → $role)");
+                        error_log("ADMIN ACTION: User ID $current_user_id updated user ID $id_user");
                     } else {
                         $error_message = "Gagal mengupdate user: " . $conn->error;
                     }
-                }
-            } else {
-                // Normal update (not affecting admin role)
-                $stmt = $conn->prepare("UPDATE user SET nama = ?, role = ?, email = ?, no_HP = ? WHERE id_user = ?");
-                $stmt->bind_param("ssssi", $nama, $role, $email, $no_HP, $id_user);
-                
-                if ($stmt->execute()) {
-                    $success_message = "✅ User berhasil diupdate!";
-                } else {
-                    $error_message = "Gagal mengupdate user: " . $conn->error;
                 }
             }
         }

@@ -159,11 +159,11 @@ session_write_close();
                                 <div id="notificationsLoading" class="p-4 text-center text-gray-500 text-sm hidden">
                                     <i class="fas fa-spinner fa-spin text-xl mb-2"></i>
                                     <p>Memuat notifikasi...</p>
-                                </div>
+                                    </div>
                                 <div id="notificationsList">
                                     <!-- Notifications will be loaded here via AJAX -->
-                                </div>
-                            </div>
+                                                </div>
+                                                </div>
                             <div id="showMoreContainer" class="border-t border-gray-200 p-3 hidden">
                                 <button id="showMoreBtn" onclick="loadMoreNotifications()"
                                         class="w-full text-center text-blue-600 hover:text-blue-800 text-sm font-medium py-2 px-4 rounded-lg hover:bg-blue-50 transition duration-200">
@@ -473,16 +473,16 @@ session_write_close();
             document.querySelectorAll('.tab-content').forEach(content => {
                 content.classList.add('hidden');
             });
-
+            
             // Remove active state from all buttons
             document.querySelectorAll('.tab-button').forEach(button => {
                 button.classList.remove('border-blue-500', 'text-blue-600');
                 button.classList.add('border-transparent', 'text-gray-500');
             });
-
+            
             // Show selected content
             document.getElementById(tabName + 'Content').classList.remove('hidden');
-
+            
             // Set active state on selected button
             const activeButton = document.getElementById('tab' + tabName.charAt(0).toUpperCase() + tabName.slice(1));
             activeButton.classList.remove('border-transparent', 'text-gray-500');
@@ -716,7 +716,7 @@ session_write_close();
             }, 30000); // 30 seconds
         });
     </script>
-
+    
     <!-- Real-time Notifications -->
     <script src="../../assets/js/realtime_notifications.js"></script>
 </body>
