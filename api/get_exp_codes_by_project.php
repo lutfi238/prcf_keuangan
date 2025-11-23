@@ -14,24 +14,31 @@ $kode_proyek = $_GET['kode_proyek'] ?? '';
 
 if (empty($kode_proyek)) {
     http_response_code(400);
-    echo json_encode(['error' => 'Kode Proyek is required']);
+    echo json_encode(['error' => 'Project code required']);
     exit();
 }
 
 try {
-    // Assuming project_codes table exists or we fetch from budgets
-    // Based on previous turn I assumed project_codes exists.
-    // If it doesn't, I'll need to handle it.
-    // I'll use a safer query that checks if table exists first or just try-catch.
-    
-    $stmt = $conn->prepare("SELECT DISTINCT exp_code, description FROM project_codes WHERE kode_proyek = ? ORDER BY exp_code ASC");
+    // Get distinct exp codes that have budget allocated for this project
+    $stmt = $conn->prepare("
+        SELECT DISTINCT exp_code, place_code
+        FROM project_code_budgets 
+        WHERE kode_proyek = ?
+        ORDER BY exp_code ASC
+    ");
     $stmt->bind_param("s", $kode_proyek);
     $stmt->execute();
     $result = $stmt->get_result();
     
     $exp_codes = [];
     while ($row = $result->fetch_assoc()) {
-        $exp_codes[] = $row;
+        // Only add unique exp codes (not duplicates)
+        if (!in_array($row['exp_code'], array_column($exp_codes, 'exp_code'))) {
+            $exp_codes[] = [
+                'exp_code' => $row['exp_code'],
+                'example_place_code' => $row['place_code']
+            ];
+        }
     }
     
     echo json_encode($exp_codes);

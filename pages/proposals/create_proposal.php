@@ -26,9 +26,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_proposal'])) {
     $pemohon = $_POST['pemohon'];
     $kode_proyek = $_POST['kode_proyek'];
     $currency = $_POST['currency'];
-    $exrate = $_POST['exrate'];
-    $total_budget_usd = $_POST['total_budget_usd'];
-    $total_budget_idr = $_POST['total_budget_idr'];
+    $exrate = floatval($_POST['exrate']);
+    $total_budget_usd = floatval($_POST['total_budget_usd']);
+    $total_budget_idr = floatval($_POST['total_budget_idr']);
     
     // Handle TOR file upload
     $tor = '';
@@ -41,16 +41,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_proposal'])) {
         move_uploaded_file($_FILES['file_tor']['tmp_name'], $tor);
     }
     
-    // Handle file upload
+    // Handle budget file upload
     $file_budget = '';
     if (isset($_FILES['file_budget']) && $_FILES['file_budget']['error'] === 0) {
         $upload_dir = '../../uploads/budgets/';
         if (!file_exists($upload_dir)) {
             mkdir($upload_dir, 0777, true);
         }
-        $stmt->close();
+        $file_budget = $upload_dir . time() . '_' . $_FILES['file_budget']['name'];
+        move_uploaded_file($_FILES['file_budget']['tmp_name'], $file_budget);
+    }
+    
+    // Start Transaction
+    $conn->begin_transaction();
+    
+    try {
+        // Insert proposal
+        $stmt = $conn->prepare("INSERT INTO proposal 
+            (judul_proposal, pj, date, pemohon, kode_proyek, tor, file_budget, 
+             total_budget_usd, total_budget_idr, currency, exrate_at_submission, status) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted')");
+        
+        $stmt->bind_param("sssssssddsd", 
+            $judul, $pj, $date, $pemohon, $kode_proyek, $tor, $file_budget,
+            $total_budget_usd, $total_budget_idr, $currency, $exrate);
+        
+        $stmt->execute();
+        $proposal_id = $conn->insert_id;
+        
+        // Insert budget details if present
+        if (isset($_POST['budget']) && is_array($_POST['budget'])) {
+            $budget_stmt = $conn->prepare("INSERT INTO proposal_budget_details 
+                (id_proposal, id_village, exp_code, place_code, requested_usd, requested_idr, currency, exrate, description) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            
+            foreach ($_POST['budget'] as $item) {
+                $id_village = intval($item['id_village']);
+                $exp_code = $item['exp_code'];
+                $place_code = $item['place_code'];
+                $amount_usd = floatval($item['amount_usd']);
+                $amount_idr = floatval($item['amount_idr']);
+                $description = $item['description'] ?? '';
+                
+                $budget_stmt->bind_param("iissddsds",
+                    $proposal_id, $id_village, $exp_code, $place_code,
+                    $amount_usd, $amount_idr, $currency, $exrate, $description);
+                
+                $budget_stmt->execute();
+            }
+            $budget_stmt->close();
+        }
+        
+        // Commit transaction
+        $conn->commit();
+        $success = "Proposal berhasil diajukan dengan ID: $proposal_id";
+        
+    } catch (Exception $e) {
+        $conn->rollback();
+        $error = "Gagal menyimpan proposal: " . $e->getMessage();
     }
 }
+
 
 // Get list of projects
 $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE status_proyek != 'cancelled'");
@@ -248,21 +299,48 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
     <script>
         let rowCount = 0;
         let villages = [];
+        let expCodes = [];
+        let selectedProject = '';
         
         // Load villages on start
         fetchVillages().then(data => {
             villages = data;
-            addBudgetRow(); // Add first row
+        });
+        
+        // Monitor project selection
+        document.querySelector('select[name="kode_proyek"]').addEventListener('change', function() {
+            selectedProject = this.value;
+            if (selectedProject) {
+                // Load exp codes for this project
+                fetchExpCodes(selectedProject).then(data => {
+                    expCodes = data;
+                    // Add first budget row automatically
+                    if (document.getElementById('budgetTableBody').children.length === 0) {
+                        addBudgetRow();
+                    }
+                });
+            }
         });
 
         function addBudgetRow() {
+            if (!selectedProject) {
+                alert('Pilih proyek terlebih dahulu!');
+                return;
+            }
+            
             const tbody = document.getElementById('budgetTableBody');
             const row = document.createElement('tr');
             row.id = `row-${rowCount}`;
+            row.className = 'hover:bg-gray-50';
             
             let villageOptions = '<option value="">Pilih Desa</option>';
             villages.forEach(v => {
                 villageOptions += `<option value="${v.id_village}" data-abbr="${v.village_abbr}">${v.village_name}</option>`;
+            });
+            
+            let expOptions = '<option value="">Pilih Exp Code</option>';
+            expCodes.forEach(e => {
+                expOptions += `<option value="${e.exp_code}">${e.exp_code}</option>`;
             });
 
             row.innerHTML = `
@@ -272,22 +350,25 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
                     </select>
                 </td>
                 <td class="px-2 py-2">
-                    <input type="text" name="budget[${rowCount}][exp_code]" class="w-full text-sm border-gray-300 rounded" oninput="updateRowPlaceCode(${rowCount})" required>
+                    <select name="budget[${rowCount}][exp_code]" class="w-full text-sm border-gray-300 rounded" onchange="updateRowPlaceCode(${rowCount})" required>
+                        ${expOptions}
+                    </select>
                 </td>
                 <td class="px-2 py-2">
-                    <input type="text" name="budget[${rowCount}][place_code]" id="place_code_${rowCount}" class="w-full text-sm bg-gray-100 border-none rounded" readonly>
+                    <input type="text" name="budget[${rowCount}][place_code]" id="place_code_${rowCount}" class="w-full text-sm bg-gray-100 border-none rounded font-mono" readonly>
+                    <div id="budget_status_${rowCount}" class="text-xs mt-1"></div>
                 </td>
                 <td class="px-2 py-2">
-                    <input type="number" step="0.01" name="budget[${rowCount}][amount_usd]" id="usd_${rowCount}" class="w-full text-sm border-gray-300 rounded text-right" oninput="calculateRow(${rowCount}, 'USD')">
+                    <input type="number" step="0.01" name="budget[${rowCount}][amount_usd]" id="usd_${rowCount}" class="w-full text-sm border-gray-300 rounded text-right" oninput="calculateRow(${rowCount}, 'USD')" required>
                 </td>
                 <td class="px-2 py-2">
-                    <input type="number" step="0.01" name="budget[${rowCount}][amount_idr]" id="idr_${rowCount}" class="w-full text-sm border-gray-300 rounded text-right" oninput="calculateRow(${rowCount}, 'IDR')">
+                    <input type="number" step="0.01" name="budget[${rowCount}][amount_idr]" id="idr_${rowCount}" class="w-full text-sm border-gray-300 rounded text-right" oninput="calculateRow(${rowCount}, 'IDR')" required>
                 </td>
                 <td class="px-2 py-2">
-                    <input type="text" name="budget[${rowCount}][description]" class="w-full text-sm border-gray-300 rounded">
+                    <input type="text" name="budget[${rowCount}][description]" class="w-full text-sm border-gray-300 rounded" placeholder="Deskripsi item">
                 </td>
                 <td class="px-2 py-2 text-center">
-                    <button type="button" onclick="removeRow(${rowCount})" class="text-red-500 hover:text-red-700">
+                    <button type="button" onclick="removeRow(${rowCount})" class="text-red-500 hover:text-red-700 transition">
                         <i class="fas fa-trash"></i>
                     </button>
                 </td>
@@ -303,19 +384,48 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
             calculateTotals();
         }
 
-        function updateRowPlaceCode(id) {
+        async function updateRowPlaceCode(id) {
             const row = document.getElementById(`row-${id}`);
             const villageSelect = row.querySelector(`select[name="budget[${id}][id_village]"]`);
-            const expInput = row.querySelector(`input[name="budget[${id}][exp_code]"]`);
+            const expSelect = row.querySelector(`select[name="budget[${id}][exp_code]"]`);
             const placeInput = document.getElementById(`place_code_${id}`);
+            const statusDiv = document.getElementById(`budget_status_${id}`);
             
             const abbr = villageSelect.options[villageSelect.selectedIndex].getAttribute('data-abbr');
-            const exp = expInput.value;
+            const exp = expSelect.value;
             
             if (abbr && exp) {
-                placeInput.value = generatePlaceCode(exp, abbr);
+                const placeCode = generatePlaceCode(exp, abbr);
+                placeInput.value = placeCode;
+                
+                // Check budget availability
+                try {
+                    const response = await fetch(`../../api/get_budget_availability.php?place_code=${placeCode}&kode_proyek=${selectedProject}`);
+                    const data = await response.json();
+                    
+                    if (data.not_found) {
+                        statusDiv.innerHTML = '<span class="text-orange-600">⚠️ Budget belum dialokasikan</span>';
+                    } else {
+                        const remaining = parseFloat(data.remaining_usd) || 0;
+                        const requested = parseFloat(document.getElementById(`usd_${id}`).value) || 0;
+                        
+                        if (remaining > 0) {
+                            if (requested > remaining) {
+                                statusDiv.innerHTML = `<span class="text-red-600">❌ Melebihi sisa: $${remaining.toFixed(2)}</span>`;
+                            } else {
+                                statusDiv.innerHTML = `<span class="text-green-600">✅ Sisa: $${remaining.toFixed(2)}</span>`;
+                            }
+                        } else {
+                            statusDiv.innerHTML = '<span class="text-red-600">❌ Budget habis</span>';
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error checking budget:', error);
+                    statusDiv.innerHTML = '<span class="text-gray-500">⚠️ Tidak dapat check budget</span>';
+                }
             } else {
                 placeInput.value = '';
+                statusDiv.innerHTML = '';
             }
         }
 
@@ -331,6 +441,13 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
                 const idr = parseFloat(idrInput.value) || 0;
                 usdInput.value = (idr / exrate).toFixed(2);
             }
+            
+            // Re-check budget availability
+            const row = document.getElementById(`row-${id}`);
+            if (row) {
+                updateRowPlaceCode(id);
+            }
+            
             calculateTotals();
         }
 
@@ -349,17 +466,39 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
             document.getElementById('totalUSD').textContent = formatCurrency(totalUSD, 'USD');
             document.getElementById('totalIDR').textContent = formatCurrency(totalIDR, 'IDR');
             
-            document.getElementById('inputTotalUSD').value = totalUSD;
-            document.getElementById('inputTotalIDR').value = totalIDR;
+            document.getElementById('inputTotalUSD').value = totalUSD.toFixed(2);
+            document.getElementById('inputTotalIDR').value = totalIDR.toFixed(2);
         }
         
         // Recalculate all if exrate changes
         document.getElementById('exrate').addEventListener('input', function() {
             document.querySelectorAll('input[id^="usd_"]').forEach(input => {
-                const id = input.id.split('_')[1];
-                calculateRow(id, 'USD');
+                if (input.value) {
+                    const id = input.id.split('_')[1];
+                    calculateRow(id, 'USD');
+                }
             });
         });
+        
+        // Form validation before submit
+        document.querySelector('form').addEventListener('submit', function(e) {
+            const budgetRows = document.getElementById('budgetTableBody').children.length;
+            if (budgetRows === 0) {
+                e.preventDefault();
+                alert('Tambahkan minimal 1 baris budget detail!');
+                return false;
+            }
+            
+            // Check for budget warnings
+            const warnings = document.querySelectorAll('[id^="budget_status_"] span.text-red-600');
+            if (warnings.length > 0) {
+                if (!confirm('Ada budget yang melebihi alokasi atau belum dialokasikan. Tetap lanjutkan?')) {
+                    e.preventDefault();
+                    return false;
+                }
+            }
+        });
     </script>
+
 </body>
 </html>

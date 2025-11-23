@@ -162,9 +162,11 @@ $budgets = $conn->query($query);
 
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Exp Code</label>
-                            <input type="text" name="exp_code" id="exp_code" required placeholder="Contoh: 10101" 
+                            <select name="exp_code" id="exp_code" required 
                                 class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
-                            <!-- Ideally this should be a datalist or select fetched via API -->
+                                <option value="">Pilih proyek terlebih dahulu</option>
+                            </select>
+                            <p class="text-xs text-gray-500 mt-1">Pilih proyek untuk memuat daftar exp code</p>
                         </div>
 
                         <div class="bg-gray-50 p-3 rounded border border-gray-200">
@@ -267,16 +269,49 @@ $budgets = $conn->query($query);
     <script>
         // Local script for page interactions
         document.addEventListener('DOMContentLoaded', function() {
+            const kodeProyekSelect = document.getElementById('kode_proyek');
             const idVillageSelect = document.getElementById('id_village');
-            const expCodeInput = document.getElementById('exp_code');
+            const expCodeSelect = document.getElementById('exp_code');
             const placeCodePreview = document.getElementById('place_code_preview');
             const amountInput = document.getElementById('amount');
             const currencySelect = document.getElementById('currency');
             const exrateInput = document.getElementById('exrate');
             const conversionPreview = document.getElementById('conversion_preview');
 
+            // Load exp codes when project changes
+            kodeProyekSelect.addEventListener('change', async function() {
+                const kodeProyek = this.value;
+                expCodeSelect.innerHTML = '<option value="">Loading...</option>';
+                expCodeSelect.disabled = true;
+                
+                if (!kodeProyek) {
+                    expCodeSelect.innerHTML = '<option value="">Pilih proyek terlebih dahulu</option>';
+                    expCodeSelect.disabled = false;
+                    return;
+                }
+                
+                try {
+                    const expCodes = await fetchExpCodes(kodeProyek);
+                    
+                    if (expCodes.length === 0) {
+                        expCodeSelect.innerHTML = '<option value="">Tidak ada exp code untuk proyek ini</option>';
+                    } else {
+                        let options = '<option value="">Pilih Exp Code</option>';
+                        expCodes.forEach(ec => {
+                            options += `<option value="${ec.exp_code}">${ec.exp_code}</option>`;
+                        });
+                        expCodeSelect.innerHTML = options;
+                    }
+                    expCodeSelect.disabled = false;
+                } catch (error) {
+                    console.error('Error loading exp codes:', error);
+                    expCodeSelect.innerHTML = '<option value="">Error loading exp codes</option>';
+                    expCodeSelect.disabled = false;
+                }
+            });
+
             function updatePlaceCode() {
-                const expCode = expCodeInput.value;
+                const expCode = expCodeSelect.value;
                 const selectedOption = idVillageSelect.options[idVillageSelect.selectedIndex];
                 const villageAbbr = selectedOption.getAttribute('data-abbr');
                 
@@ -302,7 +337,7 @@ $budgets = $conn->query($query);
             }
 
             idVillageSelect.addEventListener('change', updatePlaceCode);
-            expCodeInput.addEventListener('input', updatePlaceCode);
+            expCodeSelect.addEventListener('change', updatePlaceCode);
             
             amountInput.addEventListener('input', updateConversion);
             exrateInput.addEventListener('input', updateConversion);

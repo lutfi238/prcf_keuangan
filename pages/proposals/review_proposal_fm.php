@@ -44,22 +44,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $bud_stmt = $conn->prepare("SELECT * FROM proposal_budget_details WHERE id_proposal = ?");
             $bud_stmt->bind_param("i", $proposal_id);
             $bud_stmt->execute();
-            $budget_details = $bud_stmt->get_result();
+            $budget_details = $bud_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
             
-            // 3. Bank Transaction (Credit)
+            // 3. Get Headers (create if not exist)
             $id_bank_header = get_or_create_bank_header($conn, $prop_data['kode_proyek'], date('Y-m-d'));
-            $id_detail_bank = generate_id('BD');
+            $id_piutang_header = get_or_create_piutang_header($conn, $prop_data['kode_proyek'], date('Y-m-d'));
             
-            // Generate Voucher No: BB-[id_bank]-PROP-[id_proposal]
-            // Using id_detail_bank as the Bank Transaction ID
-            $voucher_no = "BB-" . $id_detail_bank . "-PROP-" . str_pad($proposal_id, 6, '0', STR_PAD_LEFT);
-            
-            $bank_stmt = $conn->prepare("INSERT INTO buku_bank_detail (id_detail_bank, id_bank_header, tanggal, reff, title_activity, cost_description, recipient, place_code, exp_code, nominal_code, exrate, cost_curr, credit_idr, credit_usd, balance_idr, balance_usd, status) VALUES (?, ?, NOW(), ?, ?, ?, ?, '-', '-', 'Adv', ?, ?, ?, ?, 0, 0, 'ongoing')");
-            
-            $desc = "Advance for: " . $prop_data['judul_proposal'];
-            $cost_curr = $prop_data['currency'];
-
-            // Get current exchange rate from settings or use default
+            // Get exchange rate
             $exrate = 15500.00; // Default fallback
             $exrate_check = $conn->query("SHOW TABLES LIKE 'settings'");
             if ($exrate_check && $exrate_check->num_rows > 0) {
@@ -68,41 +59,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $exrate = floatval($exrate_res->fetch_assoc()['value']);
                 }
             }
-
-            $credit_idr = $prop_data['total_budget_idr'];
-            $credit_usd = $prop_data['total_budget_usd'];
-
-            // Fixed bind_param: 10 placeholders need 10 types (ssssssdsdd)
-            // s=string, d=double: 8 strings + 2 doubles = 10 parameters
-            $bank_stmt->bind_param("ssssssdsdd", $id_detail_bank, $id_bank_header, $voucher_no, $prop_data['judul_proposal'], $desc, $prop_data['pj'], $exrate, $cost_curr, $credit_idr, $credit_usd);
-            $bank_stmt->execute();
             
-            update_bank_header_balance($conn, $id_bank_header, $credit_idr, $credit_usd, true);
-            
-            // 5. Piutang Transaction (Debit)
-            $id_piutang_header = get_or_create_piutang_header($conn, $prop_data['kode_proyek'], date('Y-m-d'));
-            
-            // Insert Detail
-            $piutang_stmt = $conn->prepare("INSERT INTO buku_piutang_detail (id_piutang, tgl_trx, reff, description, recipient, debit_idr, debit_usd, exrate) VALUES (?, NOW(), ?, ?, ?, ?, ?, ?)");
-            $piutang_stmt->bind_param("isssddd", $id_piutang_header, $voucher_no, $desc, $prop_data['pj'], $credit_idr, $credit_usd, $exrate);
-            $piutang_stmt->execute();
-            
-            // Insert Unliquidated
-            $unliq_stmt = $conn->prepare("INSERT INTO buku_piutang_unliquidated (id_piutang, tgl, voucher_no, name, description, nilai_idr, nilai_usd, status) VALUES (?, NOW(), ?, ?, ?, ?, ?, 'pending')");
-            $unliq_stmt->bind_param("isssdd", $id_piutang_header, $voucher_no, $prop_data['pj'], $desc, $credit_idr, $credit_usd);
-            $unliq_stmt->execute();
-            
-            update_piutang_header_balance($conn, $id_piutang_header, $credit_idr, $credit_usd, true);
-            
-            // 6. Update Budget Availability
-            $upd_budget_stmt = $conn->prepare("UPDATE project_code_budgets SET used_usd = used_usd + ?, remaining_usd = remaining_usd - ?, used_idr = used_idr + ?, remaining_idr = remaining_idr - ? WHERE place_code = ?");
-            
-            while ($row = $budget_details->fetch_assoc()) {
-                $upd_budget_stmt->bind_param("dddds", $row['requested_usd'], $row['requested_usd'], $row['requested_idr'], $row['requested_idr'], $row['place_code']);
+            // 4. Process each budget detail separately
+            $voucher_list = [];
+            foreach ($budget_details as $index => $detail) {
+                // Generate unique ID and voucher for this detail
+                $id_detail_bank = generate_id('BD');
+                $voucher_no = "BB-" . $id_detail_bank . "-PROP" . str_pad($proposal_id, 6, '0', STR_PAD_LEFT) . "-" . str_pad($index + 1, 2, '0', STR_PAD_LEFT);
+                $voucher_list[] = $voucher_no;
+                
+                $desc = "Advance for: " . $prop_data['judul_proposal'] . " (" . $detail['place_code'] . ")";
+                $cost_curr = $prop_data['currency'];
+                $credit_idr = $detail['requested_idr'];
+                $credit_usd = $detail['requested_usd'];
+                
+                // 4a. Insert to buku_bank_detail
+                $bank_stmt = $conn->prepare("INSERT INTO buku_bank_detail 
+                    (id_detail_bank, id_bank_header, tanggal, reff, title_activity, cost_description, 
+                     recipient, place_code, exp_code, nominal_code, exrate, cost_curr, 
+                     credit_idr, credit_usd, balance_idr, balance_usd, status) 
+                    VALUES (?, ?, NOW(), ?, ?, ?, ?, ?, ?, 'Adv', ?, ?, ?, ?, 0, 0, 'ongoing')");
+                
+                $bank_stmt->bind_param("ssssssssdsdd", 
+                    $id_detail_bank, $id_bank_header, $voucher_no, 
+                    $prop_data['judul_proposal'], $desc, $prop_data['pj'],
+                    $detail['place_code'], $detail['exp_code'],
+                    $exrate, $cost_curr, $credit_idr, $credit_usd);
+                $bank_stmt->execute();
+                
+                // Update bank header balance
+                update_bank_header_balance($conn, $id_bank_header, $credit_idr, $credit_usd, true);
+                
+                // 4b. Insert to buku_piutang_detail
+                $piutang_stmt = $conn->prepare("INSERT INTO buku_piutang_detail 
+                    (id_piutang, tgl_trx, reff, description, recipient, debit_idr, debit_usd, exrate) 
+                    VALUES (?, NOW(), ?, ?, ?, ?, ?, ?)");
+                $piutang_stmt->bind_param("isssddd", 
+                    $id_piutang_header, $voucher_no, $desc, $prop_data['pj'], 
+                    $credit_idr, $credit_usd, $exrate);
+                $piutang_stmt->execute();
+                
+                // 4c. Insert to buku_piutang_unliquidated
+                $unliq_stmt = $conn->prepare("INSERT INTO buku_piutang_unliquidated 
+                    (id_piutang, tgl, voucher_no, name, description, nilai_idr, nilai_usd, status) 
+                    VALUES (?, NOW(), ?, ?, ?, ?, ?, 'pending')");
+                $unliq_stmt->bind_param("isssdd", 
+                    $id_piutang_header, $voucher_no, $prop_data['pj'], $desc, 
+                    $credit_idr, $credit_usd);
+                $unliq_stmt->execute();
+                
+                // Update piutang header balance
+                update_piutang_header_balance($conn, $id_piutang_header, $credit_idr, $credit_usd, true);
+                
+                // 4d. Update project_code_budgets for this specific place_code
+                $upd_budget_stmt = $conn->prepare("UPDATE project_code_budgets 
+                    SET used_usd = used_usd + ?, 
+                        used_idr = used_idr + ?
+                    WHERE place_code = ? AND kode_proyek = ?");
+                $upd_budget_stmt->bind_param("ddss", 
+                    $credit_usd, $credit_idr, 
+                    $detail['place_code'], $prop_data['kode_proyek']);
                 $upd_budget_stmt->execute();
+                
+                // Check if update was successful
+                if ($upd_budget_stmt->affected_rows === 0) {
+                    throw new Exception("Failed to update budget for place_code: " . $detail['place_code']);
+                }
             }
             
-            // 7. Update Proposal Status
+            // 5. Update Proposal Status
             $check_column = $conn->query("SHOW COLUMNS FROM proposal LIKE 'approved_by_fm'");
             $is_2stage = ($check_column && $check_column->num_rows > 0);
             
@@ -117,23 +142,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             $conn->commit();
             
-            // Notify PM
-            // Get PM email
+            // 6. Notify PM
             $pm_stmt = $conn->prepare("SELECT email FROM user WHERE nama = ?");
             $pm_stmt->bind_param("s", $prop_data['pemohon']);
             $pm_stmt->execute();
             $pm_res = $pm_stmt->get_result();
             if ($pm_row = $pm_res->fetch_assoc()) {
                 if (function_exists('send_notification_email')) {
+                    $voucher_summary = implode(", ", $voucher_list);
                     send_notification_email(
                         $pm_row['email'],
                         'Proposal Disetujui & Dana Dicairkan',
-                        'Proposal "' . $prop_data['judul_proposal'] . '" telah disetujui. Voucher No: ' . $voucher_no
+                        'Proposal "' . $prop_data['judul_proposal'] . '" telah disetujui. ' . 
+                        count($voucher_list) . ' voucher telah dibuat: ' . $voucher_summary
                     );
                 }
             }
             
-            $success = 'Proposal disetujui, dana dicairkan (Voucher: ' . $voucher_no . '), dan budget diupdate.';
+            $success = 'Proposal disetujui! ' . count($voucher_list) . ' transaksi dicairkan dan budget telah diupdate per place code.';
             
         } catch (Exception $e) {
             $conn->rollback();
@@ -339,45 +365,254 @@ session_write_close();
                 <?php endif; ?>
             </div>
             
-            <!-- Budget Details Section -->
+            <!-- Budget Details Section with Availability Info -->
+            <?php
+            // Get budget details with availability info
+            $budget_query = $conn->prepare("
+                SELECT 
+                    pbd.id_detail,
+                    pbd.exp_code,
+                    pbd.place_code,
+                    pbd.requested_usd,
+                    pbd.requested_idr,
+                    pbd.description,
+                    v.village_name,
+                    v.village_abbr,
+                    pcb.budget_usd,
+                    pcb.budget_idr,
+                    pcb.used_usd,
+                    pcb.used_idr,
+                    pcb.remaining_usd,
+                    pcb.remaining_idr,
+                    CASE 
+                        WHEN pcb.remaining_usd >= pbd.requested_usd THEN 'sufficient'
+                        WHEN pcb.remaining_usd >= (pbd.requested_usd * 0.8) THEN 'tight'
+                        ELSE 'insufficient'
+                    END as budget_status
+                FROM proposal_budget_details pbd
+                LEFT JOIN villages v ON pbd.id_village = v.id_village
+                LEFT JOIN project_code_budgets pcb ON pcb.place_code = pbd.place_code 
+                    AND pcb.kode_proyek = ?
+                WHERE pbd.id_proposal = ?
+                ORDER BY pbd.id_detail ASC
+            ");
+            $budget_query->bind_param("si", $proposal['kode_proyek'], $proposal_id);
+            $budget_query->execute();
+            $budget_details_result = $budget_query->get_result();
+            $budget_details = $budget_details_result->fetch_all(MYSQLI_ASSOC);
+            
+            // Calculate totals and check overall status
+            $total_requested_usd = 0;
+            $total_requested_idr = 0;
+            $total_available_usd = 0;
+            $total_available_idr = 0;
+            $has_insufficient = false;
+            $has_tight = false;
+            
+            foreach ($budget_details as $detail) {
+                $total_requested_usd += $detail['requested_usd'];
+                $total_requested_idr += $detail['requested_idr'];
+                $total_available_usd += $detail['remaining_usd'] ?? 0;
+                $total_available_idr += $detail['remaining_idr'] ?? 0;
+                
+                if ($detail['budget_status'] === 'insufficient') $has_insufficient = true;
+                if ($detail['budget_status'] === 'tight') $has_tight = true;
+            }
+            
+            $overall_status = 'sufficient';
+            if ($has_insufficient) $overall_status = 'insufficient';
+            elseif ($has_tight) $overall_status = 'tight';
+            ?>
+            
             <div class="p-8 border-t border-gray-200">
-                <h3 class="text-lg font-bold text-gray-800 mb-4">Rincian Budget</h3>
+                <h3 class="text-lg font-bold text-gray-800 mb-4">
+                    <i class="fas fa-chart-line mr-2 text-blue-600"></i>Informasi Budget & Ketersediaan
+                </h3>
+                
+                <!-- Exchange Rate Info -->
+                <div class="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <p class="text-sm text-gray-600">Exchange Rate saat Proposal Dibuat</p>  
+                            <p class="text-lg font-bold text-gray-800">
+                                1 USD = Rp <?php echo number_format($proposal['exrate_at_submission'], 2); ?>
+                            </p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-600">Mata Uang Proposal</p>
+                            <p class="text-lg font-bold text-gray-800">
+                                <?php echo $proposal['currency']; ?>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Budget Availability Warning -->
+                <?php if ($overall_status === 'insufficient'): ?>
+                <div class="mb-4 p-4 bg-red-50 border-l-4 border-red-500 rounded">
+                    <div class="flex items-start">
+                        <i class="fas fa-exclamation-triangle text-red-600 text-xl mt-1 mr-3"></i>
+                        <div>
+                            <p class="font-bold text-red-800">Peringatan: Budget Tidak Mencukupi</p>
+                            <p class="text-sm text-red-700 mt-1">
+                                Beberapa place code memiliki budget yang tidak mencukupi untuk request ini. 
+                                Pastikan untuk mengalokasikan budget tambahan atau minta PM untuk merevisi proposal.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <?php elseif ($overall_status === 'tight'): ?>
+                <div class="mb-4 p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded">
+                    <div class="flex items-start">
+                        <i class="fas fa-info-circle text-yellow-600 text-xl mt-1 mr-3"></i>
+                        <div>
+                            <p class="font-bold text-yellow-800">Info: Budget Ketat</p>
+                            <p class="text-sm text-yellow-700 mt-1">
+                                Beberapa place code mendekati limit budget. Pertimbangkan untuk monitoring lebih ketat.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
+                
+                <!-- Budget Details Table -->
                 <div class="overflow-x-auto border border-gray-200 rounded-lg">
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Desa</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Place Code</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Exp Code</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Deskripsi</th>
-                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Amount (USD)</th>
-                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Amount (IDR)</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Diminta (USD)</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Tersedia (USD)</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Diminta (IDR)</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Tersedia (IDR)</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
-                            <?php
-                            $bud_stmt = $conn->prepare("SELECT * FROM proposal_budget_details WHERE id_proposal = ?");
-                            $bud_stmt->bind_param("i", $proposal_id);
-                            $bud_stmt->execute();
-                            $budget_res = $bud_stmt->get_result();
-                            while ($row = $budget_res->fetch_assoc()):
-                            ?>
-                            <tr>
-                                <td class="px-4 py-2 text-sm text-gray-700"><?php echo $row['place_code']; ?></td>
-                                <td class="px-4 py-2 text-sm text-gray-700"><?php echo $row['exp_code']; ?></td>
-                                <td class="px-4 py-2 text-sm text-gray-700"><?php echo $row['description']; ?></td>
-                                <td class="px-4 py-2 text-sm text-right text-gray-700"><?php echo number_format($row['requested_usd'], 2); ?></td>
-                                <td class="px-4 py-2 text-sm text-right text-gray-700"><?php echo number_format($row['requested_idr'], 2); ?></td>
+                            <?php foreach ($budget_details as $detail): ?>
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-4 py-3 text-sm text-gray-700">
+                                    <?php echo htmlspecialchars($detail['village_name'] ?? '-'); ?>
+                                </td>
+                                <td class="px-4 py-3 text-sm font-mono text-gray-700">
+                                    <?php echo htmlspecialchars($detail['place_code']); ?>
+                                </td>
+                                <td class="px-4 py-3 text-sm text-gray-700">
+                                    <?php echo htmlspecialchars($detail['exp_code']); ?>
+                                </td>
+                                <td class="px-4 py-3 text-sm text-right font-medium text-gray-900">
+                                    $<?php echo number_format($detail['requested_usd'], 2); ?>
+                                </td>
+                                <td class="px-4 py-3 text-sm text-right text-gray-700">
+                                    $<?php echo number_format($detail['remaining_usd'] ?? 0, 2); ?>
+                                </td>
+                                <td class="px-4 py-3 text-sm text-right font-medium text-gray-900">
+                                    Rp <?php echo number_format($detail['requested_idr'], 0, ',', '.'); ?>
+                                </td>
+                                <td class="px-4 py-3 text-sm text-right text-gray-700">
+                                    Rp <?php echo number_format($detail['remaining_idr'] ?? 0, 0, ',', '.'); ?>
+                                </td>
+                                <td class="px-4 py-3 text-center">
+                                    <?php
+                                    $status = $detail['budget_status'];
+                                    if ($status === 'sufficient') {
+                                        echo '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                            <i class="fas fa-check-circle mr-1"></i> Cukup
+                                        </span>';
+                                    } elseif ($status === 'tight') {
+                                        echo '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                            <i class="fas fa-exclamation-circle mr-1"></i> Ketat
+                                        </span>';
+                                    } else {
+                                        $deficit_usd = $detail['requested_usd'] - ($detail['remaining_usd'] ?? 0);
+                                        echo '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800" title="Kurang: $' . number_format($deficit_usd, 2) . '">
+                                            <i class="fas fa-times-circle mr-1"></i> Kurang
+                                        </span>';
+                                    }
+                                    ?>
+                                </td>
                             </tr>
-                            <?php endwhile; ?>
+                            <?php if (!empty($detail['description'])): ?>
+                            <tr class="bg-gray-50">
+                                <td colspan="8" class="px-4 py-2 text-sm text-gray-600">
+                                    <i class="fas fa-comment text-gray-400 mr-2"></i>
+                                    <?php echo htmlspecialchars($detail['description']); ?>
+                                </td>
+                            </tr>
+                            <?php endif; ?>
+                            <?php endforeach; ?>
                         </tbody>
-                        <tfoot class="bg-gray-50 font-bold">
+                        <tfoot class="bg-gray-100 font-bold">
                             <tr>
-                                <td colspan="3" class="px-4 py-3 text-right">TOTAL</td>
-                                <td class="px-4 py-3 text-right">$<?php echo number_format($proposal['total_budget_usd'], 2); ?></td>
-                                <td class="px-4 py-3 text-right">Rp <?php echo number_format($proposal['total_budget_idr'], 2); ?></td>
+                                <td colspan="3" class="px-4 py-3 text-right text-sm">TOTAL</td>
+                                <td class="px-4 py-3 text-right text-sm">
+                                    $<?php echo number_format($total_requested_usd, 2); ?>
+                                </td>
+                                <td class="px-4 py-3 text-right text-sm">
+                                    $<?php echo number_format($total_available_usd, 2); ?>
+                                </td>
+                                <td class="px-4 py-3 text-right text-sm">
+                                    Rp <?php echo number_format($total_requested_idr, 0, ',', '.'); ?>
+                                </td>
+                                <td class="px-4 py-3 text-right text-sm">
+                                    Rp <?php echo number_format($total_available_idr, 0, ',', '.'); ?>
+                                </td>
+                                <td class="px-4 py-3 text-center">
+                                    <?php
+                                    if ($overall_status === 'sufficient') {
+                                        echo '<span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-green-200 text-green-900">
+                                            ✓ OK
+                                        </span>';
+                                    } elseif ($overall_status === 'tight') {
+                                        echo '<span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-yellow-200 text-yellow-900">
+                                            ⚠ Ketat
+                                        </span>';
+                                    } else {
+                                        $total_deficit = $total_requested_usd - $total_available_usd;
+                                        echo '<span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-red-200 text-red-900" title="Kurang: $' . number_format($total_deficit, 2) . '">
+                                            ✗ Kurang
+                                        </span>';
+                                    }
+                                    ?>
+                                </td>
                             </tr>
                         </tfoot>
                     </table>
+                </div>
+                
+                <!-- Budget Summary Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+                    <div class="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <p class="text-sm text-blue-600 font-medium">Total Diminta</p>
+                        <p class="text-2xl font-bold text-blue-900 mt-1">
+                            $<?php echo number_format($total_requested_usd, 2); ?>
+                        </p>
+                        <p class="text-xs text-blue-700 mt-1">
+                            Rp <?php echo number_format($total_requested_idr, 0, ',', '.'); ?>
+                        </p>
+                    </div>
+                    <div class="p-4 bg-green-50 rounded-lg border border-green-200">
+                        <p class="text-sm text-green-600 font-medium">Total Tersedia</p>
+                        <p class="text-2xl font-bold text-green-900 mt-1">
+                            $<?php echo number_format($total_available_usd, 2); ?>
+                        </p>
+                        <p class="text-xs text-green-700 mt-1">
+                            Rp <?php echo number_format($total_available_idr, 0, ',', '.'); ?>
+                        </p>
+                    </div>
+                    <div class="p-4 <?php echo $total_available_usd >= $total_requested_usd ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'; ?> rounded-lg border">
+                        <p class="text-sm <?php echo $total_available_usd >= $total_requested_usd ? 'text-green-600' : 'text-red-600'; ?> font-medium">
+                            Selisih
+                        </p>
+                        <p class="text-2xl font-bold <?php echo $total_available_usd >= $total_requested_usd ? 'text-green-900' : 'text-red-900'; ?> mt-1">
+                            $<?php echo number_format($total_available_usd - $total_requested_usd, 2); ?>
+                        </p>
+                        <p class="text-xs <?php echo $total_available_usd >= $total_requested_usd ? 'text-green-700' : 'text-red-700'; ?> mt-1">
+                            <?php echo $total_available_usd >= $total_requested_usd ? '✓ Budget mencukupi' : '✗ Budget tidak cukup'; ?>
+                        </p>
+                    </div>
                 </div>
             </div>
 
