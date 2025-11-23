@@ -57,12 +57,12 @@ try {
     $budget_details = $bud_stmt->get_result();
     
     // Generate Voucher
-    $voucher_no = generate_voucher_no($conn, $prop_data['kode_proyek']);
+    $id_detail_bank = generate_id('BD');
+    $voucher_no = "BB-" . $id_detail_bank . "-PROP-" . str_pad($proposal_id, 6, '0', STR_PAD_LEFT);
     echo "Generated Voucher: $voucher_no\n";
     
     // Bank Transaction
     $id_bank_header = get_or_create_bank_header($conn, $prop_data['kode_proyek'], date('Y-m-d'));
-    $id_detail_bank = generate_id('BD');
     
     $bank_stmt = $conn->prepare("INSERT INTO buku_bank_detail (id_detail_bank, id_bank_header, tanggal, reff, title_activity, cost_description, recipient, place_code, exp_code, nominal_code, exrate, cost_curr, credit_idr, credit_usd, balance_idr, balance_usd, status) VALUES (?, ?, NOW(), ?, ?, ?, ?, '-', '-', 'Adv', ?, ?, ?, ?, 0, 0, 'ongoing')");
     

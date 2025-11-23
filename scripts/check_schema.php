@@ -25,5 +25,5 @@ $res = $conn->query("SHOW CREATE TABLE proposal_budget_details");
 if ($row = $res->fetch_assoc()) {
     echo $row['Create Table'] . "\n";
 }
-// describeTable($conn, 'proyek');
+describeTable($conn, 'buku_bank_detail');
 ?>
