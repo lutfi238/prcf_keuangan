@@ -58,36 +58,55 @@ function time_elapsed_string($datetime) {
 try {
     $notifications = [];
 
-    // Get proposal notifications with pagination
-    $proposal_query = "SELECT p.id_proposal, p.judul_proposal, p.created_at, u.nama as creator
-        FROM proposal p
-        LEFT JOIN user u ON p.pemohon = u.nama
-        WHERE p.status = 'submitted'
-        ORDER BY p.created_at DESC
-        LIMIT ? OFFSET ?";
+    // Get total counts first
+    $total_proposals = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status = 'submitted'")->fetch_assoc()['count'];
+    $total_reports = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'verified'")->fetch_assoc()['count'];
 
-    $stmt = $conn->prepare($proposal_query);
-    $stmt->bind_param("ii", $per_page, $offset);
-    $stmt->execute();
-    $proposal_result = $stmt->get_result();
+    // For page 1, load up to 10 notifications total
+    // For other pages, load 5 per page
+    $max_per_page = ($page == 1) ? 10 : 5;
 
-    while ($row = $proposal_result->fetch_assoc()) {
-        $is_unread = (strtotime($row['created_at']) > strtotime($last_notification_check));
-        $notifications[] = [
-            'type' => 'proposal',
-            'id' => $row['id_proposal'],
-            'title' => 'Proposal baru: ' . $row['judul_proposal'],
-            'link' => '../proposals/review_proposal_fm.php?id=' . $row['id_proposal'],
-            'time' => time_elapsed_string($row['created_at']),
-            'is_unread' => $is_unread,
-            'created_at' => $row['created_at']
-        ];
+    // Calculate how many proposals and reports to fetch
+    $proposals_to_fetch = min($max_per_page, $total_proposals);
+    $reports_to_fetch = 0;
+
+    // If we can fit more, get reports too
+    if (count($notifications) < $max_per_page && $total_reports > 0) {
+        $reports_to_fetch = $max_per_page - count($notifications);
+        $reports_to_fetch = min($reports_to_fetch, $total_reports);
     }
 
-    // If we have space for more notifications, get report notifications
-    $remaining_slots = $per_page - count($notifications);
-    if ($remaining_slots > 0) {
-        $report_offset = max(0, $offset - $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status = 'submitted'")->fetch_assoc()['count']);
+    // Get proposal notifications
+    if ($proposals_to_fetch > 0) {
+        $proposal_query = "SELECT p.id_proposal, p.judul_proposal, p.created_at, u.nama as creator
+            FROM proposal p
+            LEFT JOIN user u ON p.pemohon = u.nama
+            WHERE p.status = 'submitted'
+            ORDER BY p.created_at DESC
+            LIMIT ? OFFSET ?";
+
+        $stmt = $conn->prepare($proposal_query);
+        $stmt->bind_param("ii", $proposals_to_fetch, $offset);
+        $stmt->execute();
+        $proposal_result = $stmt->get_result();
+
+        while ($row = $proposal_result->fetch_assoc()) {
+            $is_unread = (strtotime($row['created_at']) > strtotime($last_notification_check));
+            $notifications[] = [
+                'type' => 'proposal',
+                'id' => $row['id_proposal'],
+                'title' => 'Proposal baru: ' . $row['judul_proposal'],
+                'link' => '../proposals/review_proposal_fm.php?id=' . $row['id_proposal'],
+                'time' => time_elapsed_string($row['created_at']),
+                'is_unread' => $is_unread,
+                'created_at' => $row['created_at']
+            ];
+        }
+    }
+
+    // Get report notifications if we still have space
+    if (count($notifications) < $per_page && $reports_to_fetch > 0) {
+        $report_offset = 0; // Always start from beginning for reports in this simplified approach
         $report_query = "SELECT lh.id_laporan_keu, lh.nama_projek, lh.created_at, u.nama as creator
             FROM laporan_keuangan_header lh
             LEFT JOIN user u ON lh.created_by = u.id_user
@@ -96,7 +115,7 @@ try {
             LIMIT ? OFFSET ?";
 
         $stmt = $conn->prepare($report_query);
-        $stmt->bind_param("ii", $remaining_slots, $report_offset);
+        $stmt->bind_param("ii", $reports_to_fetch, $report_offset);
         $stmt->execute();
         $report_result = $stmt->get_result();
 
@@ -125,9 +144,9 @@ try {
     $total_notifications = $total_proposals + $total_reports;
 
     // Calculate if there are more notifications
-    $has_more = (count($notifications) === $per_page) &&
-                (($total_proposals > ($offset + $per_page)) ||
-                 ($total_reports > ($report_offset + $remaining_slots)));
+    $max_per_page = ($page == 1) ? 10 : 5;
+    $has_more = ($total_proposals > ($offset + $proposals_to_fetch)) ||
+                ($total_reports > $reports_to_fetch);
 
     echo json_encode([
         'success' => true,

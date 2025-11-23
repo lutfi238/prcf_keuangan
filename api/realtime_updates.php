@@ -121,11 +121,11 @@ while (true) {
         // Get recent notifications based on role
         if ($user_role === 'Finance Manager') {
             // Pending proposals
-            $proposal_notifs = $conn->query("SELECT p.id_proposal, p.judul_proposal, p.created_at, u.nama as creator 
-                FROM proposal p 
-                LEFT JOIN user u ON p.pemohon = u.nama 
-                WHERE p.status = 'submitted' 
-                ORDER BY p.created_at DESC LIMIT 3");
+            $proposal_notifs = $conn->query("SELECT p.id_proposal, p.judul_proposal, p.created_at, u.nama as creator
+                FROM proposal p
+                LEFT JOIN user u ON p.pemohon = u.nama
+                WHERE p.status = 'submitted'
+                ORDER BY p.created_at DESC LIMIT 5");
             
             while ($row = $proposal_notifs->fetch_assoc()) {
                 $notifications[] = [
@@ -144,7 +144,7 @@ while (true) {
                 FROM laporan_keuangan_header lh
                 LEFT JOIN user u ON lh.created_by = u.id_user
                 WHERE lh.status_lap = 'verified'
-                ORDER BY lh.created_at DESC LIMIT 3");
+                ORDER BY lh.created_at DESC LIMIT 5");
 
             while ($row = $report_notifs->fetch_assoc()) {
                 $notifications[] = [

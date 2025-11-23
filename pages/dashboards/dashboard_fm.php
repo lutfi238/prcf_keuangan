@@ -532,7 +532,8 @@ session_write_close();
             const loadingEl = document.getElementById('notificationsLoading');
             loadingEl.classList.remove('hidden');
 
-            fetch(`pages/api/get_notifications.php?page=${currentNotificationPage}&per_page=5`)
+            const perPage = currentNotificationPage === 1 ? 10 : 5;
+            fetch(`../api/get_notifications.php?page=${currentNotificationPage}&per_page=${perPage}`)
                 .then(response => response.json())
                 .then(data => {
                     loadingEl.classList.add('hidden');
@@ -542,17 +543,19 @@ session_write_close();
                         renderNotifications(data.notifications);
 
                         hasMoreNotifications = data.has_more;
+
+                        const showMoreContainer = document.getElementById('showMoreContainer');
                         if (hasMoreNotifications) {
-                            document.getElementById('showMoreContainer').classList.remove('hidden');
+                            showMoreContainer.classList.remove('hidden');
                         } else {
-                            document.getElementById('showMoreContainer').classList.add('hidden');
+                            showMoreContainer.classList.add('hidden');
                         }
 
                         if (!reset) {
                             currentNotificationPage++;
                         }
                     } else {
-                        console.error('Error loading notifications:', data.error);
+                        console.error('API returned error:', data.error);
                         showNotificationError();
                     }
                 })
@@ -567,6 +570,11 @@ session_write_close();
         function renderNotifications(notifications) {
             const container = document.getElementById('notificationsList');
 
+            if (!container) {
+                console.error('notificationsList container not found!');
+                return;
+            }
+
             if (notifications.length === 0 && currentNotificationPage === 1) {
                 container.innerHTML = `
                     <div class="p-4 text-center text-gray-500 text-sm">
@@ -577,31 +585,53 @@ session_write_close();
                 return;
             }
 
-            notifications.forEach(notif => {
-                const notificationHtml = `
-                    <a href="${notif.link}"
-                       class="block p-4 border-b border-gray-100 transition ${notif.is_unread ? 'bg-blue-50 hover:bg-blue-100' : 'bg-white hover:bg-gray-50'}"
-                       onclick="closeNotificationsPanel()">
-                        <div class="flex items-start">
-                            <div class="flex-shrink-0 mr-3">
-                                ${notif.type === 'proposal'
-                                    ? '<i class="fas fa-file-alt text-blue-500 text-lg"></i>'
-                                    : '<i class="fas fa-chart-line text-green-500 text-lg"></i>'}
+            // Clear container first if this is the first page
+            if (currentNotificationPage === 1) {
+                container.innerHTML = '';
+            }
+
+            // Use for loop instead of forEach to avoid potential issues
+            for (let i = 0; i < notifications.length; i++) {
+                const notif = notifications[i];
+
+                try {
+
+                    // Validate notification data
+                    if (!notif || typeof notif !== 'object') {
+                        console.warn(`Invalid notification at index ${i}:`, notif);
+                        continue;
+                    }
+
+                    const notificationHtml = `
+                        <a href="${notif.link || '#'}"
+                           class="block p-4 border-b border-gray-100 transition ${notif.is_unread ? 'bg-blue-50 hover:bg-blue-100' : 'bg-white hover:bg-gray-50'}"
+                           onclick="closeNotificationsPanel()">
+                            <div class="flex items-start">
+                                <div class="flex-shrink-0 mr-3">
+                                    ${notif.type === 'proposal'
+                                        ? '<i class="fas fa-file-alt text-blue-500 text-lg"></i>'
+                                        : '<i class="fas fa-chart-line text-green-500 text-lg"></i>'}
+                                </div>
+                                <div class="flex-1">
+                                    <p class="text-sm ${notif.is_unread ? 'text-gray-900 font-bold' : 'text-gray-700 font-normal'}">
+                                        ${notif.title || 'No title'}
+                                    </p>
+                                    <p class="text-xs text-gray-500 mt-1">
+                                        <i class="far fa-clock mr-1"></i>${notif.time || 'Unknown time'}
+                                    </p>
+                                </div>
+                                ${notif.is_unread ? '<div class="flex-shrink-0 ml-2"><span class="w-2 h-2 bg-blue-600 rounded-full inline-block"></span></div>' : ''}
                             </div>
-                            <div class="flex-1">
-                                <p class="text-sm ${notif.is_unread ? 'text-gray-900 font-bold' : 'text-gray-700 font-normal'}">
-                                    ${notif.title}
-                                </p>
-                                <p class="text-xs text-gray-500 mt-1">
-                                    <i class="far fa-clock mr-1"></i>${notif.time}
-                                </p>
-                            </div>
-                            ${notif.is_unread ? '<div class="flex-shrink-0 ml-2"><span class="w-2 h-2 bg-blue-600 rounded-full inline-block"></span></div>' : ''}
-                        </div>
-                    </a>
-                `;
-                container.insertAdjacentHTML('beforeend', notificationHtml);
-            });
+                        </a>
+                    `;
+
+                    container.insertAdjacentHTML('beforeend', notificationHtml);
+
+                } catch (error) {
+                    console.error(`Error processing notification ${i + 1}:`, error, notif);
+                    // Continue processing other notifications even if one fails
+                }
+            }
         }
 
         function loadMoreNotifications() {
@@ -654,7 +684,39 @@ session_write_close();
             loadNotifications(true);
         });
     </script>
-    
+
+    <script>
+        // Enhanced real-time updates for dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            // Auto-refresh notifications when returning from action (success message)
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('success') || urlParams.has('error')) {
+                // Immediately refresh notifications when returning from action
+                setTimeout(function() {
+                    if (typeof refreshNotifications === 'function') {
+                        refreshNotifications();
+                    }
+                }, 500); // Small delay to ensure SSE is initialized
+
+                // Clean URL after showing message
+                setTimeout(function() {
+                    const cleanUrl = window.location.protocol + "//" +
+                                    window.location.host +
+                                    window.location.pathname;
+                    window.history.replaceState({}, document.title, cleanUrl);
+                }, 2000); // Wait 2 seconds for user to see message
+            }
+
+            // Auto-refresh dashboard data every 30 seconds as fallback
+            // This ensures data stays fresh even if SSE connection drops
+            setInterval(function() {
+                if (typeof refreshNotifications === 'function') {
+                    refreshNotifications();
+                }
+            }, 30000); // 30 seconds
+        });
+    </script>
+
     <!-- Real-time Notifications -->
     <script src="../../assets/js/realtime_notifications.js"></script>
 </body>

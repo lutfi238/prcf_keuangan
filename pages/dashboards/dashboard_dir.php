@@ -860,7 +860,41 @@ session_write_close();
             filterProposals();
         });
     </script>
-    
+
+    <script>
+        // Enhanced real-time updates for dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            // Auto-refresh notifications when returning from action (success message)
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('success') || urlParams.has('error')) {
+                // Immediately refresh notifications when returning from action
+                setTimeout(function() {
+                    if (typeof refreshNotifications === 'function') {
+                        console.log('Refreshing notifications after action...');
+                        refreshNotifications();
+                    }
+                }, 500); // Small delay to ensure SSE is initialized
+
+                // Clean URL after showing message
+                setTimeout(function() {
+                    const cleanUrl = window.location.protocol + "//" +
+                                    window.location.host +
+                                    window.location.pathname;
+                    window.history.replaceState({}, document.title, cleanUrl);
+                }, 2000); // Wait 2 seconds for user to see message
+            }
+
+            // Auto-refresh dashboard data every 30 seconds as fallback
+            // This ensures data stays fresh even if SSE connection drops
+            setInterval(function() {
+                if (typeof refreshNotifications === 'function') {
+                    console.log('Auto-refreshing notifications (30s interval)...');
+                    refreshNotifications();
+                }
+            }, 30000); // 30 seconds
+        });
+    </script>
+
     <!-- Real-time Notifications -->
     <script src="../../assets/js/realtime_notifications.js"></script>
 </body>

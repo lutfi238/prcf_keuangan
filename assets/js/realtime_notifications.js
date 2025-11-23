@@ -43,7 +43,7 @@ function updateNotificationBadge(count) {
 // Fetch notifications from API
 async function fetchNotifications() {
     try {
-        const response = await fetch('api_notifications.php?action=get');
+        const response = await fetch('/prcf_keuangan/api/api_notifications.php?action=get');
         const data = await response.json();
         
         if (data.success) {
@@ -166,7 +166,7 @@ function formatTime(timeString) {
 // Mark notifications as read
 async function markNotificationsAsRead() {
     try {
-        const response = await fetch('api_notifications.php?action=mark_read');
+        const response = await fetch('/prcf_keuangan/api/api_notifications.php?action=mark_read');
         const data = await response.json();
         
         if (data.success) {
@@ -215,37 +215,45 @@ function toggleNotificationsRealtime() {
     }
 }
 
-// Initialize Server-Sent Events connection
+// Initialize Server-Sent Events connection with improved retry mechanism
 function initializeSSE() {
     if (!useSSE || !window.EventSource) {
         console.log('SSE not supported or disabled, falling back to polling');
         startNotificationPolling();
         return;
     }
-    
+
     // Close existing connection if any
     if (eventSource) {
         eventSource.close();
     }
-    
+
     // Create new SSE connection
     const baseUrl = window.location.pathname.includes('/pages/') ? '../../api/' : 'api/';
     eventSource = new EventSource(baseUrl + 'realtime_updates.php');
-    
+
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+    let reconnectDelay = 1000; // Start with 1 second
+
     // Handle incoming updates
     eventSource.addEventListener('update', function(e) {
         try {
             const data = JSON.parse(e.data);
             console.log('SSE Update received:', data);
-            
+
+            // Reset reconnect attempts on successful update
+            reconnectAttempts = 0;
+            reconnectDelay = 1000;
+
             // Update notification badge
             if (data.total_notifications !== undefined) {
                 updateNotificationBadge(data.total_notifications);
             }
-            
+
             // Update dashboard stats if they exist
             updateDashboardStats(data);
-            
+
             // Update notification panel if open
             if (data.notifications && data.notifications.length > 0) {
                 updateNotificationPanel(data.notifications, data.total_notifications);
@@ -254,28 +262,47 @@ function initializeSSE() {
             console.error('Error parsing SSE data:', error);
         }
     });
-    
+
     // Handle heartbeat
     eventSource.addEventListener('heartbeat', function(e) {
-        console.log('SSE Heartbeat:', e.data);
+        console.log('SSE Heartbeat received');
+        // Reset reconnect attempts on heartbeat
+        reconnectAttempts = 0;
+        reconnectDelay = 1000;
     });
-    
-    // Handle connection errors
+
+    // Handle connection errors with exponential backoff
     eventSource.onerror = function(error) {
         console.error('SSE Error:', error);
-        console.log('SSE connection lost, attempting to reconnect...');
-        
-        // Close and retry after 5 seconds
+        console.log('SSE connection state:', eventSource.readyState);
+
         if (eventSource.readyState === EventSource.CLOSED) {
-            console.log('SSE connection closed, falling back to polling');
-            useSSE = false;
-            startNotificationPolling();
+            reconnectAttempts++;
+
+            if (reconnectAttempts <= maxReconnectAttempts) {
+                console.log(`SSE connection closed, attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts}) in ${reconnectDelay}ms...`);
+
+                setTimeout(function() {
+                    console.log('Attempting SSE reconnection...');
+                    initializeSSE();
+                }, reconnectDelay);
+
+                // Exponential backoff
+                reconnectDelay = Math.min(reconnectDelay * 2, 30000); // Max 30 seconds
+            } else {
+                console.log('SSE max reconnection attempts reached, falling back to polling');
+                useSSE = false;
+                startNotificationPolling();
+            }
         }
     };
-    
+
     // Handle connection open
     eventSource.onopen = function() {
-        console.log('SSE connection established');
+        console.log('SSE connection established successfully');
+        // Reset reconnect attempts
+        reconnectAttempts = 0;
+        reconnectDelay = 1000;
     };
 }
 
@@ -313,18 +340,65 @@ function updateDashboardStats(data) {
     }
 }
 
-// Start polling for notifications (fallback)
+// Start polling for notifications (fallback) with adaptive polling
 function startNotificationPolling() {
+    console.log('Starting notification polling (SSE fallback)');
+
     // Initial fetch
     fetchNotifications();
-    
-    // Poll every 5 seconds for real-time updates
-    notificationCheckInterval = setInterval(fetchNotifications, 5000);
+
+    // Adaptive polling: more frequent initially, then slower
+    let pollInterval = 3000; // Start with 3 seconds
+    const maxInterval = 15000; // Max 15 seconds
+    const minInterval = 3000; // Min 3 seconds
+
+    function adaptivePoll() {
+        fetchNotifications();
+
+        // Gradually increase interval if no changes detected
+        if (pollInterval < maxInterval) {
+            pollInterval = Math.min(pollInterval + 1000, maxInterval);
+        }
+
+        notificationCheckInterval = setTimeout(adaptivePoll, pollInterval);
+    }
+
+    // Start adaptive polling
+    notificationCheckInterval = setTimeout(adaptivePoll, pollInterval);
+
+    // Reset to faster polling when page becomes visible
+    document.addEventListener('visibilitychange', function() {
+        if (!document.hidden && !useSSE) {
+            console.log('Page visible, resetting poll interval');
+            pollInterval = minInterval;
+        }
+    });
 }
 
 // Trigger immediate refresh (useful after actions like save/approve)
 function refreshNotifications() {
-    fetchNotifications();
+    if (useSSE && eventSource && eventSource.readyState === EventSource.OPEN) {
+        console.log('SSE active, waiting for next update...');
+        // SSE should send updates automatically, but we can force a refresh if needed
+        fetchNotifications();
+    } else {
+        console.log('Refreshing notifications via polling...');
+        fetchNotifications();
+    }
+}
+
+// Force immediate data refresh and update UI
+function forceDataRefresh() {
+    console.log('Force refreshing all dashboard data...');
+
+    // Refresh notifications
+    refreshNotifications();
+
+    // Also refresh any dashboard stats that might be cached
+    if (typeof updateDashboardStats === 'function') {
+        // This will be called by SSE updates, but we can trigger it manually too
+        fetchNotifications();
+    }
 }
 
 // Stop polling (useful for cleanup)
