@@ -71,8 +71,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_budget'])) {
 // Get Projects
 $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE status_proyek != 'cancelled'");
 
-// Get Villages
-$villages = $conn->query("SELECT * FROM villages ORDER BY village_name ASC");
+// Get Villages (exclude deleted)
+$villages = $conn->query("SELECT * FROM villages WHERE is_deleted = 0 ORDER BY village_name ASC");
 
 // Get Budgets List
 $filter_proyek = $_GET['filter_proyek'] ?? '';
@@ -149,7 +149,12 @@ $budgets = $conn->query($query);
                         </div>
 
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Desa</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                Desa 
+                                <a href="../admin/manage_villages.php" class="text-blue-600 text-xs hover:text-blue-800 ml-2">
+                                    [<i class="fas fa-cog"></i> Kelola Desa]
+                                </a>
+                            </label>
                             <select name="id_village" id="id_village" required class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
                                 <option value="">Pilih Desa</option>
                                 <?php foreach ($villages as $v): ?>

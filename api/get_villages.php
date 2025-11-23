@@ -11,7 +11,16 @@ if (!isset($_SESSION['logged_in'])) {
 }
 
 try {
-    $query = "SELECT id_village, village_code, village_name, village_abbr FROM villages ORDER BY village_name ASC";
+    // Filter out deleted villages and include audit trail
+    $query = "SELECT v.id_village, v.village_code, v.village_name, v.village_abbr,
+              uc.nama as created_by_name, 
+              uu.nama as updated_by_name,
+              v.created_at, v.updated_at
+              FROM villages v
+              LEFT JOIN user uc ON v.created_by = uc.id_user
+              LEFT JOIN user uu ON v.updated_by = uu.id_user
+              WHERE v.is_deleted = 0
+              ORDER BY v.village_name ASC";
     $result = $conn->query($query);
     
     $villages = [];
@@ -20,6 +29,7 @@ try {
     }
     
     echo json_encode($villages);
+
 } catch (Exception $e) {
     http_response_code(500);
     echo json_encode(['error' => $e->getMessage()]);
