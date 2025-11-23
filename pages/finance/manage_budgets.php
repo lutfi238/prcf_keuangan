@@ -1,0 +1,313 @@
+<?php
+session_start();
+require_once '../../includes/config.php';
+require_once '../../includes/maintenance_config.php';
+
+// Check maintenance mode
+check_maintenance();
+
+if (!isset($_SESSION['logged_in'])) {
+    header('Location: ../../auth/login.php');
+    exit();
+}
+
+if ($_SESSION['user_role'] !== 'Finance Manager') {
+    header('Location: ../../auth/unauthorized.php');
+    exit();
+}
+
+$user_name = $_SESSION['user_name'];
+$success = '';
+$error = '';
+
+// Handle Form Submission
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_budget'])) {
+    $kode_proyek = $_POST['kode_proyek'];
+    $id_village = $_POST['id_village'];
+    $exp_code = $_POST['exp_code'];
+    $currency = $_POST['currency']; // USD or IDR
+    $amount = floatval($_POST['amount']);
+    $exrate = floatval($_POST['exrate']);
+    
+    // Get village abbr for place code generation
+    $stmt = $conn->prepare("SELECT village_abbr FROM villages WHERE id_village = ?");
+    $stmt->bind_param("i", $id_village);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    if ($res->num_rows === 0) {
+        $error = "Desa tidak valid.";
+    } else {
+        $village_abbr = $res->fetch_assoc()['village_abbr'];
+        $place_code = $exp_code . '-' . $village_abbr . '-01';
+        
+        // Calculate amounts
+        if ($currency === 'USD') {
+            $budget_usd = $amount;
+            $budget_idr = $amount * $exrate;
+        } else {
+            $budget_idr = $amount;
+            $budget_usd = $amount / $exrate;
+        }
+        
+        // Insert or Update
+        $stmt = $conn->prepare("INSERT INTO project_code_budgets 
+            (kode_proyek, id_village, exp_code, place_code, budget_usd, budget_idr, exrate) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE 
+            budget_usd = VALUES(budget_usd), 
+            budget_idr = VALUES(budget_idr), 
+            exrate = VALUES(exrate)");
+            
+        $stmt->bind_param("sisssdd", $kode_proyek, $id_village, $exp_code, $place_code, $budget_usd, $budget_idr, $exrate);
+        
+        if ($stmt->execute()) {
+            $success = "Budget berhasil disimpan! Place Code: " . $place_code;
+        } else {
+            $error = "Gagal menyimpan budget: " . $conn->error;
+        }
+    }
+}
+
+// Get Projects
+$projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE status_proyek != 'cancelled'");
+
+// Get Villages
+$villages = $conn->query("SELECT * FROM villages ORDER BY village_name ASC");
+
+// Get Budgets List
+$filter_proyek = $_GET['filter_proyek'] ?? '';
+$filter_village = $_GET['filter_village'] ?? '';
+
+$query = "SELECT b.*, v.village_name, p.nama_proyek 
+          FROM project_code_budgets b 
+          JOIN villages v ON b.id_village = v.id_village 
+          JOIN proyek p ON b.kode_proyek = p.kode_proyek 
+          WHERE 1=1";
+
+if (!empty($filter_proyek)) {
+    $query .= " AND b.kode_proyek = '$filter_proyek'";
+}
+if (!empty($filter_village)) {
+    $query .= " AND b.id_village = '$filter_village'";
+}
+
+$query .= " ORDER BY b.created_at DESC";
+$budgets = $conn->query($query);
+
+?>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kelola Budget - PRCF Keuangan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-4">
+                    <a href="../dashboards/dashboard_fm.php" class="text-gray-600 hover:text-gray-800">
+                        <i class="fas fa-arrow-left"></i>
+                    </a>
+                    <h1 class="text-xl font-bold text-gray-800">Kelola Budget Desa</h1>
+                </div>
+                <span class="text-gray-700 font-medium"><?php echo $user_name; ?></span>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <?php if ($success): ?>
+            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
+                <?php echo $success; ?>
+            </div>
+        <?php endif; ?>
+        <?php if ($error): ?>
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+                <?php echo $error; ?>
+            </div>
+        <?php endif; ?>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Form Input -->
+            <div class="lg:col-span-1">
+                <div class="bg-white rounded-lg shadow p-6 sticky top-24">
+                    <h2 class="text-lg font-bold text-gray-800 mb-4">Input / Update Budget</h2>
+                    <form method="POST" id="budgetForm" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Proyek</label>
+                            <select name="kode_proyek" id="kode_proyek" required class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
+                                <option value="">Pilih Proyek</option>
+                                <?php foreach ($projects as $p): ?>
+                                    <option value="<?php echo $p['kode_proyek']; ?>"><?php echo $p['kode_proyek'] . ' - ' . $p['nama_proyek']; ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Desa</label>
+                            <select name="id_village" id="id_village" required class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
+                                <option value="">Pilih Desa</option>
+                                <?php foreach ($villages as $v): ?>
+                                    <option value="<?php echo $v['id_village']; ?>" data-abbr="<?php echo $v['village_abbr']; ?>">
+                                        <?php echo $v['village_name']; ?> (<?php echo $v['village_abbr']; ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Exp Code</label>
+                            <input type="text" name="exp_code" id="exp_code" required placeholder="Contoh: 10101" 
+                                class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
+                            <!-- Ideally this should be a datalist or select fetched via API -->
+                        </div>
+
+                        <div class="bg-gray-50 p-3 rounded border border-gray-200">
+                            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide">Place Code Preview</label>
+                            <input type="text" id="place_code_preview" readonly class="w-full bg-transparent border-none font-mono text-lg font-bold text-blue-600 focus:ring-0 p-0" value="-">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Mata Uang</label>
+                                <select name="currency" id="currency" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
+                                    <option value="USD">USD</option>
+                                    <option value="IDR">IDR</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Exchange Rate</label>
+                                <input type="number" step="0.01" name="exrate" id="exrate" value="15500" required 
+                                    class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Jumlah Budget</label>
+                            <input type="number" step="0.01" name="amount" id="amount" required 
+                                class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
+                        </div>
+
+                        <div class="bg-blue-50 p-3 rounded text-sm text-blue-800">
+                            <p>Estimasi Konversi:</p>
+                            <p id="conversion_preview" class="font-bold">-</p>
+                        </div>
+
+                        <button type="submit" name="save_budget" class="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition duration-200">
+                            Simpan Budget
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Data Table -->
+            <div class="lg:col-span-2">
+                <div class="bg-white rounded-lg shadow overflow-hidden">
+                    <div class="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                        <h2 class="text-lg font-bold text-gray-800">Daftar Budget</h2>
+                        <div class="flex space-x-2">
+                            <!-- Filters could go here -->
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Place Code</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Desa</th>
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Budget (USD)</th>
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Used (USD)</th>
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Remaining</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <?php if ($budgets->num_rows > 0): ?>
+                                    <?php while ($row = $budgets->fetch_assoc()): ?>
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                            <?php echo $row['place_code']; ?>
+                                            <div class="text-xs text-gray-500"><?php echo $row['kode_proyek']; ?></div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            <?php echo $row['village_name']; ?>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
+                                            $<?php echo number_format($row['budget_usd'], 2); ?>
+                                            <div class="text-xs text-gray-500">Rp <?php echo number_format($row['budget_idr'], 0, ',', '.'); ?></div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
+                                            $<?php echo number_format($row['used_usd'], 2); ?>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-right">
+                                            <span class="<?php echo $row['remaining_usd'] < 0 ? 'text-red-600 font-bold' : 'text-green-600 font-bold'; ?>">
+                                                $<?php echo number_format($row['remaining_usd'], 2); ?>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <?php endwhile; ?>
+                                <?php else: ?>
+                                    <tr>
+                                        <td colspan="5" class="px-6 py-4 text-center text-gray-500">Belum ada data budget.</td>
+                                    </tr>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="../../assets/js/budget_management.js"></script>
+    <script>
+        // Local script for page interactions
+        document.addEventListener('DOMContentLoaded', function() {
+            const idVillageSelect = document.getElementById('id_village');
+            const expCodeInput = document.getElementById('exp_code');
+            const placeCodePreview = document.getElementById('place_code_preview');
+            const amountInput = document.getElementById('amount');
+            const currencySelect = document.getElementById('currency');
+            const exrateInput = document.getElementById('exrate');
+            const conversionPreview = document.getElementById('conversion_preview');
+
+            function updatePlaceCode() {
+                const expCode = expCodeInput.value;
+                const selectedOption = idVillageSelect.options[idVillageSelect.selectedIndex];
+                const villageAbbr = selectedOption.getAttribute('data-abbr');
+                
+                if (expCode && villageAbbr) {
+                    placeCodePreview.value = generatePlaceCode(expCode, villageAbbr);
+                } else {
+                    placeCodePreview.value = '-';
+                }
+            }
+
+            function updateConversion() {
+                const amount = parseFloat(amountInput.value) || 0;
+                const exrate = parseFloat(exrateInput.value) || 1;
+                const currency = currencySelect.value;
+                
+                if (currency === 'USD') {
+                    const idr = calculateIDR(amount, exrate);
+                    conversionPreview.textContent = formatCurrency(idr, 'IDR');
+                } else {
+                    const usd = calculateUSD(amount, exrate);
+                    conversionPreview.textContent = formatCurrency(usd, 'USD');
+                }
+            }
+
+            idVillageSelect.addEventListener('change', updatePlaceCode);
+            expCodeInput.addEventListener('input', updatePlaceCode);
+            
+            amountInput.addEventListener('input', updateConversion);
+            exrateInput.addEventListener('input', updateConversion);
+            currencySelect.addEventListener('change', updateConversion);
+        });
+    </script>
+</body>
+</html>

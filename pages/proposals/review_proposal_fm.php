@@ -8,6 +8,7 @@ header("Pragma: no-cache");
 
 require_once '../../includes/config.php';
 require_once '../../includes/maintenance_config.php';
+require_once '../../includes/finance_functions.php';
 
 // Check maintenance mode
 check_maintenance();
@@ -31,44 +32,99 @@ $return_tab = $_GET['return_tab'] ?? 'proposals'; // Default to proposals if not
 // Handle FM Approval (Stage 1)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['approve'])) {
-        // STAGE 1: FM Approve → status 'approved_fm'
-        $check_column = $conn->query("SHOW COLUMNS FROM proposal LIKE 'approved_by_fm'");
-        $is_2stage = ($check_column && $check_column->num_rows > 0);
-        
-        if ($is_2stage) {
-            $stmt = $conn->prepare("UPDATE proposal SET status = 'approved_fm', approved_by_fm = ?, fm_approval_date = NOW() WHERE id_proposal = ?");
-            $stmt->bind_param("ii", $user_id, $proposal_id);
-        } else {
-            // Fallback: 1-stage approval
-            $stmt = $conn->prepare("UPDATE proposal SET status = 'approved' WHERE id_proposal = ?");
-            $stmt->bind_param("i", $proposal_id);
-        }
-        
-        if ($stmt->execute()) {
-            // Get proposal and PM details
-            $prop_stmt = $conn->prepare("SELECT p.*, u.email, u.nama FROM proposal p LEFT JOIN user u ON p.pemohon = u.nama WHERE id_proposal = ?");
+        $conn->begin_transaction();
+        try {
+            // 1. Get Full Proposal Data
+            $prop_stmt = $conn->prepare("SELECT * FROM proposal WHERE id_proposal = ?");
             $prop_stmt->bind_param("i", $proposal_id);
             $prop_stmt->execute();
             $prop_data = $prop_stmt->get_result()->fetch_assoc();
             
-            // Notify PM
-            send_notification_email(
-                $prop_data['email'],
-                'Proposal Disetujui oleh Finance Manager',
-                'Proposal Anda "' . $prop_data['judul_proposal'] . '" telah disetujui oleh Finance Manager (Final).'
-            );
+            // 2. Get Budget Details
+            $bud_stmt = $conn->prepare("SELECT * FROM proposal_budget_details WHERE id_proposal = ?");
+            $bud_stmt->bind_param("i", $proposal_id);
+            $bud_stmt->execute();
+            $budget_details = $bud_stmt->get_result();
             
-            // Notify DIR (for viewing only, no approval needed)
-            $dir_stmt = $conn->query("SELECT email FROM user WHERE role = 'Direktur'");
-            while ($dir = $dir_stmt->fetch_assoc()) {
-                send_notification_email(
-                    $dir['email'],
-                    'Proposal Disetujui FM - Siap untuk Review',
-                    'Proposal "' . $prop_data['judul_proposal'] . '" telah disetujui FM (Final). Silakan review.'
-                );
+            // 3. Generate Voucher No
+            $voucher_no = generate_voucher_no($conn, $prop_data['kode_proyek']);
+            
+            // 4. Bank Transaction (Credit)
+            $id_bank_header = get_or_create_bank_header($conn, $prop_data['kode_proyek'], date('Y-m-d'));
+            $id_detail_bank = generate_id('BD');
+            
+            $bank_stmt = $conn->prepare("INSERT INTO buku_bank_detail (id_detail_bank, id_bank_header, tanggal, reff, title_activity, cost_description, recipient, place_code, exp_code, nominal_code, exrate, cost_curr, credit_idr, credit_usd, balance_idr, balance_usd, status) VALUES (?, ?, NOW(), ?, ?, ?, ?, '-', '-', 'Adv', ?, ?, ?, ?, 0, 0, 'ongoing')");
+            
+            $desc = "Advance for: " . $prop_data['judul_proposal'];
+            $cost_curr = $prop_data['currency'];
+            $exrate = $prop_data['exchange_rate'];
+            $credit_idr = $prop_data['total_budget_idr'];
+            $credit_usd = $prop_data['total_budget_usd'];
+            
+            $bank_stmt->bind_param("ssssssssdddd", $id_detail_bank, $id_bank_header, $voucher_no, $prop_data['judul_proposal'], $desc, $prop_data['pj'], $exrate, $cost_curr, $credit_idr, $credit_usd);
+            $bank_stmt->execute();
+            
+            update_bank_header_balance($conn, $id_bank_header, $credit_idr, $credit_usd, true);
+            
+            // 5. Piutang Transaction (Debit)
+            $id_piutang_header = get_or_create_piutang_header($conn, $prop_data['kode_proyek'], date('Y-m-d'));
+            
+            // Insert Detail
+            $piutang_stmt = $conn->prepare("INSERT INTO buku_piutang_detail (id_piutang, tgl_trx, reff, description, recipient, debit_idr, debit_usd, exrate) VALUES (?, NOW(), ?, ?, ?, ?, ?, ?)");
+            $piutang_stmt->bind_param("isssddd", $id_piutang_header, $voucher_no, $desc, $prop_data['pj'], $credit_idr, $credit_usd, $exrate);
+            $piutang_stmt->execute();
+            
+            // Insert Unliquidated
+            $unliq_stmt = $conn->prepare("INSERT INTO buku_piutang_unliquidated (id_piutang, tgl, voucher_no, name, description, nilai_idr, nilai_usd, status) VALUES (?, NOW(), ?, ?, ?, ?, ?, 'pending')");
+            $unliq_stmt->bind_param("isssdd", $id_piutang_header, $voucher_no, $prop_data['pj'], $desc, $credit_idr, $credit_usd);
+            $unliq_stmt->execute();
+            
+            update_piutang_header_balance($conn, $id_piutang_header, $credit_idr, $credit_usd, true);
+            
+            // 6. Update Budget Availability
+            $upd_budget_stmt = $conn->prepare("UPDATE project_code_budgets SET used_usd = used_usd + ?, remaining_usd = remaining_usd - ?, used_idr = used_idr + ?, remaining_idr = remaining_idr - ? WHERE place_code = ?");
+            
+            while ($row = $budget_details->fetch_assoc()) {
+                $upd_budget_stmt->bind_param("dddds", $row['requested_usd'], $row['requested_usd'], $row['requested_idr'], $row['requested_idr'], $row['place_code']);
+                $upd_budget_stmt->execute();
             }
             
-            $success = 'Proposal berhasil disetujui (Final).';
+            // 7. Update Proposal Status
+            $check_column = $conn->query("SHOW COLUMNS FROM proposal LIKE 'approved_by_fm'");
+            $is_2stage = ($check_column && $check_column->num_rows > 0);
+            
+            if ($is_2stage) {
+                $stmt = $conn->prepare("UPDATE proposal SET status = 'approved_fm', approved_by_fm = ?, fm_approval_date = NOW() WHERE id_proposal = ?");
+                $stmt->bind_param("ii", $user_id, $proposal_id);
+            } else {
+                $stmt = $conn->prepare("UPDATE proposal SET status = 'approved' WHERE id_proposal = ?");
+                $stmt->bind_param("i", $proposal_id);
+            }
+            $stmt->execute();
+            
+            $conn->commit();
+            
+            // Notify PM
+            // Get PM email
+            $pm_stmt = $conn->prepare("SELECT email FROM user WHERE nama = ?");
+            $pm_stmt->bind_param("s", $prop_data['pemohon']);
+            $pm_stmt->execute();
+            $pm_res = $pm_stmt->get_result();
+            if ($pm_row = $pm_res->fetch_assoc()) {
+                if (function_exists('send_notification_email')) {
+                    send_notification_email(
+                        $pm_row['email'],
+                        'Proposal Disetujui & Dana Dicairkan',
+                        'Proposal "' . $prop_data['judul_proposal'] . '" telah disetujui. Voucher No: ' . $voucher_no
+                    );
+                }
+            }
+            
+            $success = 'Proposal disetujui, dana dicairkan (Voucher: ' . $voucher_no . '), dan budget diupdate.';
+            
+        } catch (Exception $e) {
+            $conn->rollback();
+            $error = "Gagal memproses approval: " . $e->getMessage();
         }
     } elseif (isset($_POST['request_revision'])) {
         $catatan = $_POST['catatan'] ?? '';
@@ -146,6 +202,12 @@ session_write_close();
             <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
                 <?php echo $success; ?>
                 <a href="../dashboards/dashboard_fm.php?tab=<?php echo urlencode($return_tab); ?>" class="block mt-2 text-green-800 underline">Kembali ke Dashboard</a>
+            </div>
+        <?php endif; ?>
+
+        <?php if (isset($error)): ?>
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+                <?php echo $error; ?>
             </div>
         <?php endif; ?>
 
@@ -262,6 +324,48 @@ session_write_close();
                     </div>
                 </div>
                 <?php endif; ?>
+            </div>
+            
+            <!-- Budget Details Section -->
+            <div class="p-8 border-t border-gray-200">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">Rincian Budget</h3>
+                <div class="overflow-x-auto border border-gray-200 rounded-lg">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Place Code</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Exp Code</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Deskripsi</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Amount (USD)</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Amount (IDR)</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <?php
+                            $bud_stmt = $conn->prepare("SELECT * FROM proposal_budget_details WHERE id_proposal = ?");
+                            $bud_stmt->bind_param("i", $proposal_id);
+                            $bud_stmt->execute();
+                            $budget_res = $bud_stmt->get_result();
+                            while ($row = $budget_res->fetch_assoc()):
+                            ?>
+                            <tr>
+                                <td class="px-4 py-2 text-sm text-gray-700"><?php echo $row['place_code']; ?></td>
+                                <td class="px-4 py-2 text-sm text-gray-700"><?php echo $row['exp_code']; ?></td>
+                                <td class="px-4 py-2 text-sm text-gray-700"><?php echo $row['description']; ?></td>
+                                <td class="px-4 py-2 text-sm text-right text-gray-700"><?php echo number_format($row['requested_usd'], 2); ?></td>
+                                <td class="px-4 py-2 text-sm text-right text-gray-700"><?php echo number_format($row['requested_idr'], 2); ?></td>
+                            </tr>
+                            <?php endwhile; ?>
+                        </tbody>
+                        <tfoot class="bg-gray-50 font-bold">
+                            <tr>
+                                <td colspan="3" class="px-4 py-3 text-right">TOTAL</td>
+                                <td class="px-4 py-3 text-right">$<?php echo number_format($proposal['total_budget_usd'], 2); ?></td>
+                                <td class="px-4 py-3 text-right">Rp <?php echo number_format($proposal['total_budget_idr'], 2); ?></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
             </div>
 
             <!-- FM Review Form - Only for 'submitted' status -->
