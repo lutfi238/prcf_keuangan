@@ -264,7 +264,7 @@ session_write_close();
         </div>
 
         <!-- Action Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-8">
             <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-lg border border-blue-200 hover:shadow-lg transition duration-200">
                 <div class="flex items-center justify-between mb-4">
                     <div>
@@ -322,6 +322,21 @@ session_write_close();
                 </div>
                 <a href="../../public/under_construction.php?feature=Laporan Donor" class="inline-block bg-purple-500 text-white px-6 py-2 rounded-lg hover:bg-purple-600 transition duration-200 font-medium">
                     Kelola
+                </a>
+            </div>
+
+            <div class="bg-gradient-to-br from-emerald-50 to-emerald-100 p-6 rounded-lg border border-emerald-200 hover:shadow-lg transition duration-200">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-800">Kelola Budget</h3>
+                        <p class="text-sm text-gray-600 mt-1">Planning & Control</p>
+                    </div>
+                    <div class="bg-emerald-500 p-3 rounded-full">
+                        <i class="fas fa-calculator text-white text-2xl"></i>
+                    </div>
+                </div>
+                <a href="../finance/manage_budgets.php" class="inline-block bg-emerald-500 text-white px-6 py-2 rounded-lg hover:bg-emerald-600 transition duration-200 font-medium">
+                    <i class="fas fa-arrow-right mr-2"></i>Kelola
                 </a>
             </div>
         </div>
