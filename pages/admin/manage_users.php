@@ -32,8 +32,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $password = $_POST['password'];
         $password_hash = password_hash($password, PASSWORD_DEFAULT);
         
-        $stmt = $conn->prepare("INSERT INTO user (nama, role, status, email, no_HP, password_hash) VALUES (?, ?, 'inactive', ?, ?, ?)");
-        $stmt->bind_param("sssss", $nama, $role, $email, $no_HP, $password_hash);
+        $stmt = $conn->prepare("INSERT INTO user (nama, role, email, no_HP, password_hash) VALUES (?, ?, ?, ?, ?)");
+        $stmt->bind_param("ssss", $nama, $role, $email, $no_HP, $password_hash);
         
         if ($stmt->execute()) {
             $success_message = "User berhasil ditambahkan!";
@@ -247,7 +247,7 @@ $admin_count = countAdmins($conn);
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
                         <?php while ($user = $users->fetch_assoc()): ?>
-                        <tr class="hover:bg-gray-50" data-role="<?php echo $user['role']; ?>" data-status="<?php echo $user['status']; ?>" data-search="<?php echo strtolower($user['nama'] . ' ' . $user['email']); ?>">
+                        <tr class="hover:bg-gray-50" data-role="<?php echo $user['role']; ?>" data-status="<?php echo $user['status'] ?? 'active'; ?>" data-search="<?php echo strtolower($user['nama'] . ' ' . $user['email']); ?>">
                             <td class="px-6 py-4 text-sm text-gray-900"><?php echo $user['id_user']; ?></td>
                             <td class="px-6 py-4 text-sm text-gray-900 font-medium"><?php echo htmlspecialchars($user['nama']); ?></td>
                             <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($user['email']); ?></td>
@@ -274,9 +274,10 @@ $admin_count = countAdmins($conn);
                                         'inactive' => 'bg-red-100 text-red-800',
                                         'pending' => 'bg-yellow-100 text-yellow-800'
                                     ];
-                                    echo $status_colors[$user['status']] ?? 'bg-gray-100 text-gray-800';
+                                    $user_status = $user['status'] ?? 'active';
+                                    echo $status_colors[$user_status] ?? 'bg-gray-100 text-gray-800';
                                     ?>">
-                                    <?php echo ucfirst($user['status']); ?>
+                                    <?php echo ucfirst($user_status); ?>
                                 </span>
                             </td>
                             <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($user['no_HP'] ?? '-'); ?></td>
@@ -297,10 +298,10 @@ $admin_count = countAdmins($conn);
                                         <i class="fas fa-shield-alt mr-1"></i> Protected
                                     </span>
                                 <?php else: ?>
-                                    <button onclick='toggleUserStatus(<?php echo $user['id_user']; ?>, "<?php echo $user['status']; ?>", "<?php echo htmlspecialchars($user['nama']); ?>")'
-                                        class="text-<?php echo $user['status'] === 'active' ? 'orange' : 'green'; ?>-600 hover:text-<?php echo $user['status'] === 'active' ? 'orange' : 'green'; ?>-900 mr-2"
-                                        title="<?php echo $user['status'] === 'active' ? 'Deactivate' : 'Activate'; ?> user">
-                                        <i class="fas fa-<?php echo $user['status'] === 'active' ? 'user-slash' : 'user-check'; ?>"></i>
+                                    <button onclick='toggleUserStatus(<?php echo $user['id_user']; ?>, "<?php echo $user['status'] ?? 'active'; ?>", "<?php echo htmlspecialchars($user['nama']); ?>")'
+                                        class="text-<?php echo ($user['status'] ?? 'active') === 'active' ? 'orange' : 'green'; ?>-600 hover:text-<?php echo ($user['status'] ?? 'active') === 'active' ? 'orange' : 'green'; ?>-900 mr-2"
+                                        title="<?php echo ($user['status'] ?? 'active') === 'active' ? 'Deactivate' : 'Activate'; ?> user">
+                                        <i class="fas fa-<?php echo ($user['status'] ?? 'active') === 'active' ? 'user-slash' : 'user-check'; ?>"></i>
                                     </button>
                                     <button onclick='openEditModal(<?php echo json_encode($user); ?>)'
                                         class="text-blue-600 hover:text-blue-900 mr-2" title="Edit user">

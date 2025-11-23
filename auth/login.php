@@ -34,9 +34,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $user = $result->fetch_assoc();
 
             // Check account status
-            if ($user['status'] === 'inactive') {
+            $user_status = $user['status'] ?? 'active';
+            
+            if ($user_status === 'inactive') {
                 $error = 'Akun Anda telah dinonaktifkan. Silakan hubungi administrator.';
-            } elseif ($user['status'] === 'pending') {
+            } elseif ($user_status === 'pending') {
                 // Set session for pending user and redirect to pending page
                 $_SESSION['user_id'] = $user['id_user'];
                 $_SESSION['user_name'] = $user['nama'];
@@ -59,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['user_name'] = $user['nama'];
                     $_SESSION['user_role'] = $user['role'];
                     $_SESSION['user_email'] = $user['email'];
-                    $_SESSION['user_status'] = $user['status'];
+                    $_SESSION['user_status'] = $user_status;
                     $_SESSION['logged_in'] = true;
                     
                     error_log("🔧 Developer Mode: OTP bypassed for {$user['email']}");
@@ -93,7 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['user_name'] = $user['nama'];
                 $_SESSION['user_role'] = $user['role'];
                 $_SESSION['user_email'] = $user['email'];
-                $_SESSION['user_status'] = $user['status'];
+                $_SESSION['user_status'] = $user_status;
                 $_SESSION['logged_in'] = false;
                 
                 // Generate OTP
