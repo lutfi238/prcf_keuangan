@@ -1,1 +1,16 @@
-AGENTS.md
+# Large files
+*.mp4
+*.avi
+*.mov
+*.wmv
+*.mkv
+*.webm
+
+# Video folder
+assets/video/
+
+# Uploads folder - user uploaded files (large)
+uploads/
+
+# Config sensitive data (optional - uncomment if needed)
+# includes/config.php
