@@ -14,3 +14,8 @@ uploads/
 
 # Config sensitive data (optional - uncomment if needed)
 # includes/config.php
+AGENTS.md
+.roo/rules-architect/AGENTS.md
+.roo/rules-ask/AGENTS.md
+.roo/rules-code/AGENTS.md
+.roo/rules-debug/AGENTS.md
