@@ -480,13 +480,11 @@ CREATE TABLE `user` (
 --
 
 INSERT INTO `user` (`id_user`, `nama`, `role`, `email`, `no_HP`, `password_hash`, `created_at`, `updated_at`, `last_notification_check`) VALUES
-(1, 'Chandra PM', 'Project Manager', '12345c4n12345@gmail.com', '6283153505411', '$2y$10$r.zr5s5a3m9qJ3kOdCxm3.G..LqNiy9upbO0oZJUuAuBC8ee8tSC6', '2025-10-16 06:36:23', '2025-11-23 14:15:29', '2025-10-28 16:42:54'),
-(4, 'Ferrosi FM', 'Finance Manager', 'ferrosipratamaq@gmail.com', '6289521340602', '$2y$10$4Dc7kmGgHY5WxZDfGw2zm.KIegC1xrX7GirUlXyj40Rl4/RzsopZu', '2025-10-16 06:43:55', '2025-11-23 14:15:21', '2025-11-23 13:49:30'),
-(5, 'zheamanda FM', 'Finance Manager', 'zheaamandavitaloka@gmail.com', '6283836609877', '$2y$10$aYQPYZIRplq3lYsN4s4TrOtR.UPafFF7zDCS/pF30MkABJ5G/Z/CW', '2025-10-16 06:50:22', '2025-11-23 14:15:12', NULL),
-(8, 'Ferrosi SA', 'Staff Accountant', 'ferrosipratamaqu@gmail.com', '6282134812641', '$2y$10$c.kiil8chyMEiAqZgzpR7u5sqVVftQIJJLyKIckfatqprVRXNLuqO', '2025-10-19 13:22:11', '2025-11-23 14:06:11', NULL),
-(9, 'lutfi', 'Admin', 'lutfifirdaus238@gmail.com', '6285752706608', '$2y$10$2fH773o5wxutvRZtlEKm2O/PNR6riXAOfdta1jT26dKhKyJnDFqnS', '2025-10-20 01:02:46', '2025-11-23 05:06:57', NULL),
-(11, 'lutfi dir', 'Direktur', 'mulfis@googlegroups.com', '085752706607', '$2y$10$9RqVBR.dhGhzT.Puz9CL1Od.WJXEAvFGO5Gje//Deh5EixSu2g3Fu', '2025-11-23 14:05:43', '2025-11-23 14:06:02', NULL),
-(12, 'lutfi SA', 'Staff Accountant', 'lutfifirdaus236@gmail.com', '085752706606', '$2y$10$gouMKMgBSEnFAeCbEjk/0uRElcrfBAYHh9T0fJyk9iT1d3GsGKREC', '2025-11-23 14:06:54', '2025-11-23 14:06:54', NULL);
+(1, 'Administrator', 'Admin', 'admin@prcf.org', '081234567890', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '2026-01-01 00:00:00', '2026-01-01 00:00:00', NULL),
+(2, 'Project Manager One', 'Project Manager', 'pm@prcf.org', '081234567891', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '2026-01-01 00:00:00', '2026-01-01 00:00:00', NULL),
+(3, 'Finance Manager One', 'Finance Manager', 'fm@prcf.org', '081234567892', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '2026-01-01 00:00:00', '2026-01-01 00:00:00', NULL),
+(4, 'Staff Accountant One', 'Staff Accountant', 'sa@prcf.org', '081234567893', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '2026-01-01 00:00:00', '2026-01-01 00:00:00', NULL),
+(5, 'Direktur Utama', 'Direktur', 'direktur@prcf.org', '081234567894', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '2026-01-01 00:00:00', '2026-01-01 00:00:00', NULL);
 
 -- --------------------------------------------------------
 
