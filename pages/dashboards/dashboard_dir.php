@@ -125,7 +125,7 @@ while ($row = $approved_proposals->fetch_assoc()) {
         'type' => 'proposal',
         'id' => $row['id_proposal'],
         'title' => 'Proposal disetujui FM: ' . $row['judul_proposal'],
-        'link' => '../proposals/view_proposal.php?id=' . $row['id_proposal'],
+        'link' => '../proposals/approve_proposal.php?id=' . $row['id_proposal'] . '&return_tab=proposals',
         'time' => time_elapsed_string($row['updated_at']),
         'sort_time' => strtotime($row['updated_at']),
         'is_unread' => $is_unread
@@ -682,9 +682,13 @@ session_write_close();
                                     <?php endif; ?>
                                 </td>
                                 <td class="px-6 py-4 text-sm">
-                                    <a href="../proposals/view_proposal.php?id=<?php echo $proposal['id_proposal'] ?? 0; ?>&return_tab=proposals" 
-                                        class="text-blue-600 hover:text-blue-900">
-                                        <i class="fas fa-eye mr-1"></i> View
+                                    <a href="<?php echo ($proposal['status'] === 'approved_fm') ? '../proposals/approve_proposal.php' : '../proposals/view_proposal.php'; ?>?id=<?php echo $proposal['id_proposal'] ?? 0; ?>&return_tab=proposals" 
+                                        class="<?php echo ($proposal['status'] === 'approved_fm') ? 'text-purple-600 hover:text-purple-900 font-bold' : 'text-blue-600 hover:text-blue-900'; ?>">
+                                        <?php if ($proposal['status'] === 'approved_fm'): ?>
+                                            <i class="fas fa-edit mr-1"></i> Review
+                                        <?php else: ?>
+                                            <i class="fas fa-eye mr-1"></i> View
+                                        <?php endif; ?>
                                     </a>
                                 </td>
                             </tr>

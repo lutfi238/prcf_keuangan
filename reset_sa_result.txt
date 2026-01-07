@@ -1,0 +1,7 @@
+**Password Reset - SA Account**
+- **Email:** sa@prcf.org
+- **Role:** Staff Accountant (Confirmed)
+- **New Password:** password123
+- **Status:** Reset Successful.
+
+(Note: Previous failures were due to incorrect column name `password` vs `password_hash`).

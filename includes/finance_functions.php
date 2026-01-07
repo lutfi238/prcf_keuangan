@@ -48,32 +48,44 @@ function get_or_create_bank_header($conn, $project_code, $date) {
     }
     
     // Create new
-    // Get previous balance
+    // Get previous balance and Account Details
     $prev_month = date('m', strtotime("-1 month", strtotime($date)));
     $prev_year = date('Y', strtotime("-1 month", strtotime($date)));
     
-    $stmt = $conn->prepare("SELECT saldo_akhir_idr, saldo_akhir_usd FROM buku_bank_header WHERE kode_proyek = ? AND periode_bulan = ? AND periode_tahun = ?");
+    $stmt = $conn->prepare("SELECT saldo_akhir_idr, saldo_akhir_usd, account_name, bank_name, account_number, currency FROM buku_bank_header WHERE kode_proyek = ? AND periode_bulan = ? AND periode_tahun = ? LIMIT 1");
     $stmt->bind_param("sss", $project_code, $prev_month, $prev_year);
     $stmt->execute();
     $res = $stmt->get_result();
     
-    $saldo_awal_idr = 0;
-    $saldo_awal_usd = 0;
-    
     if ($row = $res->fetch_assoc()) {
         $saldo_awal_idr = $row['saldo_akhir_idr'];
         $saldo_awal_usd = $row['saldo_akhir_usd'];
+        $account_name = $row['account_name'];
+        $bank_name = $row['bank_name'];
+        $account_number = $row['account_number'];
+        $currency = $row['currency'];
+    } else {
+        throw new Exception("Buku Bank bulan lalu tidak ditemukan untuk Proyek $project_code. Harap buat Buku Bank manual terlebih dahulu sebelum transaksi.");
     }
     
     $id_header = generate_id('BH');
-    $stmt = $conn->prepare("INSERT INTO buku_bank_header (id_bank_header, kode_proyek, periode_bulan, periode_tahun, saldo_awal_idr, saldo_awal_usd, saldo_akhir_idr, saldo_akhir_usd, status_laporan, tanggal_pembuatan) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', NOW())");
-    $stmt->bind_param("ssssdddd", $id_header, $project_code, $month, $year, $saldo_awal_idr, $saldo_awal_usd, $saldo_awal_idr, $saldo_awal_usd);
+    $stmt = $conn->prepare("INSERT INTO buku_bank_header 
+        (id_bank_header, kode_proyek, periode_bulan, periode_tahun, 
+         account_name, bank_name, account_number, currency,
+         saldo_awal_idr, saldo_awal_usd, saldo_akhir_idr, saldo_akhir_usd, 
+         status_laporan, tanggal_pembuatan) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', NOW())");
+        
+    $stmt->bind_param("ssssssssdddd", 
+        $id_header, $project_code, $month, $year, 
+        $account_name, $bank_name, $account_number, $currency,
+        $saldo_awal_idr, $saldo_awal_usd, $saldo_awal_idr, $saldo_awal_usd);
     
     if ($stmt->execute()) {
         return $id_header;
     }
     
-    throw new Exception("Failed to create Bank Header");
+    throw new Exception("Failed to create Bank Header: " . $stmt->error);
 }
 
 function get_or_create_piutang_header($conn, $project_code, $date) {

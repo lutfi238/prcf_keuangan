@@ -117,10 +117,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $upd_budget_stmt = $conn->prepare("UPDATE project_code_budgets 
                     SET used_usd = used_usd + ?, 
                         used_idr = used_idr + ?
-                    WHERE place_code = ? AND kode_proyek = ?");
-                $upd_budget_stmt->bind_param("ddss", 
+                    WHERE place_code = ? 
+                    AND kode_proyek = ?
+                    AND (remaining_usd >= ? OR budget_usd >= (used_usd + ?))"); // Prevent overdraft
+                $upd_budget_stmt->bind_param("ddssdd", 
                     $credit_usd, $credit_idr, 
-                    $detail['place_code'], $prop_data['kode_proyek']);
+                    $detail['place_code'], $prop_data['kode_proyek'],
+                    $credit_usd, $credit_usd);
                 $upd_budget_stmt->execute();
                 
                 // Check if update was successful
@@ -623,7 +626,7 @@ session_write_close();
                     </div>
                     <div class="p-4 <?php echo $total_available_usd >= $total_requested_usd ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'; ?> rounded-lg border">
                         <p class="text-sm <?php echo $total_available_usd >= $total_requested_usd ? 'text-green-600' : 'text-red-600'; ?> font-medium">
-                            Selisih
+                            Sisa
                         </p>
                         <p class="text-2xl font-bold <?php echo $total_available_usd >= $total_requested_usd ? 'text-green-900' : 'text-red-900'; ?> mt-1">
                             $<?php echo number_format($total_available_usd - $total_requested_usd, 2); ?>

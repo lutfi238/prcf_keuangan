@@ -56,6 +56,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_proposal'])) {
     $conn->begin_transaction();
     
     try {
+        // [SECURITY] Backend Budget Validation
+        if (isset($_POST['budget']) && is_array($_POST['budget'])) {
+            $temp_usage = []; // Track cumulative usage in this request
+            $check_stmt = $conn->prepare("SELECT remaining_usd FROM project_code_budgets WHERE place_code = ? AND kode_proyek = ?");
+            
+            foreach ($_POST['budget'] as $item) {
+                $pc = $item['place_code'];
+                $req_usd = floatval($item['amount_usd']);
+                
+                if ($req_usd <= 0) continue;
+
+                $check_stmt->bind_param("ss", $pc, $kode_proyek);
+                $check_stmt->execute();
+                $res = $check_stmt->get_result();
+                
+                if ($res->num_rows === 0) {
+                    throw new Exception("Place Code tidak valid: " . htmlspecialchars($pc));
+                }
+                
+                $budat = $res->fetch_assoc();
+                
+                // Cumulative check (in case same place_code used multiple times)
+                $prev_used = $temp_usage[$pc] ?? 0;
+                $total_req = $prev_used + $req_usd;
+                $temp_usage[$pc] = $total_req;
+                
+                // Precision tolerance (0.01)
+                if ($total_req > ($budat['remaining_usd'] + 0.01)) {
+                     throw new Exception("Budget tidak mencukupi untuk $pc. Sisa: $" . number_format($budat['remaining_usd'], 2) . ", Diminta: $" . number_format($total_req, 2));
+                }
+            }
+            $check_stmt->close();
+        }
+
         // Insert proposal
         $stmt = $conn->prepare("INSERT INTO proposal 
             (judul_proposal, pj, date, pemohon, kode_proyek, tor, file_budget, 
@@ -340,7 +374,8 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
             
             let expOptions = '<option value="">Pilih Exp Code</option>';
             expCodes.forEach(e => {
-                expOptions += `<option value="${e.exp_code}">${e.exp_code}</option>`;
+                const cleanDesc = (e.description || '').replace(/"/g, '&quot;');
+                expOptions += `<option value="${e.exp_code}" data-description="${cleanDesc}">${e.exp_code}</option>`;
             });
 
             row.innerHTML = `
@@ -393,6 +428,14 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
             
             const abbr = villageSelect.options[villageSelect.selectedIndex].getAttribute('data-abbr');
             const exp = expSelect.value;
+            
+            // Auto-fill description from selected exp code
+            const expOption = expSelect.options[expSelect.selectedIndex];
+            const description = expOption.getAttribute('data-description');
+            if (description) {
+                const descInput = row.querySelector(`input[name="budget[${id}][description]"]`);
+                if (descInput) descInput.value = description;
+            }
             
             if (abbr && exp) {
                 const placeCode = generatePlaceCode(exp, abbr);

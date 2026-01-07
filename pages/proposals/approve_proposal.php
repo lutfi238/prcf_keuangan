@@ -11,14 +11,8 @@ if (!isset($_SESSION['logged_in'])) {
     exit();
 }
 
-// Only Finance Manager can approve - Direktur should use view page
-if ($_SESSION['user_role'] !== 'Finance Manager') {
-    if ($_SESSION['user_role'] === 'Direktur') {
-        // Redirect Direktur to view page - they only view, don't approve
-        $proposal_id = $_GET['id'] ?? 0;
-        header('Location: view_proposal.php?id=' . $proposal_id);
-        exit();
-    }
+// Only Finance Manager OR Direktur can approve
+if (!in_array($_SESSION['user_role'], ['Finance Manager', 'Direktur'])) {
     header('Location: ../../auth/unauthorized.php');
     exit();
 }
@@ -42,31 +36,131 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve'])) {
     $check_stmt->execute();
     $current = $check_stmt->get_result()->fetch_assoc();
     
+    $action_taken = false;
+    $success_msg = '';
+
+    // STAGE 1: FM Approve
     if ($user_role === 'Finance Manager' && $current['status'] === 'submitted') {
-        // STAGE 1: FM Approve
         if ($two_stage_enabled) {
             // 2-stage approval: status → 'approved_fm' (waiting DIR)
             $stmt = $conn->prepare("UPDATE proposal SET status = 'approved_fm', approved_by_fm = ?, fm_approval_date = NOW() WHERE id_proposal = ?");
             $stmt->bind_param("ii", $user_id, $proposal_id);
+            $success_msg = 'proposal_approved_stage1';
         } else {
             // Fallback: direct approval (1-stage)
             $stmt = $conn->prepare("UPDATE proposal SET status = 'approved' WHERE id_proposal = ?");
             $stmt->bind_param("i", $proposal_id);
-            
-            $error = '<div class="bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded">
-                <strong>⚠️ Warning:</strong> 2-stage approval belum diaktifkan.<br>
-                <small>Import file <code>alter_proposal_2stage_approval.sql</code> di phpMyAdmin untuk mengaktifkan fitur 2-stage approval.</small>
-            </div>';
+            $success_msg = 'proposal_approved';
         }
-        
+        $action_taken = true;
+    }
+    // STAGE 2: Director Approve (Final)
+    elseif ($user_role === 'Direktur' && $current['status'] === 'approved_fm') {
+        if (isset($_POST['approve'])) {
+            $stmt = $conn->prepare("UPDATE proposal SET status = 'approved', approved_by_dir = ?, dir_approval_date = NOW() WHERE id_proposal = ?");
+            // Check if approved_by_dir exists first? Assumed yes or fallback
+            // If column doesn't exist, use simple update
+            $check_col = $conn->query("SHOW COLUMNS FROM proposal LIKE 'approved_by_dir'");
+            if ($check_col && $check_col->num_rows > 0) {
+                 $stmt->bind_param("ii", $user_id, $proposal_id);
+            } else {
+                 $stmt = $conn->prepare("UPDATE proposal SET status = 'approved' WHERE id_proposal = ?");
+                 $stmt->bind_param("i", $proposal_id);
+            }
+            $success_msg = 'proposal_approved_final';
+            $action_taken = true;
+        } elseif (isset($_POST['reject'])) {
+            // DIRECTOR REJECTION LOGIC
+            // 1. Must Refund Budget & Cancel Bank Entries
+            $catatan = $_POST['catatan'] ?? '';
+            
+            // Start Transaction for Refund
+            $conn->begin_transaction();
+            try {
+                // Find Bank Entries for this Proposal
+                // Pattern: %-PROP{id}-%
+                $prop_id_padded = str_pad($proposal_id, 6, '0', STR_PAD_LEFT);
+                $reff_pattern = "%-PROP" . $prop_id_padded . "-%";
+                
+                $bank_stmt = $conn->prepare("SELECT * FROM buku_bank_detail WHERE reff LIKE ?");
+                $bank_stmt->bind_param("s", $reff_pattern);
+                $bank_stmt->execute();
+                $bank_entries = $bank_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+                
+                // Load helper for updating balance
+                require_once '../../includes/finance_functions.php';
+                
+                foreach ($bank_entries as $entry) {
+                    // Reverse Budget Deduction
+                    // Need to know which Place Code and Exp Code.
+                    // buku_bank_detail has place_code.
+                    // We need to fetch 'kode_proyek' from proposal or budget details? 
+                    // Entries have 'place_code'. But we need 'kode_proyek'.
+                    // Let's get kode_proyek from proposal (fetched at top $current? No, need full data).
+                    
+                    // Fetch full proposal data first if not exists
+                    $p_stmt = $conn->prepare("SELECT kode_proyek FROM proposal WHERE id_proposal = ?");
+                    $p_stmt->bind_param("i", $proposal_id);
+                    $p_stmt->execute();
+                    $p_data = $p_stmt->get_result()->fetch_assoc();
+                    $kode_proyek = $p_data['kode_proyek'];
+                    
+                    $credit_idr = $entry['credit_idr'];
+                    $credit_usd = $entry['credit_usd'];
+                    
+                    // Reverse Project Budget: used -= amount
+                    // Condition: MUST match place_code and kode_proyek
+                    $rev_bud = $conn->prepare("UPDATE project_code_budgets SET used_usd = used_usd - ?, used_idr = used_idr - ? WHERE place_code = ? AND kode_proyek = ?");
+                    $rev_bud->bind_param("ddss", $credit_usd, $credit_idr, $entry['place_code'], $kode_proyek);
+                    $rev_bud->execute();
+                    
+                    // Reverse Bank Header Balance
+                    // If entry was Credit (Payment), Balance Decreased.
+                    // To Refund, we Increase Balance.
+                    // update_bank_header_balance($conn, $id_header, $idr, $usd, $is_credit=true) -> Decreases.
+                    // We want Increase. So $is_credit = false.
+                    update_bank_header_balance($conn, $entry['id_bank_header'], $credit_idr, $credit_usd, false);
+                    
+                    // Delete Bank Entry
+                    $del_stmt = $conn->prepare("DELETE FROM buku_bank_detail WHERE id_detail_bank = ?");
+                    $del_stmt->bind_param("s", $entry['id_detail_bank']);
+                    $del_stmt->execute();
+                }
+                
+                // Update Proposal Status
+                $upd_prop = $conn->prepare("UPDATE proposal SET status = 'rejected', catatan_dir = ? WHERE id_proposal = ?");
+                // Check column 'catatan_dir'
+                $check_col = $conn->query("SHOW COLUMNS FROM proposal LIKE 'catatan_dir'");
+                if ($check_col && $check_col->num_rows > 0) {
+                     $upd_prop->bind_param("si", $catatan, $proposal_id);
+                } else {
+                     // Fallback if no specific column, maybe use catatan_fm or just update status
+                     $upd_prop = $conn->prepare("UPDATE proposal SET status = 'rejected' WHERE id_proposal = ?");
+                     $upd_prop->bind_param("i", $proposal_id);
+                }
+                $upd_prop->execute();
+                
+                $conn->commit();
+                $success_msg = 'proposal_rejected'; // Logic to handle message at bottom
+                $action_taken = true;
+                
+            } catch (Exception $e) {
+                $conn->rollback();
+                $error = "Gagal menolak proposal dan refund budget: " . $e->getMessage();
+                $action_taken = false;
+            }
+        }
+    }
+
+    if ($action_taken) {
         if ($stmt->execute()) {
-            // Get proposal details
+            // Get proposal details for notification
             $prop_stmt = $conn->prepare("SELECT p.*, u.email, u.nama FROM proposal p LEFT JOIN user u ON p.pemohon = u.nama WHERE id_proposal = ?");
             $prop_stmt->bind_param("i", $proposal_id);
             $prop_stmt->execute();
             $prop_data = $prop_stmt->get_result()->fetch_assoc();
             
-            if ($two_stage_enabled) {
+            if ($user_role === 'Finance Manager' && $two_stage_enabled) {
                 // Notify PM - Stage 1 approval
                 send_notification_email(
                     $prop_data['email'],
@@ -84,24 +178,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve'])) {
                     );
                 }
                 
-                header('Location: ../dashboards/dashboard_fm.php?success=proposal_approved_stage1');
+                header('Location: ../dashboards/dashboard_fm.php?success=' . $success_msg);
+
+            } elseif ($user_role === 'Direktur') {
+                 if ($success_msg === 'proposal_rejected') {
+                     send_notification_email(
+                        $prop_data['email'],
+                        'Proposal Ditolak oleh Direktur',
+                        'Proposal Anda "' . $prop_data['judul_proposal'] . '" telah DITOLAK oleh Direktur. Mohon cek catatan revisi/penolakan.'
+                     );
+                 } else {
+                     // Notify PM - Final approval
+                     send_notification_email(
+                        $prop_data['email'],
+                        'Proposal Disetujui Sepenuhnya (2/2)',
+                        'Proposal Anda "' . $prop_data['judul_proposal'] . '" telah mendapatkan Final Approval dari Direktur.'
+                     );
+                 }
+                header('Location: ../dashboards/dashboard_dir.php?success=' . $success_msg);
             } else {
-                // Fallback: notify as fully approved
+                // Fallback 1-stage
                 send_notification_email(
                     $prop_data['email'],
-                    'Proposal Disetujui oleh Finance Manager',
+                    'Proposal Disetujui',
                     'Proposal Anda "' . $prop_data['judul_proposal'] . '" telah disetujui.'
                 );
-                
-                header('Location: ../dashboards/dashboard_fm.php?success=proposal_approved&warning=2stage_disabled');
+                header('Location: ../dashboards/dashboard_fm.php?success=' . $success_msg . '&warning=2stage_disabled');
             }
             exit();
         } else {
             $error = 'Gagal menyetujui proposal. Error: ' . $stmt->error;
         }
-        
     } else {
-        $error = 'Status proposal tidak valid untuk approval Anda';
+        $error = 'Status proposal tidak valid untuk approval Anda atau Anda tidak memiliki akses.';
     }
 }
 
@@ -309,6 +418,12 @@ if (!$proposal) {
                 <?php endif; ?>
                 
                 <form method="POST" class="space-y-4">
+                    <!-- Note Input -->
+                    <div class="bg-white p-6 rounded-lg border border-gray-200">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Catatan / Alasan Penolakan</label>
+                        <textarea name="catatan" rows="3" class="w-full p-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="Masukkan catatan approval atau alasan penolakan (Wajib jika menolak)..."></textarea>
+                    </div>
+
                     <div class="bg-white p-6 rounded-lg border border-purple-200">
                         <div class="flex items-start space-x-4">
                             <div class="flex-shrink-0">
@@ -318,7 +433,7 @@ if (!$proposal) {
                             </div>
                             <div class="flex-1">
                                 <p class="font-medium text-gray-800 mb-2">Tanda Tangan Digital - Direktur</p>
-                                <p class="text-sm text-gray-600 mb-4">Dengan menekan tombol "Approve Final", Anda memberikan persetujuan final sebagai Direktur.</p>
+                                <p class="text-sm text-gray-600 mb-4">Dengan menekan tombol Approve, Anda memberikan persetujuan final. Jika Menolak, budget akan dikembalikan.</p>
                                 <div class="flex items-center space-x-2 text-sm text-gray-600">
                                     <i class="fas fa-user"></i>
                                     <span><?php echo $user_name; ?></span>
@@ -329,9 +444,15 @@ if (!$proposal) {
                         </div>
                     </div>
 
-                    <div class="flex justify-end">
+                    <div class="flex justify-between items-center pt-4">
+                        <button type="submit" name="reject"
+                            class="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition duration-200 font-medium shadow-lg flex items-center"
+                            onclick="if(this.form.catatan.value.trim() === '') { alert('Mohon isi catatan alasan penolakan!'); this.form.catatan.focus(); return false; } return confirm('Yakin ingin MENOLAK proposal ini? Budget yang telah ditarik akan DIKEMBALIKAN (Refund) dan transaksi dibatalkan.');">
+                            <i class="fas fa-times-circle mr-2"></i> Tolak Proposal
+                        </button>
+
                         <button type="submit" name="approve"
-                            class="px-8 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition duration-200 font-medium text-lg shadow-lg"
+                            class="px-8 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition duration-200 font-medium text-lg shadow-lg flex items-center"
                             onclick="return confirm('Setujui proposal ini sebagai FINAL APPROVAL (2/2)?')">
                             <i class="fas fa-check-double mr-2"></i> Approve Final (2/2)
                         </button>
