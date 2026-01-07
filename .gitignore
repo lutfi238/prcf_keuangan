@@ -13,7 +13,7 @@ assets/video/
 uploads/
 
 # Config sensitive data (optional - uncomment if needed)
-# includes/config.php
+includes/config.php
 AGENTS.md
 .roo/rules-architect/AGENTS.md
 .roo/rules-ask/AGENTS.md
