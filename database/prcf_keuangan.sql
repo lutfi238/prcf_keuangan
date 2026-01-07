@@ -498,6 +498,9 @@ CREATE TABLE `villages` (
   `village_name` varchar(100) NOT NULL COMMENT 'Nama lengkap desa',
   `village_abbr` varchar(5) NOT NULL COMMENT 'Singkatan untuk Place Code, misal: NJ, SW, PR',
   `description` text DEFAULT NULL,
+  `is_deleted` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Soft delete flag',
+  `created_by` int(11) DEFAULT NULL COMMENT 'User yang membuat',
+  `updated_by` int(11) DEFAULT NULL COMMENT 'User yang terakhir mengupdate',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Master data desa untuk budget allocation';
@@ -506,16 +509,12 @@ CREATE TABLE `villages` (
 -- Dumping data for table `villages`
 --
 
-INSERT INTO `villages` (`id_village`, `village_code`, `village_name`, `village_abbr`, `description`, `created_at`, `updated_at`) VALUES
-(1, 'V001', 'Nanga Jemah', 'NJ', 'Desa Nanga Jemah', '2025-11-23 03:58:07', '2025-11-23 03:58:07'),
-(2, 'V002', 'Sri Wangi', 'SW', 'Desa Sri Wangi', '2025-11-23 03:58:07', '2025-11-23 03:58:07'),
-(3, 'V003', 'Penepian Raya', 'PR', 'Desa Penepian Raya', '2025-11-23 03:58:07', '2025-11-23 03:58:07'),
-(4, 'V004', 'Tanjung Jaya', 'TJ', 'Desa Tanjung Jaya', '2025-11-23 03:58:07', '2025-11-23 03:58:07'),
-(5, 'V005', 'Riam Jaya', 'RJ', 'Desa Riam Jaya', '2025-11-23 03:58:07', '2025-11-23 03:58:07'),
-(999, 'TEST', 'Test Village', 'TV', NULL, '2025-11-23 04:21:15', '2025-11-23 04:21:15'),
-(1002, '1003', 'Nanga Lauk', 'NL', NULL, '2025-11-23 04:57:56', '2025-11-23 04:57:56'),
-(1003, '1004', 'Tanjung Kapuas', 'TK', NULL, '2025-11-23 04:57:56', '2025-11-23 04:57:56'),
-(1004, '1005', 'Nanga Betung', 'NB', NULL, '2025-11-23 04:57:56', '2025-11-23 04:57:56');
+INSERT INTO `villages` (`id_village`, `village_code`, `village_name`, `village_abbr`, `description`, `is_deleted`, `created_by`, `updated_by`, `created_at`, `updated_at`) VALUES
+(1, 'V001', 'Nanga Jemah', 'NJ', 'Desa Nanga Jemah', 0, NULL, NULL, '2025-11-23 03:58:07', '2025-11-23 03:58:07'),
+(2, 'V002', 'Sri Wangi', 'SW', 'Desa Sri Wangi', 0, NULL, NULL, '2025-11-23 03:58:07', '2025-11-23 03:58:07'),
+(3, 'V003', 'Penepian Raya', 'PR', 'Desa Penepian Raya', 0, NULL, NULL, '2025-11-23 03:58:07', '2025-11-23 03:58:07'),
+(4, 'V004', 'Tanjung Jaya', 'TJ', 'Desa Tanjung Jaya', 0, NULL, NULL, '2025-11-23 03:58:07', '2025-11-23 03:58:07'),
+(5, 'V005', 'Riam Jaya', 'RJ', 'Desa Riam Jaya', 0, NULL, NULL, '2025-11-23 03:58:07', '2025-11-23 03:58:07');
 
 --
 -- Indexes for dumped tables

@@ -44,7 +44,13 @@ async function fetchLatestExrate() {
 async function fetchVillages() {
     try {
         const response = await fetch('../../api/get_villages.php');
-        return await response.json();
+        const data = await response.json();
+        // Ensure we always return an array
+        if (Array.isArray(data)) {
+            return data;
+        }
+        console.error('Villages API returned non-array:', data);
+        return [];
     } catch (error) {
         console.error('Error fetching villages:', error);
         return [];
@@ -55,7 +61,13 @@ async function fetchVillages() {
 async function fetchExpCodes(kodeProyek) {
     try {
         const response = await fetch(`../../api/get_exp_codes_by_project.php?kode_proyek=${kodeProyek}`);
-        return await response.json();
+        const data = await response.json();
+        // Ensure we always return an array
+        if (Array.isArray(data)) {
+            return data;
+        }
+        console.error('ExpCodes API returned non-array:', data);
+        return [];
     } catch (error) {
         console.error('Error fetching exp codes:', error);
         return [];

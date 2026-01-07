@@ -23,6 +23,10 @@ try {
               ORDER BY v.village_name ASC";
     $result = $conn->query($query);
     
+    if (!$result) {
+        throw new Exception($conn->error);
+    }
+    
     $villages = [];
     while ($row = $result->fetch_assoc()) {
         $villages[] = $row;
