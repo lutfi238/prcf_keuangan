@@ -94,6 +94,29 @@ if (!empty($filter_village)) {
 $query .= " ORDER BY b.created_at DESC";
 $budgets = $conn->query($query);
 
+// Get projects with budget summary for validation
+$projects_budget_summary = $conn->query("
+    SELECT 
+        p.kode_proyek,
+        p.nama_proyek,
+        p.nilai_anggaran as total_budget,
+        COALESCE(SUM(b.budget_idr), 0) as allocated_idr,
+        COALESCE(SUM(b.budget_usd), 0) as allocated_usd,
+        (p.nilai_anggaran - COALESCE(SUM(b.budget_idr), 0)) as remaining_idr
+    FROM proyek p
+    LEFT JOIN project_code_budgets b ON p.kode_proyek = b.kode_proyek
+    WHERE p.status_proyek != 'cancelled'
+    GROUP BY p.kode_proyek, p.nama_proyek, p.nilai_anggaran
+    ORDER BY p.kode_proyek
+");
+$budget_summaries = [];
+if ($projects_budget_summary) {
+    while ($row = $projects_budget_summary->fetch_assoc()) {
+        $budget_summaries[$row['kode_proyek']] = $row;
+    }
+}
+
+
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -136,8 +159,33 @@ $budgets = $conn->query($query);
             <!-- Form Input -->
             <div class="lg:col-span-1">
                 <div class="bg-white rounded-lg shadow p-6 sticky top-24">
+                    <!-- Budget Info Card -->
+                    <div id="budgetInfoCard" class="hidden mb-4 p-4 rounded-lg border-2">
+                        <h3 class="text-sm font-bold text-gray-700 mb-2">
+                            <i class="fas fa-chart-pie mr-1"></i>Info Budget Proyek
+                        </h3>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Total Anggaran:</span>
+                                <span id="totalBudget" class="font-bold">-</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Teralokasi:</span>
+                                <span id="allocatedBudget" class="font-bold">-</span>
+                            </div>
+                            <div class="flex justify-between border-t pt-2">
+                                <span class="text-gray-600">Sisa:</span>
+                                <span id="remainingBudget" class="font-bold">-</span>
+                            </div>
+                        </div>
+                        <div id="budgetWarning" class="hidden mt-3 p-2 bg-yellow-100 border border-yellow-400 rounded text-xs text-yellow-800">
+                            <i class="fas fa-exclamation-triangle mr-1"></i>
+                            <span id="warningText">Perhatian!</span>
+                        </div>
+                    </div>
+                    
                     <h2 class="text-lg font-bold text-gray-800 mb-4">Input / Update Budget</h2>
-                    <form method="POST" id="budgetForm" class="space-y-4">
+                    <form method="POST" id="budgetForm" class="space-y-4" onsubmit="return validateBudget()">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Proyek</label>
                             <select name="kode_proyek" id="kode_proyek" required class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
@@ -347,7 +395,87 @@ $budgets = $conn->query($query);
             amountInput.addEventListener('input', updateConversion);
             exrateInput.addEventListener('input', updateConversion);
             currencySelect.addEventListener('change', updateConversion);
+            
+            // Budget validation data from PHP
+            const budgetSummaries = <?php echo json_encode($budget_summaries); ?>;
+            
+            // Budget info display
+            function updateBudgetInfo(kodeProyek) {
+                const infoCard = document.getElementById('budgetInfoCard');
+                const totalEl = document.getElementById('totalBudget');
+                const allocatedEl = document.getElementById('allocatedBudget');
+                const remainingEl = document.getElementById('remainingBudget');
+                const warningEl = document.getElementById('budgetWarning');
+                const warningText = document.getElementById('warningText');
+                
+                if (!kodeProyek || !budgetSummaries[kodeProyek]) {
+                    infoCard.classList.add('hidden');
+                    return;
+                }
+                
+                const summary = budgetSummaries[kodeProyek];
+                const total = parseFloat(summary.total_budget) || 0;
+                const allocated = parseFloat(summary.allocated_idr) || 0;
+                const remaining = total - allocated;
+                
+                totalEl.textContent = formatCurrency(total, 'IDR');
+                allocatedEl.textContent = formatCurrency(allocated, 'IDR');
+                remainingEl.textContent = formatCurrency(remaining, 'IDR');
+                
+                // Update card color and warning
+                if (remaining < 0) {
+                    infoCard.className = 'mb-4 p-4 rounded-lg border-2 bg-red-50 border-red-300';
+                    remainingEl.className = 'font-bold text-red-600';
+                    warningEl.classList.remove('hidden');
+                    warningText.textContent = 'Budget proyek sudah melebihi anggaran!';
+                } else if (remaining < total * 0.1) {
+                    infoCard.className = 'mb-4 p-4 rounded-lg border-2 bg-yellow-50 border-yellow-300';
+                    remainingEl.className = 'font-bold text-yellow-600';
+                    warningEl.classList.remove('hidden');
+                    warningText.textContent = 'Sisa budget kurang dari 10%';
+                } else {
+                    infoCard.className = 'mb-4 p-4 rounded-lg border-2 bg-green-50 border-green-300';
+                    remainingEl.className = 'font-bold text-green-600';
+                    warningEl.classList.add('hidden');
+                }
+                
+                infoCard.classList.remove('hidden');
+            }
+            
+            // Add budget info update to project change
+            kodeProyekSelect.addEventListener('change', function() {
+                updateBudgetInfo(this.value);
+            });
+            
         });
+        
+        // Validate budget before submit
+        function validateBudget() {
+            const kodeProyek = document.getElementById('kode_proyek').value;
+            const amount = parseFloat(document.getElementById('amount').value) || 0;
+            const currency = document.getElementById('currency').value;
+            const exrate = parseFloat(document.getElementById('exrate').value) || 15500;
+            
+            // Convert to IDR for comparison
+            let amountIDR = currency === 'USD' ? amount * exrate : amount;
+            
+            const budgetSummaries = <?php echo json_encode($budget_summaries); ?>;
+            
+            if (budgetSummaries[kodeProyek]) {
+                const summary = budgetSummaries[kodeProyek];
+                const total = parseFloat(summary.total_budget) || 0;
+                const allocated = parseFloat(summary.allocated_idr) || 0;
+                const remaining = total - allocated;
+                
+                if (amountIDR > remaining) {
+                    const deficit = amountIDR - remaining;
+                    const message = `⚠️ PERINGATAN: Budget yang diinput (Rp ${amountIDR.toLocaleString('id-ID')}) melebihi sisa budget proyek (Rp ${remaining.toLocaleString('id-ID')}).\n\nSelisih: Rp ${deficit.toLocaleString('id-ID')}\n\nLanjutkan tetap simpan?`;
+                    return confirm(message);
+                }
+            }
+            
+            return true;
+        }
     </script>
 </body>
 </html>

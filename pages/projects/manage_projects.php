@@ -25,6 +25,30 @@ if ($_SESSION['user_role'] !== 'Finance Manager') {
 $user_name = $_SESSION['user_name'];
 $user_id = $_SESSION['user_id'];
 
+// Auto-create project_village_expcodes table if not exists
+$conn->query("
+    CREATE TABLE IF NOT EXISTS `project_village_expcodes` (
+      `id` int(11) NOT NULL AUTO_INCREMENT,
+      `kode_proyek` varchar(50) NOT NULL,
+      `id_village` int(11) NOT NULL,
+      `exp_code` varchar(20) NOT NULL,
+      `place_code` varchar(10) NOT NULL,
+      `description` varchar(255) DEFAULT NULL,
+      `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+      `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+      PRIMARY KEY (`id`),
+      UNIQUE KEY `unique_project_village_exp` (`kode_proyek`, `id_village`, `exp_code`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+");
+
+// Get villages for dropdown
+$villages_result = $conn->query("SELECT id_village, village_code, village_name, village_abbr FROM villages WHERE is_deleted = 0 ORDER BY village_name ASC");
+$villages_list = [];
+while ($v = $villages_result->fetch_assoc()) {
+    $villages_list[] = $v;
+}
+
+
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['create_project'])) {
@@ -104,6 +128,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
+    // Handle Add Exp Code Assignment
+    elseif (isset($_POST['add_expcode'])) {
+        $kode_proyek = $_POST['exp_kode_proyek'];
+        $id_village = intval($_POST['exp_id_village']);
+        $exp_code = trim($_POST['exp_code']);
+        $description = trim($_POST['exp_description'] ?? '');
+        
+        // Get village abbr for place_code
+        $v_stmt = $conn->prepare("SELECT village_abbr FROM villages WHERE id_village = ?");
+        $v_stmt->bind_param("i", $id_village);
+        $v_stmt->execute();
+        $v_result = $v_stmt->get_result()->fetch_assoc();
+        $place_code = $v_result['village_abbr'] ?? '';
+        
+        if (empty($place_code)) {
+            $error = 'Desa tidak ditemukan!';
+        } else {
+            $stmt = $conn->prepare("INSERT INTO project_village_expcodes (kode_proyek, id_village, exp_code, place_code, description) VALUES (?, ?, ?, ?, ?)");
+            $stmt->bind_param("sisss", $kode_proyek, $id_village, $exp_code, $place_code, $description);
+            
+            if ($stmt->execute()) {
+                header('Location: manage_projects.php?success=expcode_added#expcode-section');
+                exit();
+            } else {
+                if (strpos($stmt->error, 'Duplicate') !== false) {
+                    $error = 'Kombinasi Proyek + Desa + Exp Code sudah ada!';
+                } else {
+                    $error = 'Gagal menambahkan exp code: ' . $stmt->error;
+                }
+            }
+        }
+    }
+    // Handle Delete Exp Code Assignment
+    elseif (isset($_POST['delete_expcode'])) {
+        $exp_id = intval($_POST['expcode_id']);
+        
+        $stmt = $conn->prepare("DELETE FROM project_village_expcodes WHERE id = ?");
+        $stmt->bind_param("i", $exp_id);
+        
+        if ($stmt->execute()) {
+            header('Location: manage_projects.php?success=expcode_deleted#expcode-section');
+            exit();
+        } else {
+            $error = 'Gagal menghapus exp code: ' . $stmt->error;
+        }
+    }
 }
 
 // Handle success messages
@@ -120,6 +190,12 @@ if (isset($_GET['success'])) {
         case 'deleted':
             $success_message = 'Proyek berhasil dihapus!';
             break;
+        case 'expcode_added':
+            $success_message = 'Exp Code berhasil ditambahkan!';
+            break;
+        case 'expcode_deleted':
+            $success_message = 'Exp Code berhasil dihapus!';
+            break;
     }
 }
 if (isset($_GET['info'])) {
@@ -130,6 +206,29 @@ if (isset($_GET['info'])) {
 
 // Get all projects
 $projects = $conn->query("SELECT * FROM proyek ORDER BY created_at DESC");
+
+// Get all exp code assignments with project and village info
+$expcode_assignments = $conn->query("
+    SELECT pve.*, p.nama_proyek, v.village_name, v.village_abbr 
+    FROM project_village_expcodes pve 
+    LEFT JOIN proyek p ON pve.kode_proyek = p.kode_proyek 
+    LEFT JOIN villages v ON pve.id_village = v.id_village 
+    ORDER BY pve.kode_proyek, v.village_name, pve.exp_code
+");
+$expcode_list = [];
+if ($expcode_assignments) {
+    while ($row = $expcode_assignments->fetch_assoc()) {
+        $expcode_list[] = $row;
+    }
+}
+
+// Store projects for dropdown
+$projects_for_dropdown = [];
+$projects->data_seek(0);
+while ($p = $projects->fetch_assoc()) {
+    $projects_for_dropdown[] = $p;
+}
+$projects->data_seek(0);
 
 // NOTE: JANGAN pakai session_write_close() di sini. Jika digunakan, tombol back browser akan menyebabkan session hilang dan user bisa logout/401.
 // End of session-php logic
@@ -382,6 +481,120 @@ $projects = $conn->query("SELECT * FROM proyek ORDER BY created_at DESC");
                                     <p>Belum ada proyek. Klik "Buat Proyek Baru" untuk memulai.</p>
                                 </td>
                             </tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Exp Code Management Section -->
+        <div id="expcode-section" class="mt-8 bg-white rounded-lg shadow-lg overflow-hidden border-l-4 border-green-600">
+            <div class="p-6 border-b border-gray-200 bg-gradient-to-r from-green-50 to-green-100">
+                <h2 class="text-xl font-bold text-gray-800">
+                    <i class="fas fa-code mr-2 text-green-600"></i>Kelola Desa & Exp Code
+                </h2>
+                <p class="text-sm text-gray-600 mt-1">Assign desa dan expense code ke proyek</p>
+            </div>
+
+            <!-- Add ExpCode Form -->
+            <div class="p-6 bg-gray-50 border-b border-gray-200">
+                <form method="POST" class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                    <div>
+                        <label class="block text-gray-700 text-sm font-medium mb-2">Proyek *</label>
+                        <select name="exp_kode_proyek" required
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400">
+                            <option value="">-- Pilih Proyek --</option>
+                            <?php foreach ($projects_for_dropdown as $proj): ?>
+                                <option value="<?php echo $proj['kode_proyek']; ?>">
+                                    <?php echo $proj['kode_proyek']; ?> - <?php echo $proj['nama_proyek']; ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 text-sm font-medium mb-2">Desa *</label>
+                        <select name="exp_id_village" required id="villageSelect"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400">
+                            <option value="">-- Pilih Desa --</option>
+                            <?php foreach ($villages_list as $village): ?>
+                                <option value="<?php echo $village['id_village']; ?>" data-abbr="<?php echo $village['village_abbr']; ?>">
+                                    <?php echo $village['village_name']; ?> (<?php echo $village['village_abbr']; ?>)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 text-sm font-medium mb-2">Exp Code *</label>
+                        <input type="text" name="exp_code" required placeholder="10101"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 text-sm font-medium mb-2">Deskripsi</label>
+                        <input type="text" name="exp_description" placeholder="Staff Salary"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400">
+                    </div>
+                    <div>
+                        <button type="submit" name="add_expcode"
+                            class="w-full px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition duration-200 font-medium">
+                            <i class="fas fa-plus mr-2"></i>Tambah
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- ExpCode List Table -->
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Proyek</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Desa</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Exp Code</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Place Code</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Deskripsi</th>
+                            <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        <?php if (empty($expcode_list)): ?>
+                            <tr>
+                                <td colspan="6" class="px-6 py-8 text-center text-gray-500">
+                                    <i class="fas fa-list text-4xl mb-2"></i>
+                                    <p>Belum ada exp code yang di-assign. Tambahkan menggunakan form di atas.</p>
+                                </td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($expcode_list as $exp): ?>
+                            <tr class="hover:bg-gray-50 transition">
+                                <td class="px-6 py-4">
+                                    <span class="font-mono text-sm font-bold text-blue-600"><?php echo $exp['kode_proyek']; ?></span>
+                                    <br><span class="text-xs text-gray-500"><?php echo $exp['nama_proyek'] ?? ''; ?></span>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <span class="text-sm text-gray-900"><?php echo $exp['village_name']; ?></span>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <span class="font-mono text-sm font-bold text-green-600"><?php echo $exp['exp_code']; ?></span>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <span class="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-bold">
+                                        <?php echo $exp['place_code']; ?>
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 text-sm text-gray-600">
+                                    <?php echo $exp['description'] ?: '-'; ?>
+                                </td>
+                                <td class="px-6 py-4 text-center">
+                                    <form method="POST" class="inline" onsubmit="return confirm('Hapus exp code ini?')">
+                                        <input type="hidden" name="expcode_id" value="<?php echo $exp['id']; ?>">
+                                        <button type="submit" name="delete_expcode" 
+                                            class="text-red-600 hover:text-red-900" title="Hapus">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
                         <?php endif; ?>
                     </tbody>
                 </table>
