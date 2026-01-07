@@ -16,10 +16,11 @@ Sistem Manajemen Keuangan Terintegrasi untuk PRCF Indonesia. Siap pakai untuk pe
    cd C:\laragon\www
    git clone <repository-url> prcf_keuangan
    ```
-2. Buat database `prcf_keuangan` di phpMyAdmin.
-3. Jalankan master seeder untuk mengisi data awal:
+2. Buat database kosong bernama **`prcf_keuangan`** (via phpMyAdmin atau MySQL).
+3. Reset & Seed Database (Otomatis):
+   Jalankan script berikut untuk membuat tabel dan mengisi data awal dalam satu langkah:
    ```bash
-   php scripts/master_seeder.php
+   php scripts/migrate_fresh_seed.php
    ```
 
 ### 3. Konfigurasi
