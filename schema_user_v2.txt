@@ -1,0 +1,48 @@
+﻿
+Warning: Module "openssl" is already loaded in Unknown on line 0
+
+Tables in database:
+buku_bank_detail
+buku_bank_header
+buku_piutang_detail
+buku_piutang_header
+buku_piutang_unliquidated
+laporan_donor
+laporan_keuangan_detail
+laporan_keuangan_header
+project_code_budgets
+proposal
+proposal_budget_details
+proyek
+user
+villages
+
+CREATE TABLE `proposal_budget_details` (
+  `id_detail` int(11) NOT NULL AUTO_INCREMENT,
+  `id_proposal` int(11) NOT NULL,
+  `id_village` int(11) NOT NULL,
+  `exp_code` varchar(20) NOT NULL,
+  `place_code` varchar(50) NOT NULL COMMENT 'Auto-filled dari project_code_budgets',
+  `requested_usd` decimal(15,2) DEFAULT 0.00,
+  `requested_idr` decimal(15,2) DEFAULT 0.00,
+  `currency` varchar(10) DEFAULT 'USD' COMMENT 'Currency proposal: USD atau IDR',
+  `exrate` decimal(10,4) DEFAULT 1.0000 COMMENT 'Exchange rate saat proposal dibuat',
+  `description` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id_detail`),
+  KEY `id_village` (`id_village`),
+  KEY `idx_proposal_budget` (`id_proposal`),
+  CONSTRAINT `proposal_budget_details_ibfk_1` FOREIGN KEY (`id_proposal`) REFERENCES `proposal` (`id_proposal`) ON DELETE CASCADE,
+  CONSTRAINT `proposal_budget_details_ibfk_2` FOREIGN KEY (`id_village`) REFERENCES `villages` (`id_village`)
+) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Budget details per proposal'
+Table: user
+id_user - int(11)
+nama - varchar(255)
+role - enum('Finance Manager','Project Manager','Staff Accountant','Direktur')
+email - varchar(255)
+no_HP - varchar(20)
+password_hash - varchar(255)
+created_at - timestamp
+updated_at - timestamp
+last_notification_check - timestamp
+

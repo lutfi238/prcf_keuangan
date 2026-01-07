@@ -9,11 +9,11 @@ define('DB_NAME', getenv('MYSQLDATABASE') ?: 'prcf_keuangan');
 // OTP Configuration (Email only)
 
 // Developer Mode Configuration
-define('DEVELOPER_MODE', false); // Set to true for debugging - Shows OTP on screen
+define('DEVELOPER_MODE', true); // Set to true for debugging - Shows OTP on screen
 $DEVELOPER_EMAILS = [
     '',
 ];
-define('SKIP_OTP_FOR_ALL', false); // true for skip OTP email
+define('SKIP_OTP_FOR_ALL', true); // true for skip OTP email
 
 // Email SMTP Configuration
 define('SMTP_HOST', 'smtp.gmail.com');
@@ -276,13 +276,22 @@ function smtp_send_email($smtp_host, $smtp_port, $smtp_user, $smtp_pass, $from_e
         
         // Start TLS if port is 587
         if ($smtp_port == 587) {
+            // Check if OpenSSL is available
+            if (!extension_loaded('openssl')) {
+                error_log("❌ OpenSSL extension not loaded - Cannot use TLS encryption");
+                error_log("💡 Enable OpenSSL in php.ini: extension=openssl");
+                fclose($smtp);
+                return false;
+            }
+            
             fputs($smtp, "STARTTLS\r\n");
             $response = fgets($smtp, 515);
             error_log("📧 SMTP STARTTLS: " . trim($response));
             
             if (substr($response, 0, 3) == '220') {
-                if (!stream_socket_enable_crypto($smtp, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
-                    error_log("❌ Failed to enable TLS encryption");
+                $crypto_enabled = @stream_socket_enable_crypto($smtp, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
+                if (!$crypto_enabled) {
+                    error_log("❌ Failed to enable TLS encryption - Check OpenSSL configuration");
                     fclose($smtp);
                     return false;
                 }

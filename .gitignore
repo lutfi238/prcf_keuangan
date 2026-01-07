@@ -1,37 +1,21 @@
-# Environment files
-.env
-.env.local
-.env.production
+# Large files
+*.mp4
+*.avi
+*.mov
+*.wmv
+*.mkv
+*.webm
 
-# Test files (already moved to tests/)
-# These are now in tests/ folder
+# Video folder
+assets/video/
 
-# Logs
-*.log
-logs/
-error_log
+# Uploads folder - user uploaded files (large)
+uploads/
 
-# Uploads (should be handled by Railway persistent storage)
-# uploads/
-
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Railway specific
-.railway/
-
-# Database dumps (local only)
-database/*.sql
-sql/dumps/*.sql
+# Config sensitive data (optional - uncomment if needed)
+# includes/config.php
+AGENTS.md
+.roo/rules-architect/AGENTS.md
+.roo/rules-ask/AGENTS.md
+.roo/rules-code/AGENTS.md
+.roo/rules-debug/AGENTS.md

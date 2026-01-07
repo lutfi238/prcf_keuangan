@@ -95,44 +95,10 @@ $notif_proposals = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE st
 $notif_reports = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'verified'")->fetch_assoc()['count'];
 $total_notifications = $notif_proposals + $notif_reports;
 
-// Get recent notifications with details
+// Get initial notifications (first 5) - will be loaded via AJAX for better performance
 $notifications = [];
-
-// Add proposal notifications
-$proposal_notifs = $conn->query("SELECT p.id_proposal, p.judul_proposal, p.created_at, u.nama as creator 
-    FROM proposal p 
-    LEFT JOIN user u ON p.pemohon = u.nama 
-    WHERE p.status = 'submitted' 
-    ORDER BY p.created_at DESC LIMIT 5");
-while ($row = $proposal_notifs->fetch_assoc()) {
-    $is_unread = (strtotime($row['created_at']) > strtotime($last_notification_check));
-    $notifications[] = [
-        'type' => 'proposal',
-        'id' => $row['id_proposal'],
-        'title' => 'Proposal baru: ' . $row['judul_proposal'],
-        'link' => '../proposals/review_proposal_fm.php?id=' . $row['id_proposal'],
-        'time' => time_elapsed_string($row['created_at']),
-        'is_unread' => $is_unread
-    ];
-}
-
-// Add report notifications (still only 'verified' for notifications)
-$report_notifs = $conn->query("SELECT lh.id_laporan_keu, lh.nama_projek, lh.created_at, u.nama as creator
-    FROM laporan_keuangan_header lh 
-    LEFT JOIN user u ON lh.created_by = u.id_user 
-    WHERE lh.status_lap = 'verified' 
-    ORDER BY lh.created_at DESC LIMIT 5");
-while ($row = $report_notifs->fetch_assoc()) {
-    $is_unread = (strtotime($row['created_at']) > strtotime($last_notification_check));
-    $notifications[] = [
-        'type' => 'report',
-        'id' => $row['id_laporan_keu'],
-        'title' => 'Laporan sudah diverifikasi: ' . $row['nama_projek'],
-        'link' => '../reports/approve-report-fm.php?id=' . $row['id_laporan_keu'] . '&return_tab=reports',
-        'time' => time_elapsed_string($row['created_at']),
-        'is_unread' => $is_unread
-    ];
-}
+$current_page = 1;
+$per_page = 5;
 
 // Function to calculate time elapsed
 function time_elapsed_string($datetime) {
@@ -189,42 +155,20 @@ session_write_close();
                                     <span class="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full"><span class="notification-count-text"><?php echo $total_notifications; ?></span> baru</span>
                                 <?php endif; ?>
                             </div>
-                            <div class="max-h-96 overflow-y-auto">
-                                <?php if (empty($notifications)): ?>
-                                    <div class="p-4 text-center text-gray-500 text-sm">
-                                        <i class="fas fa-inbox text-3xl mb-2"></i>
-                                        <p>Tidak ada notifikasi</p>
+                            <div class="max-h-96 overflow-y-auto" id="notificationsContainer">
+                                <div id="notificationsLoading" class="p-4 text-center text-gray-500 text-sm hidden">
+                                    <i class="fas fa-spinner fa-spin text-xl mb-2"></i>
+                                    <p>Memuat notifikasi...</p>
                                     </div>
-                                <?php else: ?>
-                                    <?php foreach ($notifications as $notif): ?>
-                                        <a href="<?php echo $notif['link']; ?>" 
-                                           class="block p-4 border-b border-gray-100 transition <?php echo $notif['is_unread'] ? 'bg-blue-50 hover:bg-blue-100' : 'bg-white hover:bg-gray-50'; ?>"
-                                           onclick="closeNotificationsPanel()">
-                                            <div class="flex items-start">
-                                                <div class="flex-shrink-0 mr-3">
-                                                    <?php if ($notif['type'] == 'proposal'): ?>
-                                                        <i class="fas fa-file-alt text-blue-500 text-lg"></i>
-                                                    <?php else: ?>
-                                                        <i class="fas fa-chart-line text-green-500 text-lg"></i>
-                                                    <?php endif; ?>
+                                <div id="notificationsList">
+                                    <!-- Notifications will be loaded here via AJAX -->
                                                 </div>
-                                                <div class="flex-1">
-                                                    <p class="text-sm <?php echo $notif['is_unread'] ? 'text-gray-900 font-bold' : 'text-gray-700 font-normal'; ?>">
-                                                        <?php echo $notif['title']; ?>
-                                                    </p>
-                                                    <p class="text-xs text-gray-500 mt-1">
-                                                        <i class="far fa-clock mr-1"></i><?php echo $notif['time']; ?>
-                                                    </p>
                                                 </div>
-                                                <?php if ($notif['is_unread']): ?>
-                                                <div class="flex-shrink-0 ml-2">
-                                                    <span class="w-2 h-2 bg-blue-600 rounded-full inline-block"></span>
-                                                </div>
-                                                <?php endif; ?>
-                                            </div>
-                                        </a>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
+                            <div id="showMoreContainer" class="border-t border-gray-200 p-3 hidden">
+                                <button id="showMoreBtn" onclick="loadMoreNotifications()"
+                                        class="w-full text-center text-blue-600 hover:text-blue-800 text-sm font-medium py-2 px-4 rounded-lg hover:bg-blue-50 transition duration-200">
+                                    <i class="fas fa-chevron-down mr-2"></i>Tampilkan Lebih Banyak
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -264,7 +208,7 @@ session_write_close();
         </div>
 
         <!-- Action Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-8">
             <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-lg border border-blue-200 hover:shadow-lg transition duration-200">
                 <div class="flex items-center justify-between mb-4">
                     <div>
@@ -322,6 +266,21 @@ session_write_close();
                 </div>
                 <a href="../../public/under_construction.php?feature=Laporan Donor" class="inline-block bg-purple-500 text-white px-6 py-2 rounded-lg hover:bg-purple-600 transition duration-200 font-medium">
                     Kelola
+                </a>
+            </div>
+
+            <div class="bg-gradient-to-br from-emerald-50 to-emerald-100 p-6 rounded-lg border border-emerald-200 hover:shadow-lg transition duration-200">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-800">Kelola Budget</h3>
+                        <p class="text-sm text-gray-600 mt-1">Planning & Control</p>
+                    </div>
+                    <div class="bg-emerald-500 p-3 rounded-full">
+                        <i class="fas fa-calculator text-white text-2xl"></i>
+                    </div>
+                </div>
+                <a href="../finance/manage_budgets.php" class="inline-block bg-emerald-500 text-white px-6 py-2 rounded-lg hover:bg-emerald-600 transition duration-200 font-medium">
+                    <i class="fas fa-arrow-right mr-2"></i>Kelola
                 </a>
             </div>
         </div>
@@ -505,6 +464,10 @@ session_write_close();
     </main>
 
     <script>
+        let currentNotificationPage = 1;
+        let isLoadingNotifications = false;
+        let hasMoreNotifications = true;
+
         function showTab(tabName) {
             // Hide all content
             document.querySelectorAll('.tab-content').forEach(content => {
@@ -530,7 +493,15 @@ session_write_close();
             const panel = document.getElementById('notificationPanel');
             const profilePanel = document.getElementById('profilePanel');
             if (profilePanel) profilePanel.classList.add('hidden');
-            if (panel) panel.classList.toggle('hidden');
+            if (panel) {
+                const isHidden = panel.classList.contains('hidden');
+                panel.classList.toggle('hidden');
+
+                // Load notifications when panel is opened
+                if (isHidden) {
+                    loadNotifications(true);
+                }
+            }
         }
 
         function closeNotificationsPanel() {
@@ -543,6 +514,142 @@ session_write_close();
             const notifPanel = document.getElementById('notificationPanel');
             if (notifPanel) notifPanel.classList.add('hidden');
             if (panel) panel.classList.toggle('hidden');
+        }
+
+        function loadNotifications(reset = false) {
+            if (isLoadingNotifications) return;
+
+            if (reset) {
+                currentNotificationPage = 1;
+                hasMoreNotifications = true;
+                document.getElementById('notificationsList').innerHTML = '';
+                document.getElementById('showMoreContainer').classList.add('hidden');
+            }
+
+            if (!hasMoreNotifications && !reset) return;
+
+            isLoadingNotifications = true;
+            const loadingEl = document.getElementById('notificationsLoading');
+            loadingEl.classList.remove('hidden');
+
+            const perPage = currentNotificationPage === 1 ? 10 : 5;
+            fetch(`../api/get_notifications.php?page=${currentNotificationPage}&per_page=${perPage}`)
+                .then(response => response.json())
+                .then(data => {
+                    loadingEl.classList.add('hidden');
+                    isLoadingNotifications = false;
+
+                    if (data.success) {
+                        renderNotifications(data.notifications);
+
+                        hasMoreNotifications = data.has_more;
+
+                        const showMoreContainer = document.getElementById('showMoreContainer');
+                        if (hasMoreNotifications) {
+                            showMoreContainer.classList.remove('hidden');
+                        } else {
+                            showMoreContainer.classList.add('hidden');
+                        }
+
+                        if (!reset) {
+                            currentNotificationPage++;
+                        }
+                    } else {
+                        console.error('API returned error:', data.error);
+                        showNotificationError();
+                    }
+                })
+                .catch(error => {
+                    loadingEl.classList.add('hidden');
+                    isLoadingNotifications = false;
+                    console.error('Error:', error);
+                    showNotificationError();
+                });
+        }
+
+        function renderNotifications(notifications) {
+            const container = document.getElementById('notificationsList');
+
+            if (!container) {
+                console.error('notificationsList container not found!');
+                return;
+            }
+
+            if (notifications.length === 0 && currentNotificationPage === 1) {
+                container.innerHTML = `
+                    <div class="p-4 text-center text-gray-500 text-sm">
+                        <i class="fas fa-inbox text-3xl mb-2"></i>
+                        <p>Tidak ada notifikasi</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Clear container first if this is the first page
+            if (currentNotificationPage === 1) {
+                container.innerHTML = '';
+            }
+
+            // Use for loop instead of forEach to avoid potential issues
+            for (let i = 0; i < notifications.length; i++) {
+                const notif = notifications[i];
+
+                try {
+
+                    // Validate notification data
+                    if (!notif || typeof notif !== 'object') {
+                        console.warn(`Invalid notification at index ${i}:`, notif);
+                        continue;
+                    }
+
+                    const notificationHtml = `
+                        <a href="${notif.link || '#'}"
+                           class="block p-4 border-b border-gray-100 transition ${notif.is_unread ? 'bg-blue-50 hover:bg-blue-100' : 'bg-white hover:bg-gray-50'}"
+                           onclick="closeNotificationsPanel()">
+                            <div class="flex items-start">
+                                <div class="flex-shrink-0 mr-3">
+                                    ${notif.type === 'proposal'
+                                        ? '<i class="fas fa-file-alt text-blue-500 text-lg"></i>'
+                                        : '<i class="fas fa-chart-line text-green-500 text-lg"></i>'}
+                                </div>
+                                <div class="flex-1">
+                                    <p class="text-sm ${notif.is_unread ? 'text-gray-900 font-bold' : 'text-gray-700 font-normal'}">
+                                        ${notif.title || 'No title'}
+                                    </p>
+                                    <p class="text-xs text-gray-500 mt-1">
+                                        <i class="far fa-clock mr-1"></i>${notif.time || 'Unknown time'}
+                                    </p>
+                                </div>
+                                ${notif.is_unread ? '<div class="flex-shrink-0 ml-2"><span class="w-2 h-2 bg-blue-600 rounded-full inline-block"></span></div>' : ''}
+                            </div>
+                        </a>
+                    `;
+
+                    container.insertAdjacentHTML('beforeend', notificationHtml);
+
+                } catch (error) {
+                    console.error(`Error processing notification ${i + 1}:`, error, notif);
+                    // Continue processing other notifications even if one fails
+                }
+            }
+        }
+
+        function loadMoreNotifications() {
+            if (!isLoadingNotifications && hasMoreNotifications) {
+                loadNotifications(false);
+            }
+        }
+
+        function showNotificationError() {
+            const container = document.getElementById('notificationsList');
+            if (currentNotificationPage === 1) {
+                container.innerHTML = `
+                    <div class="p-4 text-center text-red-500 text-sm">
+                        <i class="fas fa-exclamation-triangle text-3xl mb-2"></i>
+                        <p>Gagal memuat notifikasi</p>
+                    </div>
+                `;
+            }
         }
 
         document.addEventListener('click', function(event) {
@@ -570,6 +677,44 @@ session_write_close();
                 e.stopPropagation();
             });
         }
+
+        // Auto-load notifications when page loads (but not when panel is opened)
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load initial notifications silently in background
+            loadNotifications(true);
+        });
+    </script>
+
+    <script>
+        // Enhanced real-time updates for dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            // Auto-refresh notifications when returning from action (success message)
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('success') || urlParams.has('error')) {
+                // Immediately refresh notifications when returning from action
+                setTimeout(function() {
+                    if (typeof refreshNotifications === 'function') {
+                        refreshNotifications();
+                    }
+                }, 500); // Small delay to ensure SSE is initialized
+
+                // Clean URL after showing message
+                setTimeout(function() {
+                    const cleanUrl = window.location.protocol + "//" +
+                                    window.location.host +
+                                    window.location.pathname;
+                    window.history.replaceState({}, document.title, cleanUrl);
+                }, 2000); // Wait 2 seconds for user to see message
+            }
+
+            // Auto-refresh dashboard data every 30 seconds as fallback
+            // This ensures data stays fresh even if SSE connection drops
+            setInterval(function() {
+                if (typeof refreshNotifications === 'function') {
+                    refreshNotifications();
+                }
+            }, 30000); // 30 seconds
+        });
     </script>
     
     <!-- Real-time Notifications -->
