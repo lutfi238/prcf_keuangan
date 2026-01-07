@@ -55,8 +55,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 isset($DEVELOPER_EMAILS) && in_array($user['email'], $DEVELOPER_EMAILS));
                 $skip_all_otp = (defined('SKIP_OTP_FOR_ALL') && SKIP_OTP_FOR_ALL);
                 
-                if ($is_developer || $skip_all_otp) {
-                    // 🚀 BYPASS OTP - Direct login for developers
+                if ($skip_all_otp) {
+                    // 🚀 BYPASS OTP - Direct login when skip is explicitly enabled
                     $_SESSION['user_id'] = $user['id_user'];
                     $_SESSION['user_name'] = $user['nama'];
                     $_SESSION['user_role'] = $user['role'];
