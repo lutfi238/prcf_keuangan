@@ -54,8 +54,54 @@ if (isset($_GET['success'])) {
             break;
     }
 }
+if (isset($_GET['success_msg'])) {
+    $success_message = htmlspecialchars(urldecode($_GET['success_msg']));
+}
 
-// Get pending proposals for review - store in array to avoid result set consumption
+// Handle AJAX Table Requests
+if (isset($_GET['ajax_table'])) {
+    if ($_GET['ajax_table'] === 'proposals') {
+        // Get pending proposals
+        $proposals_result = $conn->query("SELECT DISTINCT p.*, u.nama as creator_name 
+            FROM proposal p 
+            LEFT JOIN user u ON p.pemohon = u.nama 
+            WHERE p.status IN ('submitted', 'approved') 
+            ORDER BY p.created_at DESC");
+        
+        $proposals_array = [];
+        if ($proposals_result) {
+            $seen_ids = [];
+            while ($row = $proposals_result->fetch_assoc()) {
+                if (!isset($seen_ids[$row['id_proposal']])) {
+                    $proposals_array[] = $row;
+                    $seen_ids[$row['id_proposal']] = true;
+                }
+            }
+        }
+        include 'components/table_proposals_fm.php';
+        exit();
+    }
+    
+    if ($_GET['ajax_table'] === 'reports') {
+        // Get reports
+        $reports = $conn->query("SELECT lh.*, u.nama as creator_name 
+            FROM laporan_keuangan_header lh 
+            LEFT JOIN user u ON lh.created_by = u.id_user 
+            ORDER BY lh.created_at DESC");
+
+        $reports_array = [];
+        if ($reports) {
+            while ($row = $reports->fetch_assoc()) {
+                $reports_array[] = $row;
+            }
+        }
+        include 'components/table_reports_fm.php';
+        exit();
+    }
+}
+
+// Normal Page Load - Fetch All Data
+// Get pending proposals
 $proposals_result = $conn->query("SELECT DISTINCT p.*, u.nama as creator_name 
     FROM proposal p 
     LEFT JOIN user u ON p.pemohon = u.nama 
@@ -63,26 +109,21 @@ $proposals_result = $conn->query("SELECT DISTINCT p.*, u.nama as creator_name
     ORDER BY p.created_at DESC");
 $proposals_array = [];
 if ($proposals_result) {
-    // Use id_proposal as key to prevent duplicates
     $seen_ids = [];
     while ($row = $proposals_result->fetch_assoc()) {
-        $proposal_id = $row['id_proposal'];
-        // Only add if we haven't seen this proposal ID before
-        if (!isset($seen_ids[$proposal_id])) {
+        if (!isset($seen_ids[$row['id_proposal']])) {
             $proposals_array[] = $row;
-            $seen_ids[$proposal_id] = true;
+            $seen_ids[$row['id_proposal']] = true;
         }
     }
 }
 
-// Get validated financial reports for approval
-// Debug: Show all reports to check what's in database
+// Get reports
 $reports = $conn->query("SELECT lh.*, u.nama as creator_name 
     FROM laporan_keuangan_header lh 
     LEFT JOIN user u ON lh.created_by = u.id_user 
     ORDER BY lh.created_at DESC");
 
-// Store reports in array to avoid result set consumption issues
 $reports_array = [];
 if ($reports) {
     while ($row = $reports->fetch_assoc()) {
@@ -113,7 +154,6 @@ function time_elapsed_string($datetime) {
 }
 
 // Close session writing to ensure session is fully saved before HTML output
-// This prevents session conflicts when user clicks notification links
 session_write_close();
 ?>
 <!DOCTYPE html>
@@ -322,50 +362,8 @@ session_write_close();
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
                             </tr>
                         </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
-                            <?php if (empty($proposals_array)): ?>
-                                <tr>
-                                    <td colspan="7" class="px-6 py-12 text-center">
-                                        <div class="flex flex-col items-center justify-center">
-                                            <i class="fas fa-inbox text-gray-400 text-5xl mb-4"></i>
-                                            <p class="text-gray-500 text-lg font-medium mb-2">Belum ada proposal masuk</p>
-                                            <p class="text-gray-400 text-sm">Tidak ada proposal yang perlu direview saat ini.</p>
-                                        </div>
-                                    </td>
-                                </tr>
-                            <?php else: ?>
-                                <?php 
-                                $no = 1;
-                                foreach ($proposals_array as $proposal): 
-                                ?>
-                                <tr class="hover:bg-gray-50">
-                                    <td class="px-6 py-4 text-sm text-gray-900"><?php echo $no++; ?></td>
-                                    <td class="px-6 py-4 text-sm text-gray-900"><?php echo $proposal['judul_proposal']; ?></td>
-                                    <td class="px-6 py-4 text-sm text-gray-900"><?php echo $proposal['pemohon']; ?></td>
-                                    <td class="px-6 py-4 text-sm text-gray-900"><?php echo $proposal['kode_proyek']; ?></td>
-                                    <td class="px-6 py-4 text-sm text-gray-900">
-                                        <?php echo date('d/m/Y', strtotime($proposal['date'])); ?>
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        <?php if ($proposal['status'] === 'submitted'): ?>
-                                            <span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                                                Pending Review
-                                            </span>
-                                        <?php elseif ($proposal['status'] === 'approved'): ?>
-                                            <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                                Approved
-                                            </span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td class="px-6 py-4 text-sm">
-                                        <a href="../proposals/review_proposal_fm.php?id=<?php echo $proposal['id_proposal']; ?>&return_tab=proposals" 
-                                            class="text-blue-600 hover:text-blue-900">
-                                            <i class="fas fa-eye mr-1"></i> Review
-                                        </a>
-                                    </td>
-                                </tr>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
+                        <tbody id="proposals-table-body" class="bg-white divide-y divide-gray-200">
+                            <?php include 'components/table_proposals_fm.php'; ?>
                         </tbody>
                     </table>
                 </div>
@@ -392,71 +390,8 @@ session_write_close();
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
                             </tr>
                         </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
-                            <?php if (empty($reports_array)): ?>
-                                <tr>
-                                    <td colspan="7" class="px-6 py-12 text-center">
-                                        <div class="flex flex-col items-center justify-center">
-                                            <i class="fas fa-file-invoice text-gray-400 text-5xl mb-4"></i>
-                                            <p class="text-gray-500 text-lg font-medium mb-2">Belum ada laporan keuangan</p>
-                                            <p class="text-gray-400 text-sm">Tidak ada laporan keuangan yang perlu diapprove saat ini.</p>
-                                        </div>
-                                    </td>
-                                </tr>
-                            <?php else: ?>
-                                <?php 
-                                $no = 1;
-                                foreach ($reports_array as $report): 
-                                ?>
-                                <tr class="hover:bg-gray-50">
-                                    <td class="px-6 py-4 text-sm text-gray-900"><?php echo $no++; ?></td>
-                                    <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($report['nama_projek']); ?></td>
-                                    <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($report['kode_projek']); ?></td>
-                                    <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($report['creator_name']); ?></td>
-                                    <td class="px-6 py-4 text-sm text-gray-900">
-                                        <?php echo date('d/m/Y', strtotime($report['tanggal_laporan'])); ?>
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        <?php
-                                        $status = trim($report['status_lap']);
-                                        // Debug: Show actual status
-                                        switch ($status) {
-                                            case 'draft':
-                                                echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">Draft</span>';
-                                                break;
-                                            case 'submitted':
-                                                echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Pending SA</span>';
-                                                break;
-                                            case 'verified':
-                                                echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Tervalidasi SA</span>';
-                                                break;
-                                            case 'approved_fm':
-                                                echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">Approved FM</span>';
-                                                break;
-                                            case 'approved':
-                                                echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">Approved Final</span>';
-                                                break;
-                                            default:
-                                                echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Unknown: ' . htmlspecialchars($status) . '</span>';
-                                        }
-                                        ?>
-                                    </td>
-                                    <td class="px-6 py-4 text-sm">
-                                        <?php if ($status === 'verified' || $status === 'submitted'): ?>
-                                            <a href="../reports/approve-report-fm.php?id=<?php echo $report['id_laporan_keu']; ?>&return_tab=reports" 
-                                                class="text-blue-600 hover:text-blue-900">
-                                                <i class="fas fa-check-circle mr-1"></i> Approve
-                                            </a>
-                                        <?php else: ?>
-                                            <a href="../reports/view_report_fm.php?id=<?php echo $report['id_laporan_keu']; ?>&return_tab=reports" 
-                                                class="text-gray-600 hover:text-gray-900">
-                                                <i class="fas fa-eye mr-1"></i> View
-                                            </a>
-                                        <?php endif; ?>
-                                    </td>
-                                </tr>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
+                        <tbody id="reports-table-body" class="bg-white divide-y divide-gray-200">
+                            <?php include 'components/table_reports_fm.php'; ?>
                         </tbody>
                     </table>
                 </div>
@@ -720,5 +655,37 @@ session_write_close();
     
     <!-- Real-time Notifications -->
     <script src="../../assets/js/realtime_notifications.js"></script>
+</body>
+    <script>
+        // Real-time Table Updates
+        window.addEventListener('dashboard-data-refresh', function(e) {
+            console.log('Refreshing dashboard tables...');
+            
+            // Reload Proposals Table
+            fetch('dashboard_fm.php?ajax_table=proposals')
+                .then(response => response.text())
+                .then(html => {
+                    const tbody = document.getElementById('proposals-table-body');
+                    if (tbody) {
+                        tbody.innerHTML = html;
+                        // Add subtle flash effect
+                        tbody.parentElement.classList.add('ring-2', 'ring-blue-200');
+                        setTimeout(() => tbody.parentElement.classList.remove('ring-2', 'ring-blue-200'), 1000);
+                    }
+                })
+                .catch(err => console.error('Error reloading proposals:', err));
+
+            // Reload Reports Table
+            fetch('dashboard_fm.php?ajax_table=reports')
+                .then(response => response.text())
+                .then(html => {
+                    const tbody = document.getElementById('reports-table-body');
+                    if (tbody) {
+                        tbody.innerHTML = html;
+                    }
+                })
+                .catch(err => console.error('Error reloading reports:', err));
+        });
+    </script>
 </body>
 </html>

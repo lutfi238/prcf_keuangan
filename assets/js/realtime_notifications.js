@@ -306,37 +306,42 @@ function initializeSSE() {
     };
 }
 
+// Store last known state to detect changes
+let lastDashboardState = {};
+
 // Update dashboard statistics in real-time
 function updateDashboardStats(data) {
-    // Update proposal count
-    if (data.pending_proposals !== undefined) {
-        const proposalCountElement = document.querySelector('[data-stat="pending_proposals"]');
-        if (proposalCountElement) {
-            proposalCountElement.textContent = data.pending_proposals;
+    let hasChanges = false;
+
+    // Helper to check and update
+    const checkAndUpdate = (key, selector) => {
+        if (data[key] !== undefined) {
+            const el = document.querySelector(selector);
+            if (el) el.textContent = data[key];
+
+            // Check if value changed
+            if (lastDashboardState[key] !== undefined && lastDashboardState[key] !== data[key]) {
+                hasChanges = true;
+                console.log(`Change detected in ${key}: ${lastDashboardState[key]} -> ${data[key]}`);
+            }
+            lastDashboardState[key] = data[key];
         }
-    }
+    };
+
+    checkAndUpdate('pending_proposals', '[data-stat="pending_proposals"]');
+    checkAndUpdate('pending_reports', '[data-stat="pending_reports"]');
+    checkAndUpdate('revision_proposals', '[data-stat="revision_proposals"]');
+    checkAndUpdate('revision_reports', '[data-stat="revision_reports"]');
     
-    // Update report count
-    if (data.pending_reports !== undefined) {
-        const reportCountElement = document.querySelector('[data-stat="pending_reports"]');
-        if (reportCountElement) {
-            reportCountElement.textContent = data.pending_reports;
-        }
-    }
-    
-    // Update revision counts (for PM)
-    if (data.revision_proposals !== undefined) {
-        const revisionProposalElement = document.querySelector('[data-stat="revision_proposals"]');
-        if (revisionProposalElement) {
-            revisionProposalElement.textContent = data.revision_proposals;
-        }
-    }
-    
-    if (data.revision_reports !== undefined) {
-        const revisionReportElement = document.querySelector('[data-stat="revision_reports"]');
-        if (revisionReportElement) {
-            revisionReportElement.textContent = data.revision_reports;
-        }
+    // If we detected significant changes in stats, dispatch event for dashboard to reload tables
+    if (hasChanges) {
+        console.log('Dispatching dashboard-data-refresh event');
+        window.dispatchEvent(new CustomEvent('dashboard-data-refresh', { 
+            detail: { 
+                data: data,
+                timestamp: new Date().getTime() 
+            } 
+        }));
     }
 }
 

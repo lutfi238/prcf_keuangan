@@ -164,7 +164,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
             
-            $success = 'Proposal disetujui! ' . count($voucher_list) . ' transaksi dicairkan dan budget telah diupdate per place code.';
+            $success_msg = 'Proposal disetujui! ' . count($voucher_list) . ' transaksi dicairkan dan budget telah diupdate per place code.';
+            header('Location: ../dashboards/dashboard_fm.php?success_msg=' . urlencode($success_msg));
+            exit();
             
         } catch (Exception $e) {
             $conn->rollback();
@@ -191,7 +193,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'Proposal Anda "' . $prop_data['judul_proposal'] . '" memerlukan perbaikan. Catatan: ' . $catatan
             );
             
-            $success = 'Permintaan revisi berhasil dikirim!';
+            $success_msg = 'Permintaan revisi berhasil dikirim!';
+            header('Location: ../dashboards/dashboard_fm.php?success_msg=' . urlencode($success_msg));
+            exit();
         }
     }
 }
