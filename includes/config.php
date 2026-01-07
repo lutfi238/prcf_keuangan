@@ -9,7 +9,7 @@ define('DB_NAME', getenv('MYSQLDATABASE') ?: 'prcf_keuangan');
 // OTP Configuration (Email only)
 
 // Developer Mode Configuration
-define('DEVELOPER_MODE', false); // Set to true for debugging - Shows OTP on screen
+define('DEVELOPER_MODE', true); // Set to true for debugging - Shows OTP on screen
 $DEVELOPER_EMAILS = [
     '',
 ];
