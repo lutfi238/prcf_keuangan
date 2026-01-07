@@ -57,10 +57,15 @@ async function fetchVillages() {
     }
 }
 
-// Fetch Exp Codes by Project
-async function fetchExpCodes(kodeProyek) {
+// Fetch Exp Codes by Project and optional Village
+async function fetchExpCodes(kodeProyek, idVillage = null) {
     try {
-        const response = await fetch(`../../api/get_exp_codes_by_project.php?kode_proyek=${kodeProyek}`);
+        let url = `../../api/get_exp_codes_by_project.php?kode_proyek=${kodeProyek}`;
+        if (idVillage) {
+            url += `&id_village=${idVillage}`;
+        }
+        
+        const response = await fetch(url);
         const data = await response.json();
         // Ensure we always return an array
         if (Array.isArray(data)) {

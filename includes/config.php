@@ -1,7 +1,7 @@
 
 <?php
 // Database configuration
-define('DB_HOST', getenv('MYSQLHOST') ?: 'localhost');
+define('DB_HOST', getenv('MYSQLHOST') ?: '127.0.0.1');
 define('DB_USER', getenv('MYSQLUSER') ?: 'root');
 define('DB_PASS', getenv('MYSQLPASSWORD') ?: '');
 define('DB_NAME', getenv('MYSQLDATABASE') ?: 'prcf_keuangan');
@@ -73,13 +73,58 @@ if (!function_exists('validate_phone_number_format')) {
 }
 
 // Create database connection
-$conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+// Enable exception reporting for mysqli
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+try {
+    // Create database connection
+    $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+    $conn->set_charset("utf8mb4"); // Moved inside success path
+} catch (mysqli_sql_exception $e) {
+    // Log the error securely (optional)
+    error_log("Database Connection Error: " . $e->getMessage());
+
+    // Display a friendly error page
+    die('
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Layanan Tidak Tersedia</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            body { font-family: "Inter", sans-serif; background-color: #f3f4f6; height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; }
+            .error-card { background: white; padding: 2.5rem; border-radius: 1rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); max-width: 450px; text-align: center; }
+            .icon-box { background-color: #fee2e2; width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem auto; }
+            .icon-box svg { width: 32px; height: 32px; color: #dc2626; }
+            h1 { font-size: 1.5rem; font-weight: 700; color: #1f2937; margin-bottom: 0.75rem; }
+            p { color: #4b5563; line-height: 1.6; margin-bottom: 1.5rem; }
+            .btn { display: inline-block; background-color: #2563eb; color: white; padding: 0.75rem 1.5rem; border-radius: 0.5rem; text-decoration: none; font-weight: 600; transition: background-color 0.2s; }
+            .btn:hover { background-color: #1d4ed8; }
+            .tech-details { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb; font-size: 0.875rem; color: #9ca3af; }
+        </style>
+    </head>
+    <body>
+        <div class="error-card">
+            <div class="icon-box">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+            </div>
+            <h1>Koneksi Database Gagal</h1>
+            <p>Maaf, sistem sedang tidak dapat terhubung ke database. Mohon coba beberapa saat lagi atau hubungi administrator.</p>
+            <a href="javascript:location.reload()" class="btn">Coba Lagi</a>
+            <div class="tech-details">
+                PRCF INDONESIA Financial
+            </div>
+        </div>
+    </body>
+    </html>
+    ');
 }
 
-$conn->set_charset("utf8mb4");
+
 
 // Set timezone
 date_default_timezone_set('Asia/Jakarta');

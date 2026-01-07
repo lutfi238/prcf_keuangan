@@ -32,6 +32,23 @@ if (!in_array($_SESSION['user_role'], $allowed_roles)) {
 $action = $_GET['action'] ?? '';
 $user_id = $_SESSION['user_id'];
 
+// Handle form-based POST actions
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['save_village'])) {
+        addVillage($conn, $user_id);
+        exit;
+    }
+    if (isset($_POST['edit_village'])) {
+        updateVillage($conn, $user_id);
+        exit;
+    }
+    if (isset($_POST['delete_village'])) {
+        $_POST['id_village'] = $_POST['village_id'] ?? 0;
+        deleteVillage($conn, $user_id);
+        exit;
+    }
+}
+
 try {
     switch ($action) {
         case 'add':
@@ -62,13 +79,19 @@ try {
  * Add new village
  */
 function addVillage($conn, $user_id) {
-    $data = json_decode(file_get_contents('php://input'), true);
+    // Support both JSON and Form Data
+    $content_type = $_SERVER['CONTENT_TYPE'] ?? '';
+    if (stripos($content_type, 'application/json') !== false) {
+        $data = json_decode(file_get_contents('php://input'), true);
+    } else {
+        $data = $_POST;
+    }
     
     // Validate input
-    $village_code = trim($data['village_code'] ?? '');
-    $village_name = trim($data['village_name'] ?? '');
-    $village_abbr = strtoupper(trim($data['village_abbr'] ?? ''));
-    $description = trim($data['description'] ?? '');
+    $village_code = trim($data['village_code'] ?? ($data['villageCode'] ?? ''));
+    $village_name = trim($data['village_name'] ?? ($data['villageName'] ?? ''));
+    $village_abbr = strtoupper(trim($data['village_abbr'] ?? ($data['villageAbbr'] ?? '')));
+    $description = trim($data['description'] ?? ($data['villageDescription'] ?? ''));
     
     // Validation
     if (empty($village_code) || empty($village_name) || empty($village_abbr)) {
@@ -77,8 +100,8 @@ function addVillage($conn, $user_id) {
     }
     
     // Validate village_code format (V###)
-    if (!preg_match('/^V\d{3}$/', $village_code)) {
-        echo json_encode(['success' => false, 'message' => 'Village code must be in format V### (e.g., V001)']);
+    if (!preg_match('/^[A-Z0-9]{1,4}$/', $village_code)) {
+        echo json_encode(['success' => false, 'message' => 'Village code must be 1-4 characters (alphanumeric)']);
         return;
     }
     
@@ -125,13 +148,19 @@ function addVillage($conn, $user_id) {
  * Update existing village
  */
 function updateVillage($conn, $user_id) {
-    $data = json_decode(file_get_contents('php://input'), true);
+    // Support both JSON and Form Data
+    $content_type = $_SERVER['CONTENT_TYPE'] ?? '';
+    if (stripos($content_type, 'application/json') !== false) {
+        $data = json_decode(file_get_contents('php://input'), true);
+    } else {
+        $data = $_POST;
+    }
     
-    $id_village = intval($data['id_village'] ?? 0);
-    $village_code = trim($data['village_code'] ?? '');
-    $village_name = trim($data['village_name'] ?? '');
-    $village_abbr = strtoupper(trim($data['village_abbr'] ?? ''));
-    $description = trim($data['description'] ?? '');
+    $id_village = intval($data['id_village'] ?? ($data['village_id'] ?? 0));
+    $village_code = trim($data['village_code'] ?? ($data['villageCode'] ?? ''));
+    $village_name = trim($data['village_name'] ?? ($data['villageName'] ?? ''));
+    $village_abbr = strtoupper(trim($data['village_abbr'] ?? ($data['villageAbbr'] ?? '')));
+    $description = trim($data['description'] ?? ($data['villageDescription'] ?? ''));
     
     // Validation
     if ($id_village <= 0) {
@@ -145,8 +174,8 @@ function updateVillage($conn, $user_id) {
     }
     
     // Validate formats
-    if (!preg_match('/^V\d{3}$/', $village_code)) {
-        echo json_encode(['success' => false, 'message' => 'Village code must be in format V### (e.g., V001)']);
+    if (!preg_match('/^[A-Z0-9]{1,4}$/', $village_code)) {
+        echo json_encode(['success' => false, 'message' => 'Village code must be 1-4 characters (alphanumeric)']);
         return;
     }
     
@@ -250,4 +279,3 @@ function listVillages($conn) {
     
     echo json_encode(['success' => true, 'data' => $villages]);
 }
-?>

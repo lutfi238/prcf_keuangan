@@ -114,8 +114,8 @@ $villages = $conn->query($villages_query);
                                     <?php echo htmlspecialchars($village['village_abbr']); ?>
                                 </span>
                             </td>
-                            <td class="px-6 py-4 text-sm text-gray-600 max-w-xs truncate">
-                                <?php echo htmlspecialchars($village['description'] ?? '-'); ?>
+                            <td class="px-6 py-4 text-sm text-gray-600 max-w-xs">
+                                <div class="whitespace-pre-line"><?php echo nl2br(htmlspecialchars($village['description'] ?? '-')); ?></div>
                             </td>
                             <td class="px-6 py-4 text-xs text-gray-500">
                                 <?php echo htmlspecialchars($village['created_by_name'] ?? 'System'); ?>
@@ -176,10 +176,11 @@ $villages = $conn->query($villages_query);
                 </div>
 
                 <div class="mb-6">
-                    <label class="block text-gray-700 text-sm font-medium mb-2">Description</label>
-                    <textarea id="villageDescription" rows="3"
-                        placeholder="Optional description..."
+                    <label class="block text-gray-700 text-sm font-medium mb-2">Expense Code Description *</label>
+                    <textarea id="villageDescription" rows="5" required
+                        placeholder="Example: LPHD Staff Salary and Insurance&#10;Line 2: Additional details..."
                         class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"></textarea>
+                    <p class="text-xs text-gray-500 mt-1">Enter detailed expense information. Supports multiple lines.</p>
                 </div>
 
                 <div class="flex justify-end space-x-4">

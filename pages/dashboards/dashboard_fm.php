@@ -122,7 +122,8 @@ session_write_close();
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Finance Manager - PRCFI</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Local Assets -->
+    <script src="../../assets/js/tailwindcss.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="bg-white min-h-screen">
@@ -243,14 +244,14 @@ session_write_close();
                 <div class="flex items-center justify-between mb-4">
                     <div>
                         <h3 class="text-lg font-bold text-gray-800">Kelola Proyek</h3>
-                        <p class="text-sm text-gray-600 mt-1">Kode & Data Proyek</p>
+                        <p class="text-sm text-gray-600 mt-1">Proyek & Data Desa</p>
                     </div>
                     <div class="bg-orange-500 p-3 rounded-full">
                         <i class="fas fa-project-diagram text-white text-2xl"></i>
                     </div>
                 </div>
-                <a href="../projects/manage_projects.php" class="inline-block bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition duration-200 font-medium">
-                    Kelola
+                <a href="../projects/manage_projects.php" class="inline-block bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition duration-200 font-medium text-center">
+                    <i class="fas fa-tasks mr-2"></i>Kelola Proyek & Desa
                 </a>
             </div>
 

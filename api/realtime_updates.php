@@ -20,6 +20,10 @@ session_start();
 $user_id = $_SESSION['user_id'] ?? 0;
 $user_role = $_SESSION['user_role'] ?? '';
 
+// CRITICAL: Close session writing immediately to prevent locking!
+// If this is kept open, the while(true) loop will block all other pages.
+session_write_close();
+
 if (!$user_id) {
     echo "event: error\n";
     echo "data: {\"message\": \"Not authenticated\"}\n\n";

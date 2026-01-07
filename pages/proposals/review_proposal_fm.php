@@ -90,7 +90,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Update bank header balance
                 update_bank_header_balance($conn, $id_bank_header, $credit_idr, $credit_usd, true);
                 
-                // 4b. Insert to buku_piutang_detail
+                // 4b. Insert to buku_piutang_detail - DISABLED PER USER REQUEST
+                /*
                 $piutang_stmt = $conn->prepare("INSERT INTO buku_piutang_detail 
                     (id_piutang, tgl_trx, reff, description, recipient, debit_idr, debit_usd, exrate) 
                     VALUES (?, NOW(), ?, ?, ?, ?, ?, ?)");
@@ -99,7 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $credit_idr, $credit_usd, $exrate);
                 $piutang_stmt->execute();
                 
-                // 4c. Insert to buku_piutang_unliquidated
+                // 4c. Insert to buku_piutang_unliquidated - DISABLED, ASSUMED PART OF PIUTANG FEATURE
                 $unliq_stmt = $conn->prepare("INSERT INTO buku_piutang_unliquidated 
                     (id_piutang, tgl, voucher_no, name, description, nilai_idr, nilai_usd, status) 
                     VALUES (?, NOW(), ?, ?, ?, ?, ?, 'pending')");
@@ -108,8 +109,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $credit_idr, $credit_usd);
                 $unliq_stmt->execute();
                 
-                // Update piutang header balance
+                // Update piutang header balance - DISABLED
                 update_piutang_header_balance($conn, $id_piutang_header, $credit_idr, $credit_usd, true);
+                */
                 
                 // 4d. Update project_code_budgets for this specific place_code
                 $upd_budget_stmt = $conn->prepare("UPDATE project_code_budgets 
@@ -401,6 +403,16 @@ session_write_close();
             $budget_details_result = $budget_query->get_result();
             $budget_details = $budget_details_result->fetch_all(MYSQLI_ASSOC);
             
+            // Get Current Exchange Rate for "Direct Conversion" Display
+            $current_exrate = 15500.00; // Default
+            $exrate_check = $conn->query("SHOW TABLES LIKE 'settings'");
+            if ($exrate_check && $exrate_check->num_rows > 0) {
+                $exrate_res = $conn->query("SELECT value FROM settings WHERE `key` = 'usd_idr_rate'");
+                if ($exrate_res && $exrate_res->num_rows > 0) {
+                    $current_exrate = floatval($exrate_res->fetch_assoc()['value']);
+                }
+            }
+            
             // Calculate totals and check overall status
             $total_requested_usd = 0;
             $total_requested_idr = 0;
@@ -413,7 +425,8 @@ session_write_close();
                 $total_requested_usd += $detail['requested_usd'];
                 $total_requested_idr += $detail['requested_idr'];
                 $total_available_usd += $detail['remaining_usd'] ?? 0;
-                $total_available_idr += $detail['remaining_idr'] ?? 0;
+                // Use dynamic conversion for IDR available
+                $total_available_idr += ($detail['remaining_usd'] ?? 0) * $current_exrate;
                 
                 if ($detail['budget_status'] === 'insufficient') $has_insufficient = true;
                 if ($detail['budget_status'] === 'tight') $has_tight = true;
@@ -512,7 +525,13 @@ session_write_close();
                                     Rp <?php echo number_format($detail['requested_idr'], 0, ',', '.'); ?>
                                 </td>
                                 <td class="px-4 py-3 text-sm text-right text-gray-700">
-                                    Rp <?php echo number_format($detail['remaining_idr'] ?? 0, 0, ',', '.'); ?>
+                                    <?php 
+                                    $converted_available_idr = ($detail['remaining_usd'] ?? 0) * $current_exrate;
+                                    echo 'Rp ' . number_format($converted_available_idr, 0, ',', '.'); 
+                                    ?>
+                                    <div class="text-xs text-gray-500 italic">
+                                        (Est. @ <?php echo number_format($current_exrate, 0, ',', '.'); ?>)
+                                    </div>
                                 </td>
                                 <td class="px-4 py-3 text-center">
                                     <?php

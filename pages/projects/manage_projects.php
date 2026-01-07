@@ -140,7 +140,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $v_stmt->bind_param("i", $id_village);
         $v_stmt->execute();
         $v_result = $v_stmt->get_result()->fetch_assoc();
-        $place_code = $v_result['village_abbr'] ?? '';
+        $village_abbr = $v_result['village_abbr'] ?? '';
+        $suffix = trim($_POST['exp_suffix'] ?? '01');
+        
+        // Construct full place code: ExpCode-VillageAbbr-Suffix
+        // Example: 20100-TJ-01
+        $place_code = '';
+        if ($village_abbr) {
+            $place_code = $exp_code . '-' . $village_abbr . '-' . $suffix;
+        }
         
         if (empty($place_code)) {
             $error = 'Desa tidak ditemukan!';
@@ -498,8 +506,8 @@ $projects->data_seek(0);
 
             <!-- Add ExpCode Form -->
             <div class="p-6 bg-gray-50 border-b border-gray-200">
-                <form method="POST" class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-                    <div>
+                <form method="POST" class="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+                    <div class="md:col-span-2">
                         <label class="block text-gray-700 text-sm font-medium mb-2">Proyek *</label>
                         <select name="exp_kode_proyek" required
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400">
@@ -528,15 +536,21 @@ $projects->data_seek(0);
                         <input type="text" name="exp_code" required placeholder="10101"
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 font-mono">
                     </div>
-                    <div>
+                     <div>
+                        <label class="block text-gray-700 text-sm font-medium mb-2">Suffix</label>
+                        <input type="text" name="exp_suffix" required value="01" placeholder="01"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 font-mono">
+                    </div>
+                    <!-- Description on new row or adjusted -->
+                    <div class="md:col-span-4">
                         <label class="block text-gray-700 text-sm font-medium mb-2">Deskripsi</label>
-                        <input type="text" name="exp_description" placeholder="Staff Salary"
+                        <input type="text" name="exp_description" placeholder="Contoh: LPHD Staff Salary" 
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400">
                     </div>
-                    <div>
+                    <div class="md:col-span-2">
                         <button type="submit" name="add_expcode"
                             class="w-full px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition duration-200 font-medium">
-                            <i class="fas fa-plus mr-2"></i>Tambah
+                            <i class="fas fa-plus mr-2"></i>Tambah Exp Code
                         </button>
                     </div>
                 </form>
@@ -582,7 +596,7 @@ $projects->data_seek(0);
                                     </span>
                                 </td>
                                 <td class="px-6 py-4 text-sm text-gray-600">
-                                    <?php echo $exp['description'] ?: '-'; ?>
+                                    <div class="whitespace-pre-line"><?php echo nl2br(htmlspecialchars($exp['description'] ?? '-')); ?></div>
                                 </td>
                                 <td class="px-6 py-4 text-center">
                                     <form method="POST" class="inline" onsubmit="return confirm('Hapus exp code ini?')">
@@ -600,7 +614,153 @@ $projects->data_seek(0);
                 </table>
             </div>
         </div>
+
+        <!-- Village Management Section -->
+        <div id="village-section" class="mt-8 bg-white rounded-lg shadow-lg overflow-hidden border-l-4 border-blue-600">
+            <div class="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-blue-100 flex justify-between items-center">
+                <div>
+                    <h2 class="text-xl font-bold text-gray-800">
+                        <i class="fas fa-map-marker-alt mr-2 text-blue-600"></i>Kelola Desa
+                    </h2>
+                    <p class="text-sm text-gray-600 mt-1">Master data desa untuk budget allocation</p>
+                </div>
+                <button onclick="openVillageModal()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-200 font-medium">
+                    <i class="fas fa-plus mr-2"></i>Tambah Desa
+                </button>
+            </div>
+
+            <!-- Search -->
+            <div class="p-4 bg-gray-50 border-b border-gray-200">
+                <input type="text" id="villageSearchInput" placeholder="Cari berdasarkan nama, kode, atau singkatan..." 
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    onkeyup="searchVillages()">
+            </div>
+
+            <!-- Villages Table -->
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200" id="villagesTable">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kode</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nama Desa</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Singkatan</th>
+                            <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        <?php 
+                        $villages_result_all = $conn->query("SELECT * FROM villages WHERE is_deleted = 0 ORDER BY village_name ASC");
+                        if ($villages_result_all && $villages_result_all->num_rows > 0): 
+                            while ($vill = $villages_result_all->fetch_assoc()): 
+                        ?>
+                        <tr class="hover:bg-gray-50 transition village-row" data-search="<?php echo strtolower($vill['village_code'] . ' ' . $vill['village_name'] . ' ' . $vill['village_abbr']); ?>">
+                            <td class="px-6 py-4">
+                                <span class="font-mono text-sm font-bold text-blue-600"><?php echo $vill['village_code']; ?></span>
+                            </td>
+                            <td class="px-6 py-4 text-sm text-gray-900 font-medium"><?php echo htmlspecialchars($vill['village_name']); ?></td>
+                            <td class="px-6 py-4">
+                                <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-mono font-semibold">
+                                    <?php echo htmlspecialchars($vill['village_abbr']); ?>
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-center text-sm">
+                                <button onclick='openEditVillageModal(<?php echo json_encode($vill); ?>)'
+                                    class="text-blue-600 hover:text-blue-900 mr-2" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button onclick='confirmDeleteVillage(<?php echo $vill['id_village']; ?>, "<?php echo htmlspecialchars($vill['village_name']); ?>")'
+                                    class="text-red-600 hover:text-red-900" title="Hapus">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <?php 
+                            endwhile;
+                        else: 
+                        ?>
+                        <tr>
+                            <td colspan="4" class="px-6 py-8 text-center text-gray-500">
+                                <i class="fas fa-map-marked-alt text-4xl mb-2"></i>
+                                <p>Belum ada desa. Klik "Tambah Desa" untuk menambahkan.</p>
+                            </td>
+                        </tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </main>
+
+    <!-- Village Create/Edit Modal -->
+    <div id="villageModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4">
+            <h3 id="villageModalTitle" class="text-xl font-bold text-gray-800 mb-6">Tambah Desa Baru</h3>
+            <form id="villageForm" onsubmit="saveVillage(event)">
+                <input type="hidden" id="villageId" name="village_id">
+                
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-medium mb-2">Kode Desa *</label>
+                    <input type="text" id="villageCode" name="village_code" required 
+                        placeholder="ABCD" maxlength="4"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 font-mono uppercase">
+                    <p class="text-xs text-gray-500 mt-1">Maksimal 4 karakter (contoh: V001, AJ01, NNJ)</p>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-medium mb-2">Nama Desa *</label>
+                    <input type="text" id="villageName" name="village_name" required 
+                        placeholder="Nanga Jemah"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-medium mb-2">Singkatan *</label>
+                    <input type="text" id="villageAbbr" name="village_abbr" required pattern="[A-Z]{2,5}"
+                        placeholder="NJ" maxlength="5" style="text-transform: uppercase;"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 font-mono uppercase">
+                    <p class="text-xs text-gray-500 mt-1">2-5 huruf kapital (contoh: NJ, PR, SW)</p>
+                </div>
+
+                <div class="flex justify-end space-x-4">
+                    <button type="button" onclick="closeVillageModal()" 
+                        class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                        Batal
+                    </button>
+                    <button type="submit" id="villageSubmitBtn" 
+                        class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        Tambah Desa
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Village Delete Confirmation Modal -->
+    <div id="villageDeleteModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div class="relative top-1/3 mx-auto p-5 border w-96 shadow-lg rounded-lg bg-white">
+            <div class="text-center">
+                <i class="fas fa-exclamation-triangle text-5xl text-red-500 mb-4"></i>
+                <h3 class="text-lg font-bold text-gray-900 mb-2">Konfirmasi Hapus Desa</h3>
+                <p class="text-sm text-gray-600 mb-4">Apakah Anda yakin ingin menghapus desa <strong id="deleteVillageName"></strong>?</p>
+                <p class="text-xs text-gray-500 mb-6">Data desa yang sudah digunakan di exp code tidak dapat dihapus.</p>
+                
+                <form onsubmit="deleteVillageHandler(event)" id="villageDeleteForm">
+                    <input type="hidden" name="delete_village" value="1">
+                    <input type="hidden" name="village_id" id="deleteVillageId">
+                    <div class="flex justify-center space-x-3">
+                        <button type="button" onclick="closeVillageDeleteModal()" 
+                            class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition duration-200 font-medium">
+                            Batal
+                        </button>
+                        <button type="submit"
+                            class="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition duration-200 font-medium">
+                            <i class="fas fa-trash mr-2"></i> Hapus
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 
     <!-- Edit Modal -->
     <div id="editModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
@@ -811,6 +971,188 @@ $projects->data_seek(0);
                 }, 3000);
             }
         })();
+
+        // Village Management Functions
+        function openVillageModal() {
+            document.getElementById('villageForm').reset();
+            document.getElementById('villageId').value = '';
+            document.getElementById('villageModalTitle').textContent = 'Tambah Desa Baru';
+            document.getElementById('villageSubmitBtn').textContent = 'Tambah Desa';
+            document.getElementById('villageModal').classList.remove('hidden');
+        }
+
+        function openEditVillageModal(village) {
+            document.getElementById('villageId').value = village.id_village;
+            document.getElementById('villageCode').value = village.village_code;
+            document.getElementById('villageName').value = village.village_name;
+            document.getElementById('villageAbbr').value = village.village_abbr;
+            document.getElementById('villageModalTitle').textContent = 'Edit Desa';
+            document.getElementById('villageSubmitBtn').textContent = 'Update Desa';
+            document.getElementById('villageModal').classList.remove('hidden');
+        }
+
+        function closeVillageModal() {
+            document.getElementById('villageModal').classList.add('hidden');
+        }
+
+        function confirmDeleteVillage(id, name) {
+            document.getElementById('deleteVillageId').value = id;
+            document.getElementById('deleteVillageName').textContent = name;
+            document.getElementById('villageDeleteModal').classList.remove('hidden');
+        }
+
+        function closeVillageDeleteModal() {
+            document.getElementById('villageDeleteModal').classList.add('hidden');
+        }
+
+        function searchVillages() {
+            const input = document.getElementById('villageSearchInput');
+            const filter = input.value.toLowerCase();
+            const rows = document.getElementsByClassName('village-row');
+
+            for (let i = 0; i < rows.length; i++) {
+                const searchText = rows[i].getAttribute('data-search');
+                if (searchText.includes(filter)) {
+                    rows[i].style.display = '';
+                } else {
+                    rows[i].style.display = 'none';
+                }
+            }
+        }
+
+        async function saveVillage(event) {
+            event.preventDefault();
+            
+            const submitBtn = document.getElementById('villageSubmitBtn');
+            // Check if button exists before proceeding
+            if (!submitBtn) {
+                console.error('Village submit button not found');
+                return;
+            }
+
+            try {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Menyimpan...';
+
+                const villageId = document.getElementById('villageId') ? document.getElementById('villageId').value : '';
+                const villageCodeElement = document.getElementById('villageCode');
+                const villageNameElement = document.getElementById('villageName');
+                const villageAbbrElement = document.getElementById('villageAbbr');
+
+                if (!villageCodeElement || !villageNameElement || !villageAbbrElement) {
+                    throw new Error('Required form elements not found');
+                }
+
+                const villageCode = villageCodeElement.value.toUpperCase();
+                const villageName = villageNameElement.value;
+                const villageAbbr = villageAbbrElement.value.toUpperCase();
+
+                // Create form data
+                const formData = new FormData();
+                if (villageId) {
+                    formData.append('edit_village', '1');
+                    formData.append('village_id', villageId);
+                } else {
+                    formData.append('save_village', '1');
+                }
+                formData.append('village_code', villageCode);
+                formData.append('village_name', villageName);
+                formData.append('village_abbr', villageAbbr);
+
+                // Submit via fetch
+                const response = await fetch('../../api/manage_village.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                // Handle non-OK responses
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const text = await response.text();
+                let result;
+                try {
+                    result = JSON.parse(text);
+                } catch (e) {
+                    console.error('JSON Parse Error:', text);
+                    throw new Error('Invalid server response');
+                }
+                
+                if (result.success) {
+                    closeVillageModal();
+                    window.location.reload();
+                } else {
+                    alert('Gagal menyimpan desa: ' + result.message);
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = villageId ? 'Update Desa' : 'Tambah Desa';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Terjadi kesalahan sistem: ' + error.message);
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    // Restore text based on context or default
+                    const villageIdVal = document.getElementById('villageId') ? document.getElementById('villageId').value : '';
+                    submitBtn.textContent = villageIdVal ? 'Update Desa' : 'Tambah Desa';
+                }
+            }
+        }
+
+        async function deleteVillageHandler(event) {
+            event.preventDefault();
+            
+            const form = event.target;
+            const formData = new FormData(form);
+            const submitBtn = form.querySelector('button[type="submit"]');
+            
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Menghapus...';
+
+            try {
+                const response = await fetch('../../api/manage_village.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    closeVillageDeleteModal();
+                    window.location.reload();
+                } else {
+                    alert('Gagal menghapus desa: ' + result.message);
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fas fa-trash mr-2"></i> Hapus';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Terjadi kesalahan sistem saat menghapus: ' + error.message);
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-trash mr-2"></i> Hapus';
+            }
+        }
+
+        // Close modals when clicking outside
+        window.onclick = function(event) {
+            const editModal = document.getElementById('editModal');
+            const deleteModal = document.getElementById('deleteModal');
+            const villageModal = document.getElementById('villageModal');
+            const villageDeleteModal = document.getElementById('villageDeleteModal');
+            
+            if (event.target === editModal) {
+                closeEditModal();
+            }
+            if (event.target === deleteModal) {
+                closeDeleteModal();
+            }
+            if (event.target === villageModal) {
+                closeVillageModal();
+            }
+            if (event.target === villageDeleteModal) {
+                closeVillageDeleteModal();
+            }
+        }
     </script>
 </body>
 </html>

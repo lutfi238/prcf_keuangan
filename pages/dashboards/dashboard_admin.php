@@ -261,6 +261,19 @@ if (!$recent_users) {
                 </div>
             </a>
 
+            <!-- Manage Villages (Nested under Project Management context) -->
+            <a href="../admin/manage_villages.php" class="block p-6 bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md hover:border-orange-300 transition">
+                <div class="flex items-center space-x-4">
+                    <div class="bg-orange-100 p-3 rounded-full">
+                        <i class="fas fa-map-marker-alt text-orange-600 text-2xl"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-gray-800">Kelola Desa</h4>
+                        <p class="text-sm text-gray-600">Manajemen data desa dan deskripsi Expense Code</p>
+                    </div>
+                </div>
+            </a>
+
             <!-- System Health -->
             <a href="../admin/system_health.php" class="block p-6 bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md hover:border-green-300 transition">
                 <div class="flex items-center space-x-4">

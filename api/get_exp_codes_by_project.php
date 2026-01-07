@@ -19,26 +19,35 @@ if (empty($kode_proyek)) {
 }
 
 try {
-    // Get distinct exp codes that have budget allocated for this project
-    $stmt = $conn->prepare("
-        SELECT DISTINCT exp_code, place_code
-        FROM project_code_budgets 
-        WHERE kode_proyek = ?
-        ORDER BY exp_code ASC
-    ");
-    $stmt->bind_param("s", $kode_proyek);
+    $id_village = $_GET['id_village'] ?? '';
+
+    // Build query to fetch valid exp codes from assignment table
+    $sql = "SELECT DISTINCT exp_code, place_code, description 
+            FROM project_village_expcodes 
+            WHERE kode_proyek = ?";
+    
+    $params = ["s", $kode_proyek];
+    
+    if (!empty($id_village)) {
+        $sql .= " AND id_village = ?";
+        $params[0] .= "i";
+        $params[] = $id_village;
+    }
+    
+    $sql .= " ORDER BY exp_code ASC";
+    
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param(...$params);
     $stmt->execute();
     $result = $stmt->get_result();
     
     $exp_codes = [];
     while ($row = $result->fetch_assoc()) {
-        // Only add unique exp codes (not duplicates)
-        if (!in_array($row['exp_code'], array_column($exp_codes, 'exp_code'))) {
-            $exp_codes[] = [
-                'exp_code' => $row['exp_code'],
-                'example_place_code' => $row['place_code']
-            ];
-        }
+        $exp_codes[] = [
+            'exp_code' => $row['exp_code'],
+            'place_code' => $row['place_code'],
+            'description' => $row['description']
+        ];
     }
     
     echo json_encode($exp_codes);

@@ -29,16 +29,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_budget'])) {
     $amount = floatval($_POST['amount']);
     $exrate = floatval($_POST['exrate']);
     
-    // Get village abbr for place code generation
+    // Get village abbr for place code generation or usage
+    // Use submitted place_code if available (preferred for custom suffix), else generate default
+    $submitted_place_code = $_POST['place_code'] ?? '';
+    
+    // Validate village (still needed to ensure village exists)
     $stmt = $conn->prepare("SELECT village_abbr FROM villages WHERE id_village = ?");
     $stmt->bind_param("i", $id_village);
     $stmt->execute();
     $res = $stmt->get_result();
+    
     if ($res->num_rows === 0) {
         $error = "Desa tidak valid.";
     } else {
         $village_abbr = $res->fetch_assoc()['village_abbr'];
-        $place_code = $exp_code . '-' . $village_abbr . '-01';
+        
+        if (!empty($submitted_place_code) && $submitted_place_code !== '-') {
+            $place_code = $submitted_place_code;
+        } else {
+            // Fallback generation (should rarely happen if JS works)
+            $place_code = $exp_code . '-' . $village_abbr . '-01';
+        }
         
         // Calculate amounts
         if ($currency === 'USD') {
@@ -56,7 +67,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_budget'])) {
             ON DUPLICATE KEY UPDATE 
             budget_usd = VALUES(budget_usd), 
             budget_idr = VALUES(budget_idr), 
-            exrate = VALUES(exrate)");
+            exrate = VALUES(exrate),
+            place_code = VALUES(place_code)"); // Also update place_code just in case
             
         $stmt->bind_param("sisssdd", $kode_proyek, $id_village, $exp_code, $place_code, $budget_usd, $budget_idr, $exrate);
         
@@ -69,10 +81,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_budget'])) {
 }
 
 // Get Projects
-$projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE status_proyek != 'cancelled'");
+$projects_res = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE status_proyek != 'cancelled'");
+$projects = [];
+if ($projects_res) {
+    while($row = $projects_res->fetch_assoc()) {
+        $projects[] = $row;
+    }
+}
 
 // Get Villages (exclude deleted)
-$villages = $conn->query("SELECT * FROM villages WHERE is_deleted = 0 ORDER BY village_name ASC");
+$villages_res = $conn->query("SELECT * FROM villages WHERE is_deleted = 0 ORDER BY village_name ASC");
+$villages = [];
+if ($villages_res) {
+    while($row = $villages_res->fetch_assoc()) {
+        $villages[] = $row;
+    }
+}
 
 // Get Budgets List
 $filter_proyek = $_GET['filter_proyek'] ?? '';
@@ -124,7 +148,8 @@ if ($projects_budget_summary) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kelola Budget - PRCF Keuangan</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Local Assets -->
+    <script src="../../assets/js/tailwindcss.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -199,9 +224,6 @@ if ($projects_budget_summary) {
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">
                                 Desa 
-                                <a href="../admin/manage_villages.php" class="text-blue-600 text-xs hover:text-blue-800 ml-2">
-                                    [<i class="fas fa-cog"></i> Kelola Desa]
-                                </a>
                             </label>
                             <select name="id_village" id="id_village" required class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
                                 <option value="">Pilih Desa</option>
@@ -224,7 +246,7 @@ if ($projects_budget_summary) {
 
                         <div class="bg-gray-50 p-3 rounded border border-gray-200">
                             <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide">Place Code Preview</label>
-                            <input type="text" id="place_code_preview" readonly class="w-full bg-transparent border-none font-mono text-lg font-bold text-blue-600 focus:ring-0 p-0" value="-">
+                            <input type="text" name="place_code" id="place_code_preview" readonly class="w-full bg-transparent border-none font-mono text-lg font-bold text-blue-600 focus:ring-0 p-0" value="-">
                         </div>
 
                         <div class="grid grid-cols-2 gap-4">
@@ -265,9 +287,30 @@ if ($projects_budget_summary) {
                 <div class="bg-white rounded-lg shadow overflow-hidden">
                     <div class="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
                         <h2 class="text-lg font-bold text-gray-800">Daftar Budget</h2>
-                        <div class="flex space-x-2">
-                            <!-- Filters could go here -->
-                        </div>
+                        <form method="GET" class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+                            <select name="filter_proyek" class="border-gray-300 rounded-md shadow-sm text-sm focus:ring-blue-500 focus:border-blue-500 p-1 border">
+                                <option value="">Semua Proyek</option>
+                                <?php foreach ($projects as $p): ?>
+                                    <option value="<?php echo $p['kode_proyek']; ?>" <?php echo $filter_proyek == $p['kode_proyek'] ? 'selected' : ''; ?>>
+                                        <?php echo $p['kode_proyek']; ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            
+                            <select name="filter_village" class="border-gray-300 rounded-md shadow-sm text-sm focus:ring-blue-500 focus:border-blue-500 p-1 border">
+                                <option value="">Semua Desa</option>
+                                <?php foreach ($villages as $v): ?>
+                                    <option value="<?php echo $v['id_village']; ?>" <?php echo $filter_village == $v['id_village'] ? 'selected' : ''; ?>>
+                                        <?php echo $v['village_name']; ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            
+                            <button type="submit" class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">Filter</button>
+                            <?php if($filter_proyek || $filter_village): ?>
+                                <a href="manage_budgets.php" class="bg-gray-500 text-white px-3 py-1 rounded text-sm hover:bg-gray-600 flex items-center">Reset</a>
+                            <?php endif; ?>
+                        </form>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200">
@@ -332,8 +375,11 @@ if ($projects_budget_summary) {
             const conversionPreview = document.getElementById('conversion_preview');
 
             // Load exp codes when project changes
-            kodeProyekSelect.addEventListener('change', async function() {
-                const kodeProyek = this.value;
+            // Helper function to load exp codes
+            async function loadExpCodes() {
+                const kodeProyek = kodeProyekSelect.value;
+                const idVillage = idVillageSelect.value;
+                
                 expCodeSelect.innerHTML = '<option value="">Loading...</option>';
                 expCodeSelect.disabled = true;
                 
@@ -343,15 +389,23 @@ if ($projects_budget_summary) {
                     return;
                 }
                 
+                // If village is selected, we filter by it. If not, maybe show all or ask for village?
+                // Depending on requirement. The API now supports optional village.
+                // Assuming we want to show all valid exp codes for the project if no village is selected, 
+                // OR wait for village if the table logic implies strictly (Proj+Village) -> ExpCode.
+                // Given the user asked "pas pilih desa", let's pass village if selected.
+                
                 try {
-                    const expCodes = await fetchExpCodes(kodeProyek);
+                    const expCodes = await fetchExpCodes(kodeProyek, idVillage);
                     
                     if (expCodes.length === 0) {
-                        expCodeSelect.innerHTML = '<option value="">Tidak ada exp code untuk proyek ini</option>';
+                        expCodeSelect.innerHTML = '<option value="">Tidak ada exp code tersedia</option>';
                     } else {
                         let options = '<option value="">Pilih Exp Code</option>';
                         expCodes.forEach(ec => {
-                            options += `<option value="${ec.exp_code}">${ec.exp_code}</option>`;
+                            // Show exp code and description
+                            const desc = ec.description ? ` - ${ec.description}` : '';
+                            options += `<option value="${ec.exp_code}" data-place-code="${ec.place_code}">${ec.exp_code}${desc}</option>`;
                         });
                         expCodeSelect.innerHTML = options;
                     }
@@ -361,15 +415,27 @@ if ($projects_budget_summary) {
                     expCodeSelect.innerHTML = '<option value="">Error loading exp codes</option>';
                     expCodeSelect.disabled = false;
                 }
+            }
+
+            // Load exp codes when project changes
+            kodeProyekSelect.addEventListener('change', async function() {
+                updateBudgetInfo(this.value);
+                await loadExpCodes(); // Wait for load to finish
+                updatePlaceCode(); // Then update place code (likely clears it)
+            });
+            
+            // Load exp codes when village changes (User Request Fix)
+            idVillageSelect.addEventListener('change', async function() {
+                await loadExpCodes();
+                updatePlaceCode();
             });
 
             function updatePlaceCode() {
-                const expCode = expCodeSelect.value;
-                const selectedOption = idVillageSelect.options[idVillageSelect.selectedIndex];
-                const villageAbbr = selectedOption.getAttribute('data-abbr');
+                const selectedOption = expCodeSelect.options[expCodeSelect.selectedIndex];
+                const placeCode = selectedOption ? selectedOption.getAttribute('data-place-code') : '';
                 
-                if (expCode && villageAbbr) {
-                    placeCodePreview.value = generatePlaceCode(expCode, villageAbbr);
+                if (placeCode) {
+                    placeCodePreview.value = placeCode;
                 } else {
                     placeCodePreview.value = '-';
                 }
