@@ -22,13 +22,13 @@ if ($include_used) {
     // Include all approved proposals (used for checking if any exist)
     $stmt = $conn->prepare("SELECT id_proposal, judul_proposal, pj, date
         FROM proposal
-        WHERE kode_proyek = ? AND status = 'approved'
+        WHERE kode_proyek = ? AND (status = 'approved' OR status = 'approved_fm')
         ORDER BY created_at DESC");
 } else {
     // Exclude those already used in financial reports
     $stmt = $conn->prepare("SELECT id_proposal, judul_proposal, pj, date
         FROM proposal p
-        WHERE kode_proyek = ? AND status = 'approved'
+        WHERE kode_proyek = ? AND (status = 'approved' OR status = 'approved_fm')
         AND NOT EXISTS (
             SELECT 1 FROM laporan_keuangan_header lh
             WHERE lh.nama_projek = p.judul_proposal

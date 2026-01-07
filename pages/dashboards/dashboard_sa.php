@@ -52,6 +52,18 @@ if (isset($_GET['success'])) {
     }
 }
 
+// Handle AJAX Table Requests
+if (isset($_GET['ajax_table']) && $_GET['ajax_table'] === 'reports') {
+    $reports = $conn->query("SELECT lh.*, u.nama as creator_name 
+        FROM laporan_keuangan_header lh 
+        LEFT JOIN user u ON lh.created_by = u.id_user 
+        WHERE lh.status_lap IN ('submitted', 'verified') 
+        ORDER BY lh.created_at DESC");
+        
+    include 'components/table_reports_sa.php';
+    exit();
+}
+
 // Get pending financial reports
 $reports = $conn->query("SELECT lh.*, u.nama as creator_name 
     FROM laporan_keuangan_header lh 
@@ -271,52 +283,8 @@ session_write_close();
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
                         </tr>
                     </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        <?php 
-                        if ($reports && $reports->num_rows > 0):
-                            $no = 1;
-                            while ($report = $reports->fetch_assoc()): 
-                        ?>
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><?php echo $no++; ?></td>
-                            <td class="px-6 py-4 text-sm text-gray-900"><?php echo $report['nama_projek']; ?></td>
-                            <td class="px-6 py-4 text-sm text-gray-900"><?php echo $report['kode_projek']; ?></td>
-                            <td class="px-6 py-4 text-sm text-gray-900"><?php echo $report['creator_name']; ?></td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                <?php echo date('d/m/Y', strtotime($report['tanggal_laporan'])); ?>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <?php if ($report['status_lap'] === 'submitted'): ?>
-                                    <span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                                        Pending Validation
-                                    </span>
-                                <?php elseif ($report['status_lap'] === 'verified'): ?>
-                                    <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                        Validated
-                                    </span>
-                                <?php endif; ?>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                <a href="../reports/approve-report-sa.php?id=<?php echo $report['id_laporan_keu']; ?>" 
-                                    class="text-blue-600 hover:text-blue-900 mr-3">
-                                    <i class="fas fa-eye mr-1"></i> Review
-                                </a>
-                            </td>
-                        </tr>
-                        <?php 
-                            endwhile;
-                        else:
-                        ?>
-                        <tr>
-                            <td colspan="7" class="px-6 py-12 text-center">
-                                <div class="flex flex-col items-center justify-center">
-                                    <i class="fas fa-file-invoice text-gray-400 text-5xl mb-4"></i>
-                                    <p class="text-gray-500 text-lg font-medium mb-2">Belum ada laporan keuangan</p>
-                                    <p class="text-gray-400 text-sm">Tidak ada laporan keuangan yang perlu divalidasi saat ini.</p>
-                                </div>
-                            </td>
-                        </tr>
-                        <?php endif; ?>
+                    <tbody id="reports-table-body" class="bg-white divide-y divide-gray-200">
+                        <?php include 'components/table_reports_sa.php'; ?>
                     </tbody>
                 </table>
             </div>
@@ -407,5 +375,25 @@ session_write_close();
 
     <!-- Real-time Notifications -->
     <script src="../../assets/js/realtime_notifications.js"></script>
+    <script>
+        // Real-time Table Updates for SA
+        window.addEventListener('dashboard-data-refresh', function(e) {
+            console.log('Refreshing SA dashboard tables...');
+            
+            // Reload Reports Table
+            fetch('dashboard_sa.php?ajax_table=reports')
+                .then(response => response.text())
+                .then(html => {
+                    const tbody = document.getElementById('reports-table-body');
+                    if (tbody) {
+                        tbody.innerHTML = html;
+                        // Add subtle flash effect
+                        tbody.parentElement.classList.add('ring-2', 'ring-blue-200');
+                        setTimeout(() => tbody.parentElement.classList.remove('ring-2', 'ring-blue-200'), 1000);
+                    }
+                })
+                .catch(err => console.error('Error reloading reports:', err));
+        });
+    </script>
 </body>
 </html>

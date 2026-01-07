@@ -8,6 +8,7 @@ header("Pragma: no-cache");
 
 require_once '../../includes/config.php';
 require_once '../../includes/maintenance_config.php';
+require_once '../../includes/finance_functions.php';
 
 // Check maintenance mode
 check_maintenance();
@@ -31,49 +32,53 @@ $report_id = $_GET['id'] ?? 0;
 $return_tab = $_GET['return_tab'] ?? 'proposals'; // Default to proposals if not specified
 
 // Handle approval
+// Handle approval
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['approve'])) {
-        $stmt = $conn->prepare("UPDATE laporan_keuangan_header SET status_lap = 'approved', approved_by = ?, updated_at = NOW() WHERE id_laporan_keu = ?");
-        $stmt->bind_param("ii", $user_id, $report_id);
-        
-        if ($stmt->execute()) {
-            // Get report details
+        $conn->begin_transaction();
+            // 5. Update Status
+            $stmt = $conn->prepare("UPDATE laporan_keuangan_header SET status_lap = 'approved_fm', approved_by = ?, updated_at = NOW() WHERE id_laporan_keu = ?");
+            $stmt->bind_param("ii", $user_id, $report_id);
+            $stmt->execute();
+            
+            $conn->commit();
+            
+            // Notifications ...
+            // Get user info (already fetched in original code, need to refetch or reuse)
             $report_stmt = $conn->prepare("SELECT lh.*, u.email, u.nama FROM laporan_keuangan_header lh LEFT JOIN user u ON lh.created_by = u.id_user WHERE id_laporan_keu = ?");
             $report_stmt->bind_param("i", $report_id);
             $report_stmt->execute();
             $report_data = $report_stmt->get_result()->fetch_assoc();
             
-            // Notify PM and SA
             send_notification_email(
                 $report_data['email'],
-                'Laporan Keuangan Telah Diapprove oleh FM',
-                'Laporan keuangan Anda untuk kegiatan "' . $report_data['nama_projek'] . '" telah disetujui oleh Finance Manager.'
+                'Laporan Keuangan Disetujui FM',
+                'Laporan keuangan "' . $report_data['nama_projek'] . '" telah disetujui Finance Manager. Menunggu persetujuan Direktur.'
             );
             
-            $success = 'Laporan berhasil di-approve!';
+            $success = 'Laporan berhasil di-approve oleh FM dan menunggu persetujuan Direktur!';
+            
+        } catch (Exception $e) {
+            $conn->rollback();
+            $error = "Gagal memproses approval: " . $e->getMessage();
         }
     } elseif (isset($_POST['request_revision']) && $user_role === 'Finance Manager') {
         $catatan = $_POST['catatan_fm'] ?? '';
-        
-        // Update report status to rejected and save revision notes
-        // Note: We'll use catatan_finance column or create catatan_fm if needed
         $stmt = $conn->prepare("UPDATE laporan_keuangan_header SET status_lap = 'rejected', catatan_finance = ? WHERE id_laporan_keu = ?");
         $stmt->bind_param("si", $catatan, $report_id);
         
         if ($stmt->execute()) {
-            // Get report details and creator
+             // Get report details
             $report_stmt = $conn->prepare("SELECT lh.*, u.email FROM laporan_keuangan_header lh LEFT JOIN user u ON lh.created_by = u.id_user WHERE id_laporan_keu = ?");
             $report_stmt->bind_param("i", $report_id);
             $report_stmt->execute();
             $report_data = $report_stmt->get_result()->fetch_assoc();
             
-            // Notify PM
             send_notification_email(
                 $report_data['email'],
                 'Laporan Keuangan Perlu Revisi (FM)',
-                'Laporan keuangan Anda untuk kegiatan "' . $report_data['nama_projek'] . '" memerlukan perbaikan dari Finance Manager. Catatan: ' . $catatan
+                'Laporan keuangan "' . $report_data['nama_projek'] . '" perlu revisi. Catatan: ' . $catatan
             );
-            
             $success = 'Permintaan revisi berhasil dikirim!';
         }
     }
@@ -130,6 +135,12 @@ $items = $details->get_result();
             <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
                 <?php echo $success; ?>
                 <a href="../dashboards/dashboard_fm.php?tab=<?php echo urlencode($return_tab); ?>" class="block mt-2 text-green-800 underline">Kembali ke Dashboard</a>
+            </div>
+        <?php endif; ?>
+        
+        <?php if (isset($error)): ?>
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+                <?php echo $error; ?>
             </div>
         <?php endif; ?>
 
@@ -281,10 +292,11 @@ $items = $details->get_result();
                             </tr>
                             <?php endwhile; ?>
                             <tr class="bg-gray-50 font-bold">
-                                <td colspan="3" class="px-4 py-2 text-right">TOTAL:</td>
+                                <td colspan="6" class="px-4 py-2 text-right">TOTAL:</td>
                                 <td class="px-4 py-2 text-right"><?php echo number_format($total_budget, 2); ?></td>
                                 <td class="px-4 py-2 text-right"><?php echo number_format($total_actual, 2); ?></td>
                                 <td class="px-4 py-2 text-right"><?php echo number_format($total_budget - $total_actual, 2); ?></td>
+                                <td></td>
                             </tr>
                         </tbody>
                     </table>

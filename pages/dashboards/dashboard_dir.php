@@ -42,6 +42,51 @@ if ($check_notif_column && $check_notif_column->num_rows > 0) {
     $last_notification_check = '1970-01-01 00:00:00';
 }
 
+// Handle AJAX Table Requests
+if (isset($_GET['ajax_table'])) {
+    if ($_GET['ajax_table'] === 'proposals') {
+        // Get proposals logic (Copied from below)
+        $check_column = $conn->query("SHOW COLUMNS FROM proposal LIKE 'approved_by_fm'");
+        if ($check_column && $check_column->num_rows > 0) {
+            $proposals_result = $conn->query("SELECT p.*, u.nama as creator_name, u2.nama as fm_name
+                FROM proposal p 
+                LEFT JOIN user u ON p.pemohon = u.nama 
+                LEFT JOIN user u2 ON p.approved_by_fm = u2.id_user
+                WHERE p.status IN ('approved_fm', 'approved') 
+                ORDER BY p.created_at DESC");
+        } else {
+            $proposals_result = $conn->query("SELECT p.*, u.nama as creator_name
+                FROM proposal p 
+                LEFT JOIN user u ON p.pemohon = u.nama 
+                WHERE p.status = 'approved' 
+                ORDER BY p.created_at DESC");
+        }
+        $proposals_array = [];
+        if ($proposals_result) {
+            while ($row = $proposals_result->fetch_assoc()) $proposals_array[] = $row;
+        }
+        include 'components/table_proposals_dir.php';
+        exit();
+    }
+    
+    if ($_GET['ajax_table'] === 'reports') {
+        $reports_result = $conn->query("SELECT lh.*, u.nama as creator_name, u2.nama as fm_name
+            FROM laporan_keuangan_header lh
+            LEFT JOIN user u ON lh.created_by = u.id_user
+            LEFT JOIN user u2 ON lh.approved_by = u2.id_user
+            WHERE lh.status_lap = 'approved'
+            ORDER BY lh.created_at DESC");
+        $reports_array = [];
+        if ($reports_result) {
+            while ($row = $reports_result->fetch_assoc()) $reports_array[] = $row;
+        }
+        include 'components/table_reports_dir.php';
+        exit();
+    }
+}
+
+// Normal Page Load - Fetch All Data logic starts here (keeping existing flow)
+$reports_array = []; // Initialize to avoid warnings
 // Get proposals approved by FM (DIR only views, no approval needed)
 // Check if approved_by_fm column exists (2-stage approval feature)
 $check_column = $conn->query("SHOW COLUMNS FROM proposal LIKE 'approved_by_fm'");
@@ -53,7 +98,7 @@ if ($check_column && $check_column->num_rows > 0) {
         FROM proposal p 
         LEFT JOIN user u ON p.pemohon = u.nama 
         LEFT JOIN user u2 ON p.approved_by_fm = u2.id_user
-        WHERE p.status = 'approved_fm' 
+        WHERE p.status IN ('approved_fm', 'approved') 
         ORDER BY p.created_at DESC");
     
     if (!$proposals_result) {
@@ -98,6 +143,7 @@ if (!$reports_result) {
 } else {
     // Store results in array to avoid result set issues
     $reports_array = [];
+
     while ($row = $reports_result->fetch_assoc()) {
         $reports_array[] = $row;
     }
@@ -653,59 +699,8 @@ session_write_close();
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
                             </tr>
                         </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
-                            <?php 
-                            $no = 1;
-                            if (!empty($proposals_array) && count($proposals_array) > 0):
-                            foreach ($proposals_array as $proposal): 
-                            ?>
-                            <tr class="hover:bg-gray-50 proposal-row"
-                                data-title="<?php echo strtolower(htmlspecialchars($proposal['judul_proposal'] ?? '')); ?>"
-                                data-pj="<?php echo strtolower(htmlspecialchars($proposal['pj'] ?? '')); ?>"
-                                data-project="<?php echo strtolower(trim(htmlspecialchars($proposal['kode_proyek'] ?? $proposal['kode_projek'] ?? ''))); ?>">
-                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo $no++; ?></td>
-                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($proposal['judul_proposal'] ?? ''); ?></td>
-                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($proposal['pj'] ?? ''); ?></td>
-                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($proposal['kode_proyek'] ?? $proposal['kode_projek'] ?? ''); ?></td>
-                                <td class="px-6 py-4 text-sm text-gray-900">
-                                    <?php echo !empty($proposal['date']) ? date('d/m/Y', strtotime($proposal['date'])) : (!empty($proposal['created_at']) ? date('d/m/Y', strtotime($proposal['created_at'])) : '-'); ?>
-                                </td>
-                                <td class="px-6 py-4">
-                                    <?php if ($proposal['status'] === 'approved_fm'): ?>
-                                        <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                            <i class="fas fa-check-circle mr-1"></i> Approved by FM
-                                        </span>
-                                    <?php elseif ($proposal['status'] === 'approved'): ?>
-                                        <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                            <i class="fas fa-check-circle mr-1"></i> Approved by FM
-                                        </span>
-                                    <?php endif; ?>
-                                </td>
-                                <td class="px-6 py-4 text-sm">
-                                    <a href="<?php echo ($proposal['status'] === 'approved_fm') ? '../proposals/approve_proposal.php' : '../proposals/view_proposal.php'; ?>?id=<?php echo $proposal['id_proposal'] ?? 0; ?>&return_tab=proposals" 
-                                        class="<?php echo ($proposal['status'] === 'approved_fm') ? 'text-purple-600 hover:text-purple-900 font-bold' : 'text-blue-600 hover:text-blue-900'; ?>">
-                                        <?php if ($proposal['status'] === 'approved_fm'): ?>
-                                            <i class="fas fa-edit mr-1"></i> Review
-                                        <?php else: ?>
-                                            <i class="fas fa-eye mr-1"></i> View
-                                        <?php endif; ?>
-                                    </a>
-                                </td>
-                            </tr>
-                            <?php 
-                                endforeach;
-                            else: 
-                            ?>
-                            <tr>
-                                <td colspan="7" class="px-6 py-12 text-center">
-                                    <div class="flex flex-col items-center justify-center">
-                                        <i class="fas fa-inbox text-gray-400 text-5xl mb-4"></i>
-                                        <p class="text-gray-500 text-lg font-medium mb-2">Belum ada proposal</p>
-                                        <p class="text-gray-400 text-sm">Belum ada proposal yang disetujui oleh Finance Manager</p>
-                                    </div>
-                                </td>
-                            </tr>
-                            <?php endif; ?>
+                        <tbody id="proposals-table-body" class="bg-white divide-y divide-gray-200">
+                            <?php include 'components/table_proposals_dir.php'; ?>
                         </tbody>
                     </table>
                 </div>
@@ -732,67 +727,8 @@ session_write_close();
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
                             </tr>
                         </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
-                            <?php
-                            $no = 1;
-                            if (!empty($reports_array) && count($reports_array) > 0):
-                            foreach ($reports_array as $report):
-                            ?>
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo $no++; ?></td>
-                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($report['nama_projek'] ?? ''); ?></td>
-                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($report['kode_projek'] ?? ''); ?></td>
-                                <td class="px-6 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($report['creator_name'] ?? ''); ?></td>
-                                <td class="px-6 py-4 text-sm text-gray-900">
-                                    <?php echo isset($report['tanggal_laporan']) ? date('d/m/Y', strtotime($report['tanggal_laporan'])) : ''; ?>
-                                </td>
-                                <td class="px-6 py-4">
-                                    <?php 
-                                    $status = isset($report['status_lap']) ? trim($report['status_lap']) : '';
-                                    // Debug: Show actual status
-                                    switch ($status) {
-                                        case 'draft':
-                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">Draft</span>';
-                                            break;
-                                        case 'submitted':
-                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Pending SA</span>';
-                                            break;
-                                        case 'verified':
-                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Validated SA</span>';
-                                            break;
-                                        case 'approved_fm':
-                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">Approved FM</span>';
-                                            break;
-                                        case 'approved':
-                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800"><i class="fas fa-check-circle mr-1"></i> Approved by FM</span>';
-                                            break;
-                                        default:
-                                            echo '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Unknown: ' . htmlspecialchars($status) . '</span>';
-                                    }
-                                    ?>
-                                </td>
-                                <td class="px-6 py-4 text-sm">
-                                    <!-- DIR only views - no approval needed -->
-                                    <a href="../reports/view_report_dir.php?id=<?php echo $report['id_laporan_keu'] ?? 0; ?>&return_tab=reports"
-                                        class="text-blue-600 hover:text-blue-900">
-                                        <i class="fas fa-eye mr-1"></i> View
-                                    </a>
-                                </td>
-                            </tr>
-                            <?php 
-                                endforeach;
-                            else: 
-                            ?>
-                            <tr>
-                                <td colspan="7" class="px-6 py-12 text-center">
-                                    <div class="flex flex-col items-center justify-center">
-                                        <i class="fas fa-file-invoice text-gray-400 text-5xl mb-4"></i>
-                                        <p class="text-gray-500 text-lg font-medium mb-2">Belum ada laporan keuangan</p>
-                                        <p class="text-gray-400 text-sm">Belum ada laporan keuangan yang disetujui oleh Finance Manager</p>
-                                    </div>
-                                </td>
-                            </tr>
-                            <?php endif; ?>
+                        <tbody id="reports-table-body" class="bg-white divide-y divide-gray-200">
+                            <?php include 'components/table_reports_dir.php'; ?>
                         </tbody>
                     </table>
                 </div>
@@ -901,5 +837,36 @@ session_write_close();
 
     <!-- Real-time Notifications -->
     <script src="../../assets/js/realtime_notifications.js"></script>
+    <script>
+        // Real-time Table Updates for Director
+        window.addEventListener('dashboard-data-refresh', function(e) {
+            console.log('Refreshing Director dashboard tables...');
+            
+            // Reload Proposals Table
+            fetch('dashboard_dir.php?ajax_table=proposals')
+                .then(response => response.text())
+                .then(html => {
+                    const tbody = document.getElementById('proposals-table-body');
+                    if (tbody) {
+                        tbody.innerHTML = html;
+                        // Add subtle flash effect
+                        tbody.parentElement.classList.add('ring-2', 'ring-blue-200');
+                        setTimeout(() => tbody.parentElement.classList.remove('ring-2', 'ring-blue-200'), 1000);
+                    }
+                })
+                .catch(err => console.error('Error reloading proposals:', err));
+
+            // Reload Reports Table
+            fetch('dashboard_dir.php?ajax_table=reports')
+                .then(response => response.text())
+                .then(html => {
+                    const tbody = document.getElementById('reports-table-body');
+                    if (tbody) {
+                        tbody.innerHTML = html;
+                    }
+                })
+                .catch(err => console.error('Error reloading reports:', err));
+        });
+    </script>
 </body>
 </html>

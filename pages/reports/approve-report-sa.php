@@ -242,7 +242,7 @@ $items = $details->get_result();
                             </tr>
                             <?php endwhile; ?>
                             <tr class="bg-gray-100 font-bold">
-                                <td colspan="8" class="border border-gray-300 px-2 py-2 text-right">TOTAL:</td>
+                                <td colspan="7" class="border border-gray-300 px-2 py-2 text-right">TOTAL:</td>
                                 <td class="border border-gray-300 px-2 py-2 text-right"><?php echo number_format($total_requested, 2); ?></td>
                                 <td class="border border-gray-300 px-2 py-2 text-right"><?php echo number_format($total_actual, 2); ?></td>
                                 <td class="border border-gray-300 px-2 py-2 text-right <?php echo $total_balance < 0 ? 'text-red-600' : ''; ?>">

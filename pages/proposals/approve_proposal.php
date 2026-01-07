@@ -24,42 +24,64 @@ $proposal_id = $_GET['id'] ?? 0;
 $return_tab = $_GET['return_tab'] ?? 'proposals'; // Default to proposals if not specified
 
 // Handle approval - 2-STAGE APPROVAL SYSTEM
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve'])) {
+// Handle approval - 2-STAGE APPROVAL SYSTEM
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     // Check if 2-stage approval is enabled (check if column exists)
     $check_column = $conn->query("SHOW COLUMNS FROM proposal LIKE 'approved_by_fm'");
     $two_stage_enabled = ($check_column && $check_column->num_rows > 0);
     
     // Get current proposal status
-    $check_stmt = $conn->prepare("SELECT status FROM proposal WHERE id_proposal = ?");
+    $check_stmt = $conn->prepare("SELECT p.*, u.email, u.nama as creator_name FROM proposal p LEFT JOIN user u ON p.pemohon = u.nama WHERE id_proposal = ?");
     $check_stmt->bind_param("i", $proposal_id);
     $check_stmt->execute();
     $current = $check_stmt->get_result()->fetch_assoc();
     
-    $action_taken = false;
-    $success_msg = '';
+    if (!$current) { /* Handle not found */ exit('Proposal not found'); }
 
-    // STAGE 1: FM Approve
-    if ($user_role === 'Finance Manager' && $current['status'] === 'submitted') {
-        if ($two_stage_enabled) {
-            // 2-stage approval: status → 'approved_fm' (waiting DIR)
-            $stmt = $conn->prepare("UPDATE proposal SET status = 'approved_fm', approved_by_fm = ?, fm_approval_date = NOW() WHERE id_proposal = ?");
-            $stmt->bind_param("ii", $user_id, $proposal_id);
-            $success_msg = 'proposal_approved_stage1';
-        } else {
-            // Fallback: direct approval (1-stage)
-            $stmt = $conn->prepare("UPDATE proposal SET status = 'approved' WHERE id_proposal = ?");
-            $stmt->bind_param("i", $proposal_id);
-            $success_msg = 'proposal_approved';
+    // ACTION: APPROVE
+    if (isset($_POST['approve'])) {
+        
+        $action_success = false;
+        $success_msg = '';
+
+        // STAGE 1: FM Approve
+        if ($user_role === 'Finance Manager' && $current['status'] === 'submitted') {
+            if ($two_stage_enabled) {
+                // 2-stage approval: status -> 'approved_fm' (waiting DIR)
+                $stmt = $conn->prepare("UPDATE proposal SET status = 'approved_fm', approved_by_fm = ?, fm_approval_date = NOW() WHERE id_proposal = ?");
+                $stmt->bind_param("ii", $user_id, $proposal_id);
+                if ($stmt->execute()) {
+                    $success_msg = 'proposal_approved_stage1';
+                    $action_success = true;
+                    
+                    // Notify PM
+                    send_notification_email($current['email'], 'Proposal Disetujui oleh Finance Manager (1/2)', 'Proposal Anda "' . $current['judul_proposal'] . '" telah disetujui oleh Finance Manager. Menunggu approval Direktur untuk final approval.');
+                    
+                    // Notify Director
+                    $dir_stmt = $conn->query("SELECT email FROM user WHERE role = 'Direktur'");
+                    while ($dir = $dir_stmt->fetch_assoc()) {
+                        send_notification_email($dir['email'], 'Proposal Menunggu Approval Direktur (Stage 2)', 'Proposal "' . $current['judul_proposal'] . '" telah disetujui FM. Mohon review untuk final approval (Stage 2/2).');
+                    }
+                }
+            } else {
+                // Fallback: direct approval (1-stage)
+                $stmt = $conn->prepare("UPDATE proposal SET status = 'approved' WHERE id_proposal = ?");
+                $stmt->bind_param("i", $proposal_id);
+                if ($stmt->execute()) {
+                    $success_msg = 'proposal_approved';
+                    $action_success = true;
+                    
+                    // Notify PM
+                    send_notification_email($current['email'], 'Proposal Disetujui', 'Proposal Anda "' . $current['judul_proposal'] . '" telah disetujui.');
+                }
+            }
         }
-        $action_taken = true;
-    }
-    // STAGE 2: Director Approve (Final)
-    elseif ($user_role === 'Direktur' && $current['status'] === 'approved_fm') {
-        if (isset($_POST['approve'])) {
+        // STAGE 2: Director Approve (Final)
+        elseif ($user_role === 'Direktur' && $current['status'] === 'approved_fm') {
+            
             $stmt = $conn->prepare("UPDATE proposal SET status = 'approved', approved_by_dir = ?, dir_approval_date = NOW() WHERE id_proposal = ?");
             // Check if approved_by_dir exists first? Assumed yes or fallback
-            // If column doesn't exist, use simple update
             $check_col = $conn->query("SHOW COLUMNS FROM proposal LIKE 'approved_by_dir'");
             if ($check_col && $check_col->num_rows > 0) {
                  $stmt->bind_param("ii", $user_id, $proposal_id);
@@ -67,18 +89,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve'])) {
                  $stmt = $conn->prepare("UPDATE proposal SET status = 'approved' WHERE id_proposal = ?");
                  $stmt->bind_param("i", $proposal_id);
             }
-            $success_msg = 'proposal_approved_final';
-            $action_taken = true;
-        } elseif (isset($_POST['reject'])) {
-            // DIRECTOR REJECTION LOGIC
-            // 1. Must Refund Budget & Cancel Bank Entries
+            
+            if ($stmt->execute()) {
+                $success_msg = 'proposal_approved_final';
+                $action_success = true;
+                
+                // Notify PM - Final approval
+                send_notification_email($current['email'], 'Proposal Disetujui Sepenuhnya (2/2)', 'Proposal Anda "' . $current['judul_proposal'] . '" telah mendapatkan Final Approval dari Direktur.');
+            }
+        }
+
+        if ($action_success) {
+            $redirect_url = ($user_role === 'Direktur') ? '../dashboards/dashboard_dir.php' : '../dashboards/dashboard_fm.php';
+            header('Location: ' . $redirect_url . '?success=' . $success_msg);
+            exit();
+        } else {
+            $error = 'Gagal menyetujui proposal atau status tidak valid.';
+        }
+
+    }
+    // ACTION: REJECT (Only Director Logic implemented here for now as requested)
+    elseif (isset($_POST['reject'])) {
+        
+        if ($user_role === 'Direktur' && $current['status'] === 'approved_fm') {
             $catatan = $_POST['catatan'] ?? '';
             
             // Start Transaction for Refund
             $conn->begin_transaction();
             try {
                 // Find Bank Entries for this Proposal
-                // Pattern: %-PROP{id}-%
                 $prop_id_padded = str_pad($proposal_id, 6, '0', STR_PAD_LEFT);
                 $reff_pattern = "%-PROP" . $prop_id_padded . "-%";
                 
@@ -87,38 +126,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve'])) {
                 $bank_stmt->execute();
                 $bank_entries = $bank_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
                 
-                // Load helper for updating balance
                 require_once '../../includes/finance_functions.php';
                 
                 foreach ($bank_entries as $entry) {
-                    // Reverse Budget Deduction
-                    // Need to know which Place Code and Exp Code.
-                    // buku_bank_detail has place_code.
-                    // We need to fetch 'kode_proyek' from proposal or budget details? 
-                    // Entries have 'place_code'. But we need 'kode_proyek'.
-                    // Let's get kode_proyek from proposal (fetched at top $current? No, need full data).
-                    
-                    // Fetch full proposal data first if not exists
-                    $p_stmt = $conn->prepare("SELECT kode_proyek FROM proposal WHERE id_proposal = ?");
-                    $p_stmt->bind_param("i", $proposal_id);
-                    $p_stmt->execute();
-                    $p_data = $p_stmt->get_result()->fetch_assoc();
-                    $kode_proyek = $p_data['kode_proyek'];
-                    
                     $credit_idr = $entry['credit_idr'];
                     $credit_usd = $entry['credit_usd'];
+                    $kode_proyek = $current['kode_proyek']; // Use fetched data
                     
                     // Reverse Project Budget: used -= amount
-                    // Condition: MUST match place_code and kode_proyek
                     $rev_bud = $conn->prepare("UPDATE project_code_budgets SET used_usd = used_usd - ?, used_idr = used_idr - ? WHERE place_code = ? AND kode_proyek = ?");
                     $rev_bud->bind_param("ddss", $credit_usd, $credit_idr, $entry['place_code'], $kode_proyek);
                     $rev_bud->execute();
                     
-                    // Reverse Bank Header Balance
-                    // If entry was Credit (Payment), Balance Decreased.
-                    // To Refund, we Increase Balance.
-                    // update_bank_header_balance($conn, $id_header, $idr, $usd, $is_credit=true) -> Decreases.
-                    // We want Increase. So $is_credit = false.
+                    // Reverse Bank Header Balance (Increase Balance)
                     update_bank_header_balance($conn, $entry['id_bank_header'], $credit_idr, $credit_usd, false);
                     
                     // Delete Bank Entry
@@ -129,88 +149,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve'])) {
                 
                 // Update Proposal Status
                 $upd_prop = $conn->prepare("UPDATE proposal SET status = 'rejected', catatan_dir = ? WHERE id_proposal = ?");
-                // Check column 'catatan_dir'
                 $check_col = $conn->query("SHOW COLUMNS FROM proposal LIKE 'catatan_dir'");
                 if ($check_col && $check_col->num_rows > 0) {
                      $upd_prop->bind_param("si", $catatan, $proposal_id);
                 } else {
-                     // Fallback if no specific column, maybe use catatan_fm or just update status
                      $upd_prop = $conn->prepare("UPDATE proposal SET status = 'rejected' WHERE id_proposal = ?");
                      $upd_prop->bind_param("i", $proposal_id);
                 }
                 $upd_prop->execute();
                 
                 $conn->commit();
-                $success_msg = 'proposal_rejected'; // Logic to handle message at bottom
-                $action_taken = true;
+                
+                // Notify PM - Rejection
+                send_notification_email($current['email'], 'Proposal Ditolak oleh Direktur', 'Proposal Anda "' . $current['judul_proposal'] . '" telah DITOLAK oleh Direktur. Mohon cek catatan revisi/penolakan.');
+                
+                header('Location: ../dashboards/dashboard_dir.php?success=proposal_rejected');
+                exit();
                 
             } catch (Exception $e) {
                 $conn->rollback();
                 $error = "Gagal menolak proposal dan refund budget: " . $e->getMessage();
-                $action_taken = false;
             }
         }
-    }
-
-    if ($action_taken) {
-        if ($stmt->execute()) {
-            // Get proposal details for notification
-            $prop_stmt = $conn->prepare("SELECT p.*, u.email, u.nama FROM proposal p LEFT JOIN user u ON p.pemohon = u.nama WHERE id_proposal = ?");
-            $prop_stmt->bind_param("i", $proposal_id);
-            $prop_stmt->execute();
-            $prop_data = $prop_stmt->get_result()->fetch_assoc();
-            
-            if ($user_role === 'Finance Manager' && $two_stage_enabled) {
-                // Notify PM - Stage 1 approval
-                send_notification_email(
-                    $prop_data['email'],
-                    'Proposal Disetujui oleh Finance Manager (1/2)',
-                    'Proposal Anda "' . $prop_data['judul_proposal'] . '" telah disetujui oleh Finance Manager. Menunggu approval Direktur untuk final approval.'
-                );
-                
-                // Notify Direktur
-                $dir_stmt = $conn->query("SELECT email FROM user WHERE role = 'Direktur'");
-                while ($dir = $dir_stmt->fetch_assoc()) {
-                    send_notification_email(
-                        $dir['email'],
-                        'Proposal Menunggu Approval Direktur (Stage 2)',
-                        'Proposal "' . $prop_data['judul_proposal'] . '" telah disetujui FM. Mohon review untuk final approval (Stage 2/2).'
-                    );
-                }
-                
-                header('Location: ../dashboards/dashboard_fm.php?success=' . $success_msg);
-
-            } elseif ($user_role === 'Direktur') {
-                 if ($success_msg === 'proposal_rejected') {
-                     send_notification_email(
-                        $prop_data['email'],
-                        'Proposal Ditolak oleh Direktur',
-                        'Proposal Anda "' . $prop_data['judul_proposal'] . '" telah DITOLAK oleh Direktur. Mohon cek catatan revisi/penolakan.'
-                     );
-                 } else {
-                     // Notify PM - Final approval
-                     send_notification_email(
-                        $prop_data['email'],
-                        'Proposal Disetujui Sepenuhnya (2/2)',
-                        'Proposal Anda "' . $prop_data['judul_proposal'] . '" telah mendapatkan Final Approval dari Direktur.'
-                     );
-                 }
-                header('Location: ../dashboards/dashboard_dir.php?success=' . $success_msg);
-            } else {
-                // Fallback 1-stage
-                send_notification_email(
-                    $prop_data['email'],
-                    'Proposal Disetujui',
-                    'Proposal Anda "' . $prop_data['judul_proposal'] . '" telah disetujui.'
-                );
-                header('Location: ../dashboards/dashboard_fm.php?success=' . $success_msg . '&warning=2stage_disabled');
-            }
-            exit();
-        } else {
-            $error = 'Gagal menyetujui proposal. Error: ' . $stmt->error;
-        }
-    } else {
-        $error = 'Status proposal tidak valid untuk approval Anda atau Anda tidak memiliki akses.';
     }
 }
 

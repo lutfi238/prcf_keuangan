@@ -220,6 +220,64 @@ if ($details_stmt) {
                 </div>
             </div>
 
+            <!-- Approval Section -->
+            <?php if ($report['status_lap'] === 'approved_fm' && !$report['approved_by_dir']): ?>
+            <div class="p-8 border-t border-gray-200 bg-blue-50">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">
+                    <i class="fas fa-clipboard-check mr-2 text-blue-600"></i>Final Approval - Direktur
+                </h3>
+                
+                <div class="mb-4 p-3 bg-blue-100 border border-blue-300 rounded-lg">
+                    <p class="text-sm text-blue-800">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        <strong>Info:</strong> Menyetujui laporan ini akan memproses <strong>Financial Settlement</strong> (Debit/Credit Bank dan Adjustment Budget) secara otomatis.
+                    </p>
+                </div>
+                
+                <form action="authorize-report-dir.php?id=<?php echo $report_id; ?>&return_tab=reports" method="POST" class="space-y-4" onsubmit="return confirm('Apakah Anda yakin ingin menyetujui laporan ini?\n\nTindakan ini akan:\n1. Memfinalisasi laporan.\n2. Memproses settlement keuangan (Bank & Budget).\n3. Mengirim notifikasi ke PM dan FM.')">
+                    <div class="bg-white p-6 rounded-lg border border-gray-200">
+                        <div class="flex items-start space-x-4">
+                            <div class="flex-shrink-0">
+                                <div class="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                                    <i class="fas fa-signature text-green-600 text-xl"></i>
+                                </div>
+                            </div>
+                            <div class="flex-1">
+                                <p class="font-medium text-gray-800 mb-2">Tanda Tangan Digital - Direktur</p>
+                                <p class="text-sm text-gray-600 mb-4">Dengan menekan tombol "Final Approve", Anda menyetujui laporan keuangan ini.</p>
+                                <div class="flex items-center space-x-2 text-sm text-gray-600">
+                                    <i class="fas fa-user"></i>
+                                    <span><?php echo $user_name; ?></span>
+                                    <span>•</span>
+                                    <span><?php echo date('d/m/Y H:i'); ?></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end space-x-4">
+                        <button type="submit" name="approve"
+                            class="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-200 font-medium text-lg shadow-lg">
+                            <i class="fas fa-check-double mr-2"></i> Final Approve & Settle
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <?php elseif ($report['status_lap'] === 'approved'): ?>
+            <div class="p-8 border-t border-gray-200 bg-green-50">
+                <div class="flex items-center text-green-700">
+                    <i class="fas fa-check-circle text-2xl mr-3"></i>
+                    <div>
+                        <p class="font-bold">Laporan Telah Disetujui Sepenuhnya (Settled)</p>
+                        <p class="text-sm">Settlement keuangan telah diproses dan budget telah disesuaikan.</p>
+                        <?php if ($report['dir_approval_date']): ?>
+                            <p class="text-xs mt-1">Disetujui Direktur pada: <?php echo date('d/m/Y H:i', strtotime($report['dir_approval_date'])); ?></p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+        </div>
             <!-- Back Button -->
             <div class="mt-6 flex justify-center">
                 <a href="<?php echo $return_dashboard; ?>" 

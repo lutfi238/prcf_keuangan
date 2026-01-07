@@ -404,7 +404,7 @@ session_write_close();
         let isLoadingNotifications = false;
         let hasMoreNotifications = true;
 
-        function showTab(tabName) {
+        function showTab(tabName, updateHistory = true) {
             // Hide all content
             document.querySelectorAll('.tab-content').forEach(content => {
                 content.classList.add('hidden');
@@ -417,13 +417,38 @@ session_write_close();
             });
             
             // Show selected content
-            document.getElementById(tabName + 'Content').classList.remove('hidden');
+            const content = document.getElementById(tabName + 'Content');
+            if (content) content.classList.remove('hidden');
             
             // Set active state on selected button
             const activeButton = document.getElementById('tab' + tabName.charAt(0).toUpperCase() + tabName.slice(1));
-            activeButton.classList.remove('border-transparent', 'text-gray-500');
-            activeButton.classList.add('border-blue-500', 'text-blue-600');
+            if (activeButton) {
+                activeButton.classList.remove('border-transparent', 'text-gray-500');
+                activeButton.classList.add('border-blue-500', 'text-blue-600');
+            }
+
+            // Update URL and History
+            if (updateHistory) {
+                const url = new URL(window.location);
+                url.searchParams.set('tab', tabName);
+                window.history.pushState({tab: tabName}, '', url);
+            }
         }
+
+        // Handle Browser Back Button
+        window.addEventListener('popstate', function(event) {
+            const tabName = event.state?.tab || new URLSearchParams(window.location.search).get('tab') || 'proposals';
+            showTab(tabName, false);
+        });
+
+        // Initial Tab Load
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const tab = urlParams.get('tab');
+            if (tab) {
+                showTab(tab, false);
+            }
+        });
 
         function toggleNotifications() {
             const panel = document.getElementById('notificationPanel');

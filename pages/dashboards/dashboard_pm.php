@@ -130,6 +130,7 @@ while ($row = $approved_reports->fetch_assoc()) {
 
 // Function to calculate time elapsed
 function time_elapsed_string($datetime) {
+    if (!$datetime) return 'Baru saja';
     $now = new DateTime;
     $ago = new DateTime($datetime);
     $diff = $now->diff($ago);
@@ -138,6 +139,43 @@ function time_elapsed_string($datetime) {
     if ($diff->h > 0) return $diff->h . ' jam yang lalu';
     if ($diff->i > 0) return $diff->i . ' menit yang lalu';
     return 'Baru saja';
+}
+
+// Handle AJAX Panel Requests
+if (isset($_GET['ajax_panel']) && $_GET['ajax_panel'] === 'recent_activities') {
+    // Get recent activities logic (Copied from below)
+    $recent_activities = [];
+
+    // Get recent proposals
+    $recent_proposals_query = $conn->query("SELECT 'proposal' as type, id_proposal as id, judul_proposal as title, status, created_at as activity_date 
+        FROM proposal 
+        WHERE pemohon = '{$user_name}' 
+        ORDER BY created_at DESC 
+        LIMIT 3");
+    if ($recent_proposals_query) {
+        while ($row = $recent_proposals_query->fetch_assoc()) $recent_activities[] = $row;
+    }
+
+    // Get recent reports
+    $recent_reports_query = $conn->query("SELECT 'report' as type, id_laporan_keu as id, nama_projek as title, status_lap as status, created_at as activity_date
+        FROM laporan_keuangan_header
+        WHERE created_by = {$user_id}
+        ORDER BY created_at DESC
+        LIMIT 3");
+    if ($recent_reports_query) {
+        while ($row = $recent_reports_query->fetch_assoc()) $recent_activities[] = $row;
+    }
+
+    // Sort by date descending
+    usort($recent_activities, function($a, $b) {
+        return strtotime($b['activity_date']) - strtotime($a['activity_date']);
+    });
+
+    // Limit to 5 most recent
+    $recent_activities = array_slice($recent_activities, 0, 5);
+    
+    include 'components/list_recent_activities_pm.php';
+    exit();
 }
 
 // Handle success messages from redirects
@@ -348,87 +386,14 @@ session_write_close();
             <h3 class="text-lg font-bold text-gray-800 mb-4">
                 <i class="fas fa-history mr-2 text-blue-600"></i>Aktivitas Terbaru
             </h3>
-            <div class="space-y-4">
-                <?php if (count($recent_activities) > 0): ?>
-                    <?php foreach ($recent_activities as $activity): ?>
-                        <?php
-                        // Determine icon and color based on type and status
-                        if ($activity['type'] === 'proposal') {
-                            $icon = 'fa-file-alt';
-                            $color = 'blue';
-                            $status_text = [
-                                'draft' => 'Draft',
-                                'submitted' => 'Pending FM Approval',
-                                'approved_fm' => 'Approved by FM (Final)',
-                                'approved' => 'Approved by FM (Final)',
-                                'rejected' => 'Rejected'
-                            ];
-                            $link = '../proposals/view_proposal.php?id=' . $activity['id']; // READ-ONLY for PM
-                        } else {
-                            $icon = 'fa-chart-line';
-                            $color = 'green';
-                            $status_text = [
-                                'draft' => 'Draft',
-                                'submitted' => 'Pending SA Validation',
-                                'verified' => 'Verified',
-                                'revision_requested' => 'Needs Revision from FM',
-                                'approved' => 'Approved',
-                                'rejected' => 'Rejected'
-                            ];
-                            $link = '../reports/view_report_pm.php?id=' . $activity['id']; // READ-ONLY for PM
-                        }
-                        $current_status = $status_text[$activity['status']] ?? $activity['status'];
-                        ?>
-                        <a href="<?php echo $link; ?>" class="block">
-                            <div class="flex items-start space-x-4 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
-                                <div class="bg-<?php echo $color; ?>-500 p-2 rounded-full flex-shrink-0">
-                                    <i class="fas <?php echo $icon; ?> text-white"></i>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <h4 class="font-medium text-gray-800 truncate"><?php echo htmlspecialchars($activity['title']); ?></h4>
-                                    <p class="text-sm text-gray-600">Status: <?php echo $current_status; ?></p>
-                                    <p class="text-xs text-gray-500 mt-1">
-                                        <i class="fas fa-clock mr-1"></i><?php echo time_elapsed_string($activity['activity_date']); ?>
-                                    </p>
-                                </div>
-                                <div class="flex-shrink-0">
-                                    <i class="fas fa-chevron-right text-gray-400"></i>
-                                </div>
-                            </div>
-                        </a>
-                    <?php endforeach; ?>
-                <?php else: ?>
-                    <div class="flex flex-col items-center justify-center py-12">
-                        <i class="fas fa-history text-gray-400 text-5xl mb-4"></i>
-                        <p class="text-gray-500 text-lg font-medium mb-2">Belum ada aktivitas</p>
-                        <p class="text-gray-400 text-sm">Mulai dengan membuat proposal atau laporan keuangan</p>
-                    </div>
-                <?php endif; ?>
+            <div id="recent-activities-list" class="space-y-4">
+                <?php include 'components/list_recent_activities_pm.php'; ?>
             </div>
         </div>
     </main>
 
     <script>
-        function showTab(tabName) {
-            // Hide all content
-            document.querySelectorAll('.tab-content').forEach(content => {
-                content.classList.add('hidden');
-            });
-            
-            // Remove active state from all buttons
-            document.querySelectorAll('.tab-button').forEach(button => {
-                button.classList.remove('border-blue-500', 'text-blue-600');
-                button.classList.add('border-transparent', 'text-gray-500');
-            });
-            
-            // Show selected content
-            document.getElementById(tabName + 'Content').classList.remove('hidden');
-            
-            // Set active state on selected button
-            const activeButton = document.getElementById('tab' + tabName.charAt(0).toUpperCase() + tabName.slice(1));
-            activeButton.classList.remove('border-transparent', 'text-gray-500');
-            activeButton.classList.add('border-blue-500', 'text-blue-600');
-        }
+
 
         function toggleNotifications() {
             const panel = document.getElementById('notificationPanel');
@@ -477,21 +442,25 @@ session_write_close();
             });
         }
 
-        // Fix back button behavior - Remove query parameters from URL after showing message
-        // This prevents double-back issue caused by PRG (Post-Redirect-Get) pattern
-        (function() {
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.has('success') || urlParams.has('error')) {
-                // Wait for user to see the message, then clean URL
-                setTimeout(function() {
-                    // Replace current history entry without query params
-                    const cleanUrl = window.location.protocol + "//" + 
-                                    window.location.host + 
-                                    window.location.pathname;
-                    window.history.replaceState({}, document.title, cleanUrl);
-                }, 100); // Small delay to ensure message is visible
-            }
-        })();
+    <script>
+        // Real-time Table Updates for PM
+        window.addEventListener('dashboard-data-refresh', function(e) {
+            console.log('Refreshing PM dashboard activities...');
+            
+            // Reload Recent Activities
+            fetch('dashboard_pm.php?ajax_panel=recent_activities')
+                .then(response => response.text())
+                .then(html => {
+                    const container = document.getElementById('recent-activities-list');
+                    if (container) {
+                        container.innerHTML = html;
+                        // Add subtle flash effect
+                        container.parentElement.classList.add('ring-2', 'ring-blue-200');
+                        setTimeout(() => container.parentElement.classList.remove('ring-2', 'ring-blue-200'), 1000);
+                    }
+                })
+                .catch(err => console.error('Error reloading activities:', err));
+        });
     </script>
 
     <script>
