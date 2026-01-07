@@ -86,7 +86,7 @@ CREATE TABLE `buku_bank_header` (
   `prepared_by` varchar(100) DEFAULT NULL,
   `approved_by` varchar(100) DEFAULT NULL,
   `status_laporan` enum('draft','submitted','approved') DEFAULT 'draft',
-  `tanggal_pembuatan` date DEFAULT curdate(),
+  `tanggal_pembuatan` date DEFAULT NULL,
   `tanggal_persetujuan` date DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
