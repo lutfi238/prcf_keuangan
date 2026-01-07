@@ -13,7 +13,7 @@ define('DEVELOPER_MODE', true); // Set to true for debugging - Shows OTP on scre
 $DEVELOPER_EMAILS = [
     '',
 ];
-define('SKIP_OTP_FOR_ALL', true); // true for skip OTP email
+define('SKIP_OTP_FOR_ALL', false); // true for skip OTP email
 
 // Email SMTP Configuration
 define('SMTP_HOST', 'smtp.gmail.com');

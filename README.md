@@ -160,6 +160,7 @@ prcf_keuangan/
    - FM melakukan review proposal
    - Approve/Reject dengan catatan
    - Status: `Pending FM Review` → `Approved by FM` / `Rejected by FM`
+
 2. **Stage 2 - Director Approval**:
 
    - Direktur melakukan final approval
@@ -196,13 +197,14 @@ prcf_keuangan/
   - Multi-currency support (IDR, USD, EUR)
   - Export to Excel dengan formatting
   - Filter by date range & project
+
 - **Buku Piutang**: Advance/receivables tracking
 
   - Status: Advance, Reimbursed, Outstanding
   - Export to Excel dengan pivot tables
   - Automated calculations
 
-### 🛠️ **Admin Panel** *(NEW)*
+### 🛠️ **Admin Panel** _(NEW)_
 
 - User management (CRUD operations)
 - Role assignment & permissions
@@ -216,10 +218,12 @@ prcf_keuangan/
   - Toggle on/off via config
   - IP Whitelist untuk admin bypass
   - Animated Lottie maintenance page
+
 - **Password Recovery**:
 
   - Forgot password dengan email verification
   - Secure token-based reset
+
 - **Session Management**:
 
   - Auto-logout on inactivity
@@ -233,6 +237,7 @@ prcf_keuangan/
 Untuk production deployment, pilih salah satu platform berikut:
 
 #### 🥇 **Heroku (Recommended untuk Pemula)**
+
 - ✅ **Free tier**: 550 jam/bulan
 - ✅ **Native PHP support** (tidak perlu Docker)
 - ✅ **Auto-deployment** dari GitHub
@@ -240,6 +245,7 @@ Untuk production deployment, pilih salah satu platform berikut:
 - 📖 **Panduan**: [deployment/HEROKU_DEPLOYMENT.md](deployment/HEROKU_DEPLOYMENT.md)
 
 #### 🥈 **Railway**
+
 - ✅ **Free tier**: 512MB RAM, 1GB storage
 - ✅ **Docker support** (sudah siap)
 - ✅ **Auto-deployment** dari GitHub
@@ -247,6 +253,7 @@ Untuk production deployment, pilih salah satu platform berikut:
 - 📖 **Panduan**: [deployment/RAILWAY_DEPLOYMENT.md](deployment/RAILWAY_DEPLOYMENT.md)
 
 #### 🥉 **Render**
+
 - ✅ **Free tier**: 750 jam app + 750 jam database/bulan
 - ✅ **Docker support**
 - ✅ **PostgreSQL/MySQL** support
@@ -254,6 +261,7 @@ Untuk production deployment, pilih salah satu platform berikut:
 - 📖 **Panduan**: [deployment/RENDER_DEPLOYMENT.md](deployment/RENDER_DEPLOYMENT.md)
 
 ### 📋 **Deployment Checklist**
+
 Lihat [deployment/README.md](deployment/README.md) untuk file yang perlu disiapkan untuk setiap platform.
 
 ---
@@ -269,7 +277,7 @@ Lihat [deployment/README.md](deployment/README.md) untuk file yang perlu disiapk
 ### 1️⃣ **Clone Repository**
 
 ```bash
-cd C:\xampp\htdocs
+cd C:\laragon\www
 git clone <repository-url> prcf_keuangan
 cd prcf_keuangan
 ```
@@ -357,18 +365,18 @@ chmod -R 755 assets/
 ### 7️⃣ **Akses Aplikasi**
 
 ```
-URL: http://localhost/prcf_keuangan/
+URL: https://prcf-test.indevs.in
 ```
 
 ## 👥 Default User Accounts
 
-| Role                       | Email         | Password | Permissions                          |
-| -------------------------- | ------------- | -------- | ------------------------------------ |
-| **Administrator**    | admin@prcf.id | password | Full system access                   |
-| **Direktur**         | dir@prcf.id   | password | Final approvals, view all            |
-| **Finance Manager**  | fm@prcf.id    | password | Approve proposals (stage 1), reports |
-| **Staff Accountant** | sa@prcf.id    | password | Validate financial reports           |
-| **Project Manager**  | pm@prcf.id    | password | Create proposals & reports           |
+| Role                 | Email               | Password      | Permissions                          |
+| -------------------- | ------------------- | ------------- | ------------------------------------ |
+| **Administrator**    | `admin@prcf.org`    | `password123` | Full system access                   |
+| **Direktur**         | `direktur@prcf.org` | `password123` | Final approvals, view all            |
+| **Finance Manager**  | `fm@prcf.org`       | `password123` | Approve proposals (stage 1), reports |
+| **Staff Accountant** | `sa@prcf.org`       | `password123` | Validate financial reports           |
+| **Project Manager**  | `pm@prcf.org`       | `password123` | Create proposals & reports           |
 
 ⚠️ **PENTING**: Ganti semua password default setelah login pertama!
 
@@ -439,8 +447,8 @@ graph LR
 
 ```javascript
 // EventSource connection to /api/realtime_updates.php
-const eventSource = new EventSource('/api/realtime_updates.php');
-eventSource.onmessage = function(event) {
+const eventSource = new EventSource("/api/realtime_updates.php");
+eventSource.onmessage = function (event) {
   const data = JSON.parse(event.data);
   // Handle real-time updates
 };
@@ -471,28 +479,33 @@ eventSource.onmessage = function(event) {
    - Session management dengan secure flags
    - OTP verification (Email)
    - Password strength requirements
+
 2. **Input Validation & Sanitization**
 
    - Prepared statements untuk SQL injection prevention
    - Input validation untuk semua form fields
    - File upload validation (type, size, extension)
    - XSS prevention dengan output escaping
+
 3. **Session Security**
 
    - Secure session configuration
    - Session timeout & auto-logout
    - Session hijacking prevention
    - Cache control headers
+
 4. **CSRF Protection**
 
    - CSRF tokens pada sensitive forms
    - Token validation untuk state-changing operations
+
 5. **File Security**
 
    - Upload directory outside webroot (optional)
    - File type validation dengan MIME checking
    - Filename sanitization
    - Size limits enforcement
+
 6. **Error Handling**
 
    - Custom error pages
@@ -731,7 +744,10 @@ extension=session
 <script src="https://cdn.tailwindcss.com"></script>
 
 <!-- Font Awesome -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link
+  rel="stylesheet"
+  href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+/>
 
 <!-- Lottie -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
@@ -857,7 +873,7 @@ Terima kasih kepada semua yang telah berkontribusi pada project ini!
 
 **Made with ❤️ for PRCF Indonesia**
 
-*Last Updated: October 2025*
+_Last Updated: October 2025_
 
 ---
 
