@@ -57,6 +57,22 @@ if (!$proposal) {
     exit();
 }
 
+// Get budget details
+$stmt_budget = $conn->prepare("
+    SELECT pbd.*, v.village_name 
+    FROM proposal_budget_details pbd
+    LEFT JOIN villages v ON pbd.id_village = v.id_village
+    WHERE pbd.id_proposal = ?
+    ORDER BY pbd.id_detail ASC
+");
+$stmt_budget->bind_param("i", $proposal_id);
+$stmt_budget->execute();
+$budget_details = $stmt_budget->get_result();
+$budget_items = [];
+while ($item = $budget_details->fetch_assoc()) {
+    $budget_items[] = $item;
+}
+
 // Log access for debugging
 error_log("✅ view_proposal.php - User ($user_role) viewing proposal: ID = $proposal_id, Status = " . $proposal['status']);
 
@@ -190,6 +206,54 @@ session_write_close();
                         <label class="block text-sm font-medium text-gray-600 mb-1">Pemohon</label>
                         <p class="text-gray-800 font-medium"><?php echo htmlspecialchars($proposal['pemohon']); ?></p>
                     </div>
+                </div>
+
+                <!-- Budget Details Table -->
+                <div class="border-t pt-6">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4">Detail Anggaran yang Diajukan</h3>
+                    <div class="overflow-x-auto border border-gray-200 rounded-lg">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50 text-xs font-semibold text-gray-500 uppercase">
+                                <tr>
+                                    <th class="px-4 py-3 text-left">Desa</th>
+                                    <th class="px-4 py-3 text-left">Place Code</th>
+                                    <th class="px-4 py-3 text-right">Requested (USD)</th>
+                                    <th class="px-4 py-3 text-right">Requested (IDR)</th>
+                                    <th class="px-4 py-3 text-left">Deskripsi</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200 text-sm">
+                                <?php if (empty($budget_items)): ?>
+                                    <tr>
+                                        <td colspan="5" class="px-4 py-4 text-center text-gray-500 italic">Tidak ada detail anggaran.</td>
+                                    </tr>
+                                <?php else: ?>
+                                    <?php 
+                                    $total_usd = 0;
+                                    $total_idr = 0;
+                                    foreach ($budget_items as $item): 
+                                        $total_usd += $item['requested_usd'];
+                                        $total_idr += $item['requested_idr'];
+                                    ?>
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-4 py-3 text-gray-900 font-medium"><?php echo htmlspecialchars($item['village_name']); ?></td>
+                                        <td class="px-4 py-3 font-mono text-blue-600"><?php echo htmlspecialchars($item['place_code']); ?></td>
+                                        <td class="px-4 py-3 text-right font-mono">$<?php echo number_format($item['requested_usd'], 2); ?></td>
+                                        <td class="px-4 py-3 text-right font-mono">Rp <?php echo number_format($item['requested_idr'], 0, ',', '.'); ?></td>
+                                        <td class="px-4 py-3 text-gray-600"><?php echo htmlspecialchars($item['description']); ?></td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                    <tr class="bg-gray-50 font-bold border-t-2 border-gray-200">
+                                        <td colspan="2" class="px-4 py-3 text-right text-gray-700">TOTAL</td>
+                                        <td class="px-4 py-3 text-right text-blue-800 font-mono">$<?php echo number_format($total_usd, 2); ?></td>
+                                        <td class="px-4 py-3 text-right text-blue-800 font-mono">Rp <?php echo number_format($total_idr, 0, ',', '.'); ?></td>
+                                        <td></td>
+                                    </tr>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="text-[10px] text-gray-400 mt-2 italic">* Exchange Rate Submission: 1 USD = Rp <?php echo number_format($proposal['exrate_at_submission'], 0, ',', '.'); ?></p>
                 </div>
 
                 <?php if (!empty($proposal['tor']) && file_exists($proposal['tor'])): ?>

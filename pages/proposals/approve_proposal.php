@@ -288,19 +288,19 @@ if (!$proposal) {
                 <div class="grid grid-cols-2 gap-6">
                     <div>
                         <label class="block text-sm font-medium text-gray-600 mb-1">Judul Proposal</label>
-                        <p class="text-gray-800 font-medium"><?php echo $proposal['judul_proposal']; ?></p>
+                        <p class="text-gray-800 font-medium"><?php echo htmlspecialchars($proposal['judul_proposal']); ?></p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-600 mb-1">Kode Proyek</label>
-                        <p class="text-gray-800 font-medium"><?php echo $proposal['kode_proyek']; ?></p>
+                        <p class="text-gray-800 font-medium"><?php echo htmlspecialchars($proposal['kode_proyek']); ?></p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-600 mb-1">Penanggung Jawab</label>
-                        <p class="text-gray-800 font-medium"><?php echo $proposal['pj']; ?></p>
+                        <p class="text-gray-800 font-medium"><?php echo htmlspecialchars($proposal['pj']); ?></p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-600 mb-1">Pemohon</label>
-                        <p class="text-gray-800 font-medium"><?php echo $proposal['pemohon']; ?></p>
+                        <p class="text-gray-800 font-medium"><?php echo htmlspecialchars($proposal['pemohon']); ?></p>
                     </div>
                 </div>
 
@@ -313,9 +313,9 @@ if (!$proposal) {
                         </div>
                         <div class="flex-1 min-w-0">
                             <p class="font-medium text-gray-800">File TOR</p>
-                            <p class="text-sm text-gray-600 truncate"><?php echo basename($proposal['tor']); ?></p>
+                            <p class="text-sm text-gray-600 truncate"><?php echo htmlspecialchars(basename($proposal['tor'])); ?></p>
                         </div>
-                        <a href="<?php echo $proposal['tor']; ?>" target="_blank" download
+                        <a href="<?php echo htmlspecialchars($proposal['tor']); ?>" target="_blank" download
                             class="flex-shrink-0 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition duration-200">
                             <i class="fas fa-download mr-2"></i> Download TOR
                         </a>
@@ -330,7 +330,7 @@ if (!$proposal) {
                         </div>
                         <div class="flex-1">
                             <p class="font-medium text-red-800">File TOR Tidak Ditemukan</p>
-                            <p class="text-sm text-red-600">Path: <?php echo $proposal['tor']; ?></p>
+                            <p class="text-sm text-red-600">File tidak tersedia di server</p>
                         </div>
                     </div>
                 </div>

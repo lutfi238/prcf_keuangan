@@ -15,24 +15,16 @@
                                     <?php echo !empty($proposal['date']) ? date('d/m/Y', strtotime($proposal['date'])) : (!empty($proposal['created_at']) ? date('d/m/Y', strtotime($proposal['created_at'])) : '-'); ?>
                                 </td>
                                 <td class="px-6 py-4">
-                                    <?php if ($proposal['status'] === 'approved_fm'): ?>
+                                    <?php if ($proposal['status'] === 'approved' || $proposal['status'] === 'approved_fm'): ?>
                                         <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                            <i class="fas fa-check-circle mr-1"></i> Approved by FM
-                                        </span>
-                                    <?php elseif ($proposal['status'] === 'approved'): ?>
-                                        <span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                                            <i class="fas fa-check-double mr-1"></i> Final Approved
+                                            <i class="fas fa-check-double mr-1"></i> Approved
                                         </span>
                                     <?php endif; ?>
                                 </td>
                                 <td class="px-6 py-4 text-sm">
-                                    <a href="<?php echo ($proposal['status'] === 'approved_fm') ? '../proposals/approve_proposal.php' : '../proposals/view_proposal.php'; ?>?id=<?php echo $proposal['id_proposal'] ?? 0; ?>&return_tab=proposals" 
-                                        class="<?php echo ($proposal['status'] === 'approved_fm') ? 'text-purple-600 hover:text-purple-900 font-bold' : 'text-blue-600 hover:text-blue-900'; ?>">
-                                        <?php if ($proposal['status'] === 'approved_fm'): ?>
-                                            <i class="fas fa-edit mr-1"></i> Review
-                                        <?php else: ?>
-                                            <i class="fas fa-eye mr-1"></i> View
-                                        <?php endif; ?>
+                                    <a href="../proposals/view_proposal.php?id=<?php echo $proposal['id_proposal'] ?? 0; ?>&return_tab=proposals" 
+                                        class="text-blue-600 hover:text-blue-900">
+                                        <i class="fas fa-eye mr-1"></i> View
                                     </a>
                                 </td>
                             </tr>

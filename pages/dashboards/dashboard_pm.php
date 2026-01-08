@@ -8,6 +8,7 @@ header("Pragma: no-cache");
 
 require_once '../../includes/config.php';
 require_once '../../includes/maintenance_config.php';
+require_once '../../includes/session_sync.php';
 
 // Check maintenance mode (admin with whitelisted IP can bypass)
 check_maintenance();
@@ -22,6 +23,9 @@ if ($_SESSION['user_role'] !== 'Project Manager') {
     exit();
 }
 
+// Sync session with database to ensure name is always up-to-date
+sync_session_with_database($conn);
+
 $user_name = $_SESSION['user_name'];
 $user_id = $_SESSION['user_id'];
 
@@ -29,10 +33,14 @@ $user_id = $_SESSION['user_id'];
 // Check if last_notification_check column exists first to avoid error
 $check_notif_column = $conn->query("SHOW COLUMNS FROM user LIKE 'last_notification_check'");
 if ($check_notif_column && $check_notif_column->num_rows > 0) {
-    // Column exists, get the value
-    $last_check_query = $conn->query("SELECT last_notification_check FROM user WHERE id_user = {$user_id}");
+    // Column exists, get the value using prepared statement
+    $stmt = $conn->prepare("SELECT last_notification_check FROM user WHERE id_user = ?");
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    $last_check_query = $stmt->get_result();
     $last_check_data = $last_check_query->fetch_assoc();
     $last_notification_check = $last_check_data['last_notification_check'] ?? '1970-01-01 00:00:00';
+    $stmt->close();
     
     // DISABLED auto-update to prevent session issues with back button
     // User can manually import SQL to enable read/unread feature
@@ -42,29 +50,55 @@ if ($check_notif_column && $check_notif_column->num_rows > 0) {
     $last_notification_check = '1970-01-01 00:00:00';
 }
 
-// Get proposals created by this PM
-$proposals = $conn->query("SELECT p.*, pr.nama_proyek 
-    FROM proposal p 
-    LEFT JOIN proyek pr ON p.kode_proyek = pr.kode_proyek 
-    WHERE p.pemohon = '{$user_name}' 
+// Get proposals created by this PM - using prepared statement
+$stmt = $conn->prepare("SELECT p.*, pr.nama_proyek
+    FROM proposal p
+    LEFT JOIN proyek pr ON p.kode_proyek = pr.kode_proyek
+    WHERE p.pemohon = ?
     ORDER BY p.created_at DESC");
+$stmt->bind_param("s", $user_name);
+$stmt->execute();
+$proposals = $stmt->get_result();
 
-// Get notifications for PM
-$notif_approved_proposals = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE pemohon = '{$user_name}' AND status = 'approved' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['count'];
-$notif_rejected_proposals = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE pemohon = '{$user_name}' AND status = 'rejected' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['count'];
-$notif_approved_reports = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE created_by = {$user_id} AND status_lap = 'approved' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['count'];
-$notif_revision_reports = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE created_by = {$user_id} AND status_lap = 'revision_requested' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['count'];
-$notif_reports = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE created_by = {$user_id} AND status_lap IN ('verified', 'approved', 'revision_requested') AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['count'];
+// Get notifications for PM - using prepared statements
+$stmt = $conn->prepare("SELECT COUNT(*) as count FROM proposal WHERE pemohon = ? AND status = 'approved' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)");
+$stmt->bind_param("s", $user_name);
+$stmt->execute();
+$notif_approved_proposals = $stmt->get_result()->fetch_assoc()['count'];
+
+$stmt = $conn->prepare("SELECT COUNT(*) as count FROM proposal WHERE pemohon = ? AND status = 'rejected' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)");
+$stmt->bind_param("s", $user_name);
+$stmt->execute();
+$notif_rejected_proposals = $stmt->get_result()->fetch_assoc()['count'];
+
+$stmt = $conn->prepare("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE created_by = ? AND status_lap = 'approved' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)");
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$notif_approved_reports = $stmt->get_result()->fetch_assoc()['count'];
+
+$stmt = $conn->prepare("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE created_by = ? AND status_lap = 'revision_requested' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)");
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$notif_revision_reports = $stmt->get_result()->fetch_assoc()['count'];
+
+$stmt = $conn->prepare("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE created_by = ? AND status_lap IN ('verified', 'approved', 'revision_requested') AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)");
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$notif_reports = $stmt->get_result()->fetch_assoc()['count'];
+
 $total_notifications = $notif_approved_proposals + $notif_rejected_proposals + $notif_approved_reports + $notif_revision_reports;
 
 // Get recent notifications with details
 $notifications = [];
 
 // Add approved proposal notifications
-$approved_proposals = $conn->query("SELECT id_proposal, judul_proposal, updated_at 
-    FROM proposal 
-    WHERE pemohon = '{$user_name}' AND status = 'approved' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
+$stmt = $conn->prepare("SELECT id_proposal, judul_proposal, updated_at
+    FROM proposal
+    WHERE pemohon = ? AND status = 'approved' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
     ORDER BY updated_at DESC LIMIT 5");
+$stmt->bind_param("s", $user_name);
+$stmt->execute();
+$approved_proposals = $stmt->get_result();
 while ($row = $approved_proposals->fetch_assoc()) {
     $is_unread = (strtotime($row['updated_at']) > strtotime($last_notification_check));
     $notifications[] = [
@@ -78,10 +112,13 @@ while ($row = $approved_proposals->fetch_assoc()) {
 }
 
 // Add rejected proposal notifications
-$rejected_proposals = $conn->query("SELECT id_proposal, judul_proposal, updated_at 
-    FROM proposal 
-    WHERE pemohon = '{$user_name}' AND status = 'rejected' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
+$stmt = $conn->prepare("SELECT id_proposal, judul_proposal, updated_at
+    FROM proposal
+    WHERE pemohon = ? AND status = 'rejected' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
     ORDER BY updated_at DESC LIMIT 5");
+$stmt->bind_param("s", $user_name);
+$stmt->execute();
+$rejected_proposals = $stmt->get_result();
 while ($row = $rejected_proposals->fetch_assoc()) {
     $is_unread = (strtotime($row['updated_at']) > strtotime($last_notification_check));
     $notifications[] = [
@@ -95,10 +132,13 @@ while ($row = $rejected_proposals->fetch_assoc()) {
 }
 
 // Add revision report notifications
-$revision_reports = $conn->query("SELECT id_laporan_keu, nama_projek, updated_at
+$stmt = $conn->prepare("SELECT id_laporan_keu, nama_projek, updated_at
     FROM laporan_keuangan_header
-    WHERE created_by = {$user_id} AND status_lap = 'revision_requested' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
+    WHERE created_by = ? AND status_lap = 'revision_requested' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
     ORDER BY updated_at DESC LIMIT 5");
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$revision_reports = $stmt->get_result();
 while ($row = $revision_reports->fetch_assoc()) {
     $is_unread = (strtotime($row['updated_at']) > strtotime($last_notification_check));
     $notifications[] = [
@@ -112,10 +152,13 @@ while ($row = $revision_reports->fetch_assoc()) {
 }
 
 // Add approved report notifications
-$approved_reports = $conn->query("SELECT id_laporan_keu, nama_projek, updated_at
+$stmt = $conn->prepare("SELECT id_laporan_keu, nama_projek, updated_at
     FROM laporan_keuangan_header
-    WHERE created_by = {$user_id} AND status_lap = 'approved' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
+    WHERE created_by = ? AND status_lap = 'approved' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
     ORDER BY updated_at DESC LIMIT 5");
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$approved_reports = $stmt->get_result();
 while ($row = $approved_reports->fetch_assoc()) {
     $is_unread = (strtotime($row['updated_at']) > strtotime($last_notification_check));
     $notifications[] = [
@@ -146,25 +189,33 @@ if (isset($_GET['ajax_panel']) && $_GET['ajax_panel'] === 'recent_activities') {
     // Get recent activities logic (Copied from below)
     $recent_activities = [];
 
-    // Get recent proposals
-    $recent_proposals_query = $conn->query("SELECT 'proposal' as type, id_proposal as id, judul_proposal as title, status, created_at as activity_date 
-        FROM proposal 
-        WHERE pemohon = '{$user_name}' 
-        ORDER BY created_at DESC 
+    // Get recent proposals - using prepared statement
+    $stmt = $conn->prepare("SELECT 'proposal' as type, id_proposal as id, judul_proposal as title, status, created_at as activity_date
+        FROM proposal
+        WHERE pemohon = ?
+        ORDER BY created_at DESC
         LIMIT 3");
+    $stmt->bind_param("s", $user_name);
+    $stmt->execute();
+    $recent_proposals_query = $stmt->get_result();
     if ($recent_proposals_query) {
         while ($row = $recent_proposals_query->fetch_assoc()) $recent_activities[] = $row;
     }
+    $stmt->close();
 
-    // Get recent reports
-    $recent_reports_query = $conn->query("SELECT 'report' as type, id_laporan_keu as id, nama_projek as title, status_lap as status, created_at as activity_date
+    // Get recent reports - using prepared statement
+    $stmt = $conn->prepare("SELECT 'report' as type, id_laporan_keu as id, nama_projek as title, status_lap as status, created_at as activity_date
         FROM laporan_keuangan_header
-        WHERE created_by = {$user_id}
+        WHERE created_by = ?
         ORDER BY created_at DESC
         LIMIT 3");
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    $recent_reports_query = $stmt->get_result();
     if ($recent_reports_query) {
         while ($row = $recent_reports_query->fetch_assoc()) $recent_activities[] = $row;
     }
+    $stmt->close();
 
     // Sort by date descending
     usort($recent_activities, function($a, $b) {
@@ -197,29 +248,37 @@ if (isset($_GET['success'])) {
 // Get recent activities (proposals and reports combined)
 $recent_activities = [];
 
-// Get recent proposals
-$recent_proposals_query = $conn->query("SELECT 'proposal' as type, id_proposal as id, judul_proposal as title, status, created_at as activity_date 
-    FROM proposal 
-    WHERE pemohon = '{$user_name}' 
-    ORDER BY created_at DESC 
+// Get recent proposals - using prepared statement
+$stmt = $conn->prepare("SELECT 'proposal' as type, id_proposal as id, judul_proposal as title, status, created_at as activity_date
+    FROM proposal
+    WHERE pemohon = ?
+    ORDER BY created_at DESC
     LIMIT 3");
+$stmt->bind_param("s", $user_name);
+$stmt->execute();
+$recent_proposals_query = $stmt->get_result();
 if ($recent_proposals_query) {
     while ($row = $recent_proposals_query->fetch_assoc()) {
         $recent_activities[] = $row;
     }
 }
+$stmt->close();
 
-// Get recent reports
-$recent_reports_query = $conn->query("SELECT 'report' as type, id_laporan_keu as id, nama_projek as title, status_lap as status, created_at as activity_date
+// Get recent reports - using prepared statement
+$stmt = $conn->prepare("SELECT 'report' as type, id_laporan_keu as id, nama_projek as title, status_lap as status, created_at as activity_date
     FROM laporan_keuangan_header
-    WHERE created_by = {$user_id}
+    WHERE created_by = ?
     ORDER BY created_at DESC
     LIMIT 3");
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$recent_reports_query = $stmt->get_result();
 if ($recent_reports_query) {
     while ($row = $recent_reports_query->fetch_assoc()) {
         $recent_activities[] = $row;
     }
 }
+$stmt->close();
 
 // Sort by date descending
 usort($recent_activities, function($a, $b) {
@@ -441,6 +500,7 @@ session_write_close();
                 e.stopPropagation();
             });
         }
+    </script>
 
     <script>
         // Real-time Table Updates for PM
@@ -498,6 +558,6 @@ session_write_close();
     </script>
 
     <!-- Real-time Notifications -->
-    <script src="assets/js/realtime_notifications.js"></script>
+    <script src="../../assets/js/realtime_notifications.js"></script>
 </body>
 </html>

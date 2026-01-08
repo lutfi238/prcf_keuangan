@@ -221,7 +221,7 @@ $expcode_assignments = $conn->query("
     FROM project_village_expcodes pve 
     LEFT JOIN proyek p ON pve.kode_proyek = p.kode_proyek 
     LEFT JOIN villages v ON pve.id_village = v.id_village 
-    ORDER BY pve.kode_proyek, v.village_name, pve.exp_code
+    ORDER BY pve.exp_code ASC, pve.kode_proyek ASC, v.village_name ASC
 ");
 $expcode_list = [];
 if ($expcode_assignments) {
@@ -556,6 +556,30 @@ $projects->data_seek(0);
                 </form>
             </div>
 
+            <!-- Filter for ExpCode List -->
+            <div class="p-4 bg-gray-50 border-b border-gray-200 flex flex-col md:flex-row gap-4">
+                <div class="flex-1">
+                    <label class="block text-gray-700 text-xs font-medium mb-1">Filter Proyek</label>
+                    <select id="filterProject" onchange="filterExpCodes()" 
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 text-sm">
+                        <option value="">Semua Proyek</option>
+                        <?php foreach ($projects_for_dropdown as $proj): ?>
+                            <option value="<?php echo $proj['kode_proyek']; ?>"><?php echo $proj['kode_proyek']; ?> - <?php echo $proj['nama_proyek']; ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="flex-1">
+                    <label class="block text-gray-700 text-xs font-medium mb-1">Filter Desa</label>
+                    <select id="filterVillage" onchange="filterExpCodes()" 
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 text-sm">
+                        <option value="">Semua Desa</option>
+                        <?php foreach ($villages_list as $village): ?>
+                            <option value="<?php echo $village['id_village']; ?>"><?php echo $village['village_name']; ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+
             <!-- ExpCode List Table -->
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -579,7 +603,7 @@ $projects->data_seek(0);
                             </tr>
                         <?php else: ?>
                             <?php foreach ($expcode_list as $exp): ?>
-                            <tr class="hover:bg-gray-50 transition">
+                            <tr class="hover:bg-gray-50 transition expcode-row" data-project="<?php echo $exp['kode_proyek']; ?>" data-village="<?php echo $exp['id_village']; ?>">
                                 <td class="px-6 py-4">
                                     <span class="font-mono text-sm font-bold text-blue-600"><?php echo $exp['kode_proyek']; ?></span>
                                     <br><span class="text-xs text-gray-500"><?php echo $exp['nama_proyek'] ?? ''; ?></span>
@@ -1013,6 +1037,26 @@ $projects->data_seek(0);
             for (let i = 0; i < rows.length; i++) {
                 const searchText = rows[i].getAttribute('data-search');
                 if (searchText.includes(filter)) {
+                    rows[i].style.display = '';
+                } else {
+                    rows[i].style.display = 'none';
+                }
+            }
+        }
+
+        function filterExpCodes() {
+            const projectFilter = document.getElementById('filterProject').value;
+            const villageFilter = document.getElementById('filterVillage').value;
+            const rows = document.getElementsByClassName('expcode-row');
+
+            for (let i = 0; i < rows.length; i++) {
+                const project = rows[i].getAttribute('data-project');
+                const village = rows[i].getAttribute('data-village');
+                
+                const matchProject = projectFilter === "" || project === projectFilter;
+                const matchVillage = villageFilter === "" || village === villageFilter;
+
+                if (matchProject && matchVillage) {
                     rows[i].style.display = '';
                 } else {
                     rows[i].style.display = 'none';

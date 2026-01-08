@@ -52,17 +52,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($entered_otp === (string)($_SESSION['otp'] ?? '')) {
             // OTP correct
             $user_id = $_SESSION['user_id'];
-            
+
+            // Security: Regenerate session ID to prevent session fixation
+            session_regenerate_id(true);
+
             // Get user data
             $stmt = $conn->prepare("SELECT * FROM user WHERE id_user = ?");
             $stmt->bind_param("i", $user_id);
             $stmt->execute();
             $result = $stmt->get_result();
             $user = $result->fetch_assoc();
-            
+
             // Clear OTP data
             unset($_SESSION['otp'], $_SESSION['otp_time'], $_SESSION['pending_login'], $_SESSION['otp_attempts']);
-            
+
             // Set session with proper data
             $_SESSION['user_id'] = $user['id_user'];
             $_SESSION['user_name'] = $user['nama'];
@@ -125,7 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Tunggu sebentar sebelum meminta OTP baru (' . (5 - $time_since_last) . ' detik lagi)';
             error_log("⚠️ Resend OTP: Too soon, wait required");
         } else {
-            $new_otp = rand(100000, 999999);
+            $new_otp = random_int(100000, 999999);
             
             error_log("🔄 Resend OTP: Generating new OTP: $new_otp");
             error_log("🔄 Resend OTP: User email: " . ($_SESSION['user_email'] ?? 'NOT SET'));

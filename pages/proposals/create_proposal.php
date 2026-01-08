@@ -30,25 +30,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_proposal'])) {
     $total_budget_usd = floatval($_POST['total_budget_usd']);
     $total_budget_idr = floatval($_POST['total_budget_idr']);
     
-    // Handle TOR file upload
+    // Handle TOR file upload with security validation
     $tor = '';
     if (isset($_FILES['file_tor']) && $_FILES['file_tor']['error'] === 0) {
         $upload_dir = '../../uploads/tor/';
         if (!file_exists($upload_dir)) {
-            mkdir($upload_dir, 0777, true);
+            mkdir($upload_dir, 0755, true);
         }
-        $tor = $upload_dir . time() . '_' . $_FILES['file_tor']['name'];
+
+        // Security: Validate file extension
+        $allowed_extensions = ['pdf', 'doc', 'docx'];
+        $file_extension = strtolower(pathinfo($_FILES['file_tor']['name'], PATHINFO_EXTENSION));
+        if (!in_array($file_extension, $allowed_extensions)) {
+            throw new Exception("Format file TOR tidak valid. Hanya PDF dan Word yang diizinkan.");
+        }
+
+        // Security: Validate file size (max 10MB)
+        if ($_FILES['file_tor']['size'] > 10 * 1024 * 1024) {
+            throw new Exception("File TOR terlalu besar. Maksimal 10MB.");
+        }
+
+        // Security: Sanitize filename
+        $safe_filename = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', basename($_FILES['file_tor']['name']));
+        $tor = $upload_dir . $safe_filename;
         move_uploaded_file($_FILES['file_tor']['tmp_name'], $tor);
     }
-    
-    // Handle budget file upload
+
+    // Handle budget file upload with security validation
     $file_budget = '';
     if (isset($_FILES['file_budget']) && $_FILES['file_budget']['error'] === 0) {
         $upload_dir = '../../uploads/budgets/';
         if (!file_exists($upload_dir)) {
-            mkdir($upload_dir, 0777, true);
+            mkdir($upload_dir, 0755, true);
         }
-        $file_budget = $upload_dir . time() . '_' . $_FILES['file_budget']['name'];
+
+        // Security: Validate file extension
+        $allowed_extensions = ['pdf', 'xlsx', 'xls', 'doc', 'docx'];
+        $file_extension = strtolower(pathinfo($_FILES['file_budget']['name'], PATHINFO_EXTENSION));
+        if (!in_array($file_extension, $allowed_extensions)) {
+            throw new Exception("Format file Budget tidak valid. Hanya PDF, Excel, dan Word yang diizinkan.");
+        }
+
+        // Security: Validate file size (max 5MB)
+        if ($_FILES['file_budget']['size'] > 5 * 1024 * 1024) {
+            throw new Exception("File Budget terlalu besar. Maksimal 5MB.");
+        }
+
+        // Security: Sanitize filename
+        $safe_filename = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', basename($_FILES['file_budget']['name']));
+        $file_budget = $upload_dir . $safe_filename;
         move_uploaded_file($_FILES['file_budget']['tmp_name'], $file_budget);
     }
     
@@ -372,21 +402,15 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
                 villageOptions += `<option value="${v.id_village}" data-abbr="${v.village_abbr}">${v.village_name}</option>`;
             });
             
-            let expOptions = '<option value="">Pilih Exp Code</option>';
-            expCodes.forEach(e => {
-                const cleanDesc = (e.description || '').replace(/"/g, '&quot;');
-                expOptions += `<option value="${e.exp_code}" data-description="${cleanDesc}">${e.exp_code}</option>`;
-            });
-
             row.innerHTML = `
                 <td class="px-2 py-2">
-                    <select name="budget[${rowCount}][id_village]" class="w-full text-sm border-gray-300 rounded" onchange="updateRowPlaceCode(${rowCount})" required>
+                    <select name="budget[${rowCount}][id_village]" class="w-full text-sm border-gray-300 rounded" onchange="handleVillageChange(${rowCount})" required>
                         ${villageOptions}
                     </select>
                 </td>
                 <td class="px-2 py-2">
-                    <select name="budget[${rowCount}][exp_code]" class="w-full text-sm border-gray-300 rounded" onchange="updateRowPlaceCode(${rowCount})" required>
-                        ${expOptions}
+                    <select name="budget[${rowCount}][exp_code]" id="exp_code_${rowCount}" class="w-full text-sm border-gray-300 rounded" onchange="updateRowPlaceCode(${rowCount})" required disabled>
+                        <option value="">Pilih Desa dahulu</option>
                     </select>
                 </td>
                 <td class="px-2 py-2">
@@ -419,6 +443,46 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
             calculateTotals();
         }
 
+        async function handleVillageChange(id) {
+            const row = document.getElementById(`row-${id}`);
+            const villageSelect = row.querySelector(`select[name="budget[${id}][id_village]"]`);
+            const expSelect = document.getElementById(`exp_code_${id}`);
+            const idVillage = villageSelect.value;
+            
+            // Reset and disable exp code
+            expSelect.innerHTML = '<option value="">Pilih Exp Code</option>';
+            expSelect.disabled = true;
+            
+            if (idVillage && selectedProject) {
+                expSelect.innerHTML = '<option value="">Loading...</option>';
+                try {
+                    const codes = await fetchExpCodes(selectedProject, idVillage);
+                    expSelect.innerHTML = '<option value="">Pilih Exp Code</option>';
+                    if (codes.length > 0) {
+                        codes.forEach(e => {
+                            const cleanDesc = (e.description || '').replace(/"/g, '&quot;');
+                            const option = document.createElement('option');
+                            option.value = e.exp_code;
+                            option.text = e.exp_code;
+                            option.setAttribute('data-place-code', e.place_code || '');
+                            option.setAttribute('data-description', cleanDesc);
+                            expSelect.appendChild(option);
+                        });
+                        expSelect.disabled = false;
+                    } else {
+                        expSelect.innerHTML = '<option value="">Tidak ada Exp Code di Desa ini</option>';
+                    }
+                } catch (error) {
+                    console.error('Error fetching filtered exp codes:', error);
+                    expSelect.innerHTML = '<option value="">Error loading codes</option>';
+                }
+            } else {
+                expSelect.innerHTML = '<option value="">Pilih Desa dahulu</option>';
+            }
+            
+            updateRowPlaceCode(id);
+        }
+
         async function updateRowPlaceCode(id) {
             const row = document.getElementById(`row-${id}`);
             const villageSelect = row.querySelector(`select[name="budget[${id}][id_village]"]`);
@@ -431,14 +495,17 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
             
             // Auto-fill description from selected exp code
             const expOption = expSelect.options[expSelect.selectedIndex];
-            const description = expOption.getAttribute('data-description');
+            const description = expOption ? expOption.getAttribute('data-description') : '';
+            const dataPlaceCode = expOption ? expOption.getAttribute('data-place-code') : '';
+
             if (description) {
                 const descInput = row.querySelector(`input[name="budget[${id}][description]"]`);
                 if (descInput) descInput.value = description;
             }
             
             if (abbr && exp) {
-                const placeCode = generatePlaceCode(exp, abbr);
+                // Priority to data-place-code from API if village+exp selected
+                const placeCode = dataPlaceCode || generatePlaceCode(exp, abbr);
                 placeInput.value = placeCode;
                 
                 // Check budget availability

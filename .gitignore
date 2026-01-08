@@ -22,3 +22,6 @@ AGENTS.md
 
 # Local batch scripts
 scripts/batch/
+
+# Reserved names
+nul

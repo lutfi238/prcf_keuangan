@@ -321,6 +321,7 @@ if ($projects_budget_summary) {
                                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Budget (USD)</th>
                                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Used (USD)</th>
                                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Remaining</th>
+                                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
@@ -346,11 +347,16 @@ if ($projects_budget_summary) {
                                                 $<?php echo number_format($row['remaining_usd'], 2); ?>
                                             </span>
                                         </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-center">
+                                            <button onclick="showBudgetDetail('<?php echo $row['place_code']; ?>')" class="text-blue-600 hover:text-blue-900 transition">
+                                                <i class="fas fa-search-plus mr-1"></i> Detail
+                                            </button>
+                                        </td>
                                     </tr>
                                     <?php endwhile; ?>
                                 <?php else: ?>
                                     <tr>
-                                        <td colspan="5" class="px-6 py-4 text-center text-gray-500">Belum ada data budget.</td>
+                                        <td colspan="6" class="px-6 py-4 text-center text-gray-500">Belum ada data budget.</td>
                                     </tr>
                                 <?php endif; ?>
                             </tbody>
@@ -360,6 +366,63 @@ if ($projects_budget_summary) {
             </div>
         </div>
     </main>
+
+    <!-- Budget Detail Modal -->
+    <div id="detailModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col mx-4">
+            <div class="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 rounded-t-lg">
+                <h3 class="text-xl font-bold text-gray-800">
+                    Detail Penggunaan Budget: <span id="modalPlaceCode" class="text-blue-600"></span>
+                </h3>
+                <button onclick="closeDetailModal()" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <div id="usageLoading" class="hidden py-10 text-center">
+                    <i class="fas fa-spinner fa-spin text-4xl text-blue-600 mb-2"></i>
+                    <p class="text-gray-500">Memuat data penggunaan...</p>
+                </div>
+                <div id="usageContent" class="hidden">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div class="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                            <p class="text-sm text-blue-600 font-medium">Total Diajukan (Semua Status)</p>
+                            <p id="totalRequested" class="text-2xl font-bold text-blue-800">$0.00</p>
+                        </div>
+                        <div class="bg-green-50 p-4 rounded-lg border border-green-100">
+                            <p class="text-sm text-green-600 font-medium">Total Disetujui (Approved)</p>
+                            <p id="totalApproved" class="text-2xl font-bold text-green-800">$0.00</p>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50 text-xs text-gray-500 uppercase">
+                                <tr>
+                                    <th class="px-4 py-3 text-left">Tanggal</th>
+                                    <th class="px-4 py-3 text-left">Judul Proposal</th>
+                                    <th class="px-4 py-3 text-left">PJ</th>
+                                    <th class="px-4 py-3 text-right">Nominal (USD)</th>
+                                    <th class="px-4 py-3 text-center">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usageTableBody" class="text-sm divide-y divide-gray-200">
+                                <!-- Data populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div id="usageEmpty" class="hidden py-10 text-center">
+                    <i class="fas fa-info-circle text-4xl text-gray-300 mb-2"></i>
+                    <p class="text-gray-500">Belum ada proposal yang menggunakan budget ini.</p>
+                </div>
+            </div>
+            <div class="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg text-right">
+                <button onclick="closeDetailModal()" class="px-6 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition">
+                    Tutup
+                </button>
+            </div>
+        </div>
+    </div>
 
     <script src="../../assets/js/budget_management.js"></script>
     <script>
@@ -514,6 +577,76 @@ if ($projects_budget_summary) {
             });
             
         });
+
+        // Modal Functions
+        async function showBudgetDetail(placeCode) {
+            const modal = document.getElementById('detailModal');
+            const pcSpan = document.getElementById('modalPlaceCode');
+            const loading = document.getElementById('usageLoading');
+            const content = document.getElementById('usageContent');
+            const empty = document.getElementById('usageEmpty');
+            const tableBody = document.getElementById('usageTableBody');
+            
+            pcSpan.textContent = placeCode;
+            modal.classList.remove('hidden');
+            loading.classList.remove('hidden');
+            content.classList.add('hidden');
+            empty.classList.add('hidden');
+            
+            try {
+                const response = await fetch(`../../api/get_budget_usage.php?place_code=${encodeURIComponent(placeCode)}`);
+                const result = await response.json();
+                
+                loading.classList.add('hidden');
+                
+                if (result.success && result.usage.length > 0) {
+                    content.classList.remove('hidden');
+                    
+                    document.getElementById('totalRequested').textContent = formatCurrency(result.summary.total_requested_usd, 'USD');
+                    document.getElementById('totalApproved').textContent = formatCurrency(result.summary.total_approved_usd, 'USD');
+                    
+                    tableBody.innerHTML = '';
+                    result.usage.forEach(item => {
+                        const row = document.createElement('tr');
+                        row.className = 'hover:bg-gray-50';
+                        
+                        let statusColor = 'bg-gray-100 text-gray-700';
+                        if (item.status === 'approved' || item.status === 'approved_fm') statusColor = 'bg-green-100 text-green-800';
+                        else if (item.status === 'rejected') statusColor = 'bg-red-100 text-red-800';
+                        else if (item.status === 'pending') statusColor = 'bg-yellow-100 text-yellow-800';
+                        
+                        row.innerHTML = `
+                            <td class="px-4 py-3 whitespace-nowrap text-gray-500">${item.date}</td>
+                            <td class="px-4 py-3">
+                                <div class="font-medium text-gray-900">${item.judul_proposal}</div>
+                                <div class="text-xs text-gray-400">${item.description || ''}</div>
+                            </td>
+                            <td class="px-4 py-3 text-gray-500">${item.pj}</td>
+                            <td class="px-4 py-3 text-right font-mono">$${parseFloat(item.requested_usd).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                            <td class="px-4 py-3 text-center">
+                                <span class="px-2 py-1 text-xs font-semibold rounded-full ${statusColor}">
+                                    ${item.status}
+                                </span>
+                            </td>
+                        `;
+                        tableBody.appendChild(row);
+                    });
+                } else if (result.success) {
+                    empty.classList.remove('hidden');
+                } else {
+                    alert('Gagal mengambil data: ' + (result.message || 'Unknown error'));
+                    closeDetailModal();
+                }
+            } catch (error) {
+                console.error('Error fetching budget details:', error);
+                alert('Terjadi kesalahan saat mengambil data.');
+                closeDetailModal();
+            }
+        }
+
+        function closeDetailModal() {
+            document.getElementById('detailModal').classList.add('hidden');
+        }
         
         // Validate budget before submit
         function validateBudget() {

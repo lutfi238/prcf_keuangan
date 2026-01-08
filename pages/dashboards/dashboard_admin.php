@@ -8,6 +8,7 @@ header("Pragma: no-cache");
 
 require_once '../../includes/config.php';
 require_once '../../includes/maintenance_config.php';
+require_once '../../includes/session_sync.php';
 
 // Check maintenance mode
 check_maintenance();
@@ -21,6 +22,9 @@ if ($_SESSION['user_role'] !== 'Admin') {
     header('Location: ../../auth/unauthorized.php');
     exit();
 }
+
+// Sync session with database to ensure name is always up-to-date
+sync_session_with_database($conn);
 
 $user_name = $_SESSION['user_name'];
 $user_id = $_SESSION['user_id'];

@@ -8,6 +8,7 @@ header("Pragma: no-cache");
 
 require_once '../../includes/config.php';
 require_once '../../includes/maintenance_config.php';
+require_once '../../includes/session_sync.php';
 
 // Check maintenance mode (admin with whitelisted IP can bypass)
 check_maintenance();
@@ -21,6 +22,9 @@ if ($_SESSION['user_role'] !== 'Direktur') {
     header('Location: ../../auth/unauthorized.php');
     exit();
 }
+
+// Sync session with database to ensure name is always up-to-date
+sync_session_with_database($conn);
 
 $user_name = $_SESSION['user_name'];
 $user_id = $_SESSION['user_id'];
@@ -58,7 +62,7 @@ if (isset($_GET['ajax_table'])) {
             $proposals_result = $conn->query("SELECT p.*, u.nama as creator_name
                 FROM proposal p 
                 LEFT JOIN user u ON p.pemohon = u.nama 
-                WHERE p.status = 'approved' 
+                WHERE p.status IN ('approved_fm', 'approved') 
                 ORDER BY p.created_at DESC");
         }
         $proposals_array = [];
@@ -74,7 +78,7 @@ if (isset($_GET['ajax_table'])) {
             FROM laporan_keuangan_header lh
             LEFT JOIN user u ON lh.created_by = u.id_user
             LEFT JOIN user u2 ON lh.approved_by = u2.id_user
-            WHERE lh.status_lap = 'approved'
+            WHERE lh.status_lap IN ('approved_fm', 'approved')
             ORDER BY lh.created_at DESC");
         $reports_array = [];
         if ($reports_result) {
@@ -115,7 +119,7 @@ if ($check_column && $check_column->num_rows > 0) {
     $proposals_result = $conn->query("SELECT p.*, u.nama as creator_name
         FROM proposal p 
         LEFT JOIN user u ON p.pemohon = u.nama 
-        WHERE p.status = 'approved' 
+        WHERE p.status IN ('approved_fm', 'approved') 
         ORDER BY p.created_at DESC");
     
     if (!$proposals_result) {
@@ -135,7 +139,7 @@ $reports_result = $conn->query("SELECT lh.*, u.nama as creator_name,
     FROM laporan_keuangan_header lh
     LEFT JOIN user u ON lh.created_by = u.id_user
     LEFT JOIN user u2 ON lh.approved_by = u2.id_user
-    WHERE lh.status_lap = 'approved'
+    WHERE lh.status_lap IN ('approved_fm', 'approved')
     ORDER BY lh.created_at DESC");
 
 if (!$reports_result) {
@@ -149,29 +153,29 @@ if (!$reports_result) {
     }
 }
 
-// Get notifications for Direktur (newly approved by FM - for viewing only)
-$notif_proposals = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status = 'approved_fm' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['count'];
+// Get notifications for Direktur (newly approved - for viewing only)
+$notif_proposals = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status IN ('approved', 'approved_fm') AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['count'];
 $notif_reports = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'approved' AND updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetch_assoc()['count'];
 $total_notifications = $notif_proposals + $notif_reports;
 
 // Get recent notifications with details
 $notifications = [];
 
-// Add proposal notifications (approved by FM - for DIR viewing)
+// Add proposal notifications (approved - for DIR viewing)
 // Get all notifications, then limit display to 5 initially
 $approved_proposals = $conn->query("SELECT p.id_proposal, p.judul_proposal, p.updated_at, u.nama as creator, u2.nama as fm_name
     FROM proposal p 
     LEFT JOIN user u ON p.pemohon = u.nama 
     LEFT JOIN user u2 ON p.approved_by_fm = u2.id_user
-    WHERE p.status = 'approved_fm' 
+    WHERE p.status IN ('approved', 'approved_fm') AND p.updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
     ORDER BY p.updated_at DESC");
 while ($row = $approved_proposals->fetch_assoc()) {
     $is_unread = (strtotime($row['updated_at']) > strtotime($last_notification_check));
     $notifications[] = [
         'type' => 'proposal',
         'id' => $row['id_proposal'],
-        'title' => 'Proposal disetujui FM: ' . $row['judul_proposal'],
-        'link' => '../proposals/approve_proposal.php?id=' . $row['id_proposal'] . '&return_tab=proposals',
+        'title' => 'Proposal Baru Disetujui: ' . $row['judul_proposal'],
+        'link' => '../proposals/view_proposal.php?id=' . $row['id_proposal'] . '&return_tab=proposals',
         'time' => time_elapsed_string($row['updated_at']),
         'sort_time' => strtotime($row['updated_at']),
         'is_unread' => $is_unread
@@ -182,7 +186,7 @@ while ($row = $approved_proposals->fetch_assoc()) {
 $report_notifs = $conn->query("SELECT lh.id_laporan_keu, lh.nama_projek, lh.updated_at, lh.status_lap, u2.nama as fm_name
     FROM laporan_keuangan_header lh
     LEFT JOIN user u2 ON lh.approved_by = u2.id_user
-    WHERE lh.status_lap = 'approved' AND lh.updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
+    WHERE lh.status_lap IN ('approved_fm', 'approved') AND lh.updated_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
     ORDER BY lh.updated_at DESC");
 while ($row = $report_notifs->fetch_assoc()) {
     $is_unread = (strtotime($row['updated_at']) > strtotime($last_notification_check));
@@ -241,10 +245,10 @@ if (isset($_GET['success'])) {
 $total_proyek_result = $conn->query("SELECT COUNT(*) as count FROM proyek WHERE status_proyek != 'cancelled'");
 $total_proyek = $total_proyek_result ? $total_proyek_result->fetch_assoc()['count'] : 0;
 
-$proposal_masuk_result = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status = 'approved_fm'");
+$proposal_masuk_result = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status IN ('approved_fm', 'approved')");
 $proposal_masuk = $proposal_masuk_result ? $proposal_masuk_result->fetch_assoc()['count'] : 0;
 
-$laporan_approved_result = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'approved'");
+$laporan_approved_result = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'approved_fm'");
 $laporan_approved = $laporan_approved_result ? $laporan_approved_result->fetch_assoc()['count'] : 0;
 
 // Close session writing to ensure session is fully saved before HTML output
@@ -555,12 +559,12 @@ session_write_close();
                     <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-lg border border-blue-200">
                         <div class="flex items-center justify-between">
                             <div>
-                                <p class="text-sm text-gray-600 mb-1">Approved by FM</p>
+                                <p class="text-sm text-gray-600 mb-1">Approved Proposals</p>
                                 <p class="text-3xl font-bold text-gray-800" data-stat="pending_proposals"><?php echo $proposal_masuk; ?></p>
-                                <p class="text-xs text-gray-500 mt-1">Ready for Director review</p>
+                                <p class="text-xs text-gray-500 mt-1">Budget requests finalized by FM</p>
                             </div>
                             <div class="bg-blue-500 p-3 rounded-full">
-                                <i class="fas fa-check-circle text-white text-2xl"></i>
+                                <i class="fas fa-check-double text-white text-2xl"></i>
                             </div>
                         </div>
                     </div>

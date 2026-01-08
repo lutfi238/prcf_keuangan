@@ -57,6 +57,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 if ($skip_all_otp) {
                     // 🚀 BYPASS OTP - Direct login when skip is explicitly enabled
+                    // Security: Regenerate session ID to prevent session fixation
+                    session_regenerate_id(true);
+
                     $_SESSION['user_id'] = $user['id_user'];
                     $_SESSION['user_name'] = $user['nama'];
                     $_SESSION['user_role'] = $user['role'];
@@ -98,8 +101,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['user_status'] = $user_status;
                 $_SESSION['logged_in'] = false;
                 
-                // Generate OTP
-                $otp = rand(100000, 999999);
+                // Generate OTP using cryptographically secure random
+                $otp = random_int(100000, 999999);
                 $_SESSION['otp'] = $otp;
                 $_SESSION['otp_time'] = time();
                 $_SESSION['otp_attempts'] = 0;

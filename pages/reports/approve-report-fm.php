@@ -36,15 +36,15 @@ $return_tab = $_GET['return_tab'] ?? 'proposals'; // Default to proposals if not
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['approve'])) {
         $conn->begin_transaction();
-            // 5. Update Status
+        try {
+            // Update Status
             $stmt = $conn->prepare("UPDATE laporan_keuangan_header SET status_lap = 'approved_fm', approved_by = ?, updated_at = NOW() WHERE id_laporan_keu = ?");
             $stmt->bind_param("ii", $user_id, $report_id);
             $stmt->execute();
             
             $conn->commit();
             
-            // Notifications ...
-            // Get user info (already fetched in original code, need to refetch or reuse)
+            // Notifications
             $report_stmt = $conn->prepare("SELECT lh.*, u.email, u.nama FROM laporan_keuangan_header lh LEFT JOIN user u ON lh.created_by = u.id_user WHERE id_laporan_keu = ?");
             $report_stmt->bind_param("i", $report_id);
             $report_stmt->execute();

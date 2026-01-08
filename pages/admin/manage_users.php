@@ -73,8 +73,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error_message = "❌ Email sudah digunakan oleh user lain! Silakan gunakan email yang berbeda.";
             } else {
                 // 🔒 PROTECTION 2: Check if demoting last admin
-                $check_user = $conn->query("SELECT role FROM user WHERE id_user = $id_user");
-                $current_role = $check_user->fetch_assoc()['role'];
+                // Also get old name to cascade update to proposals
+                $check_stmt = $conn->prepare("SELECT nama, role FROM user WHERE id_user = ?");
+                $check_stmt->bind_param("i", $id_user);
+                $check_stmt->execute();
+                $check_user = $check_stmt->get_result();
+                $current_user_data = $check_user->fetch_assoc();
+                $current_role = $current_user_data['role'];
+                $old_name = $current_user_data['nama'];
+                $check_stmt->close();
 
                 if ($current_role === 'Admin' && $role !== 'Admin') {
                     $admin_count = countAdmins($conn);
@@ -86,6 +93,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $stmt->bind_param("ssssi", $nama, $role, $email, $no_HP, $id_user);
 
                         if ($stmt->execute()) {
+                            // CASCADE: Update pemohon in proposal table if name changed
+                            if ($old_name !== $nama) {
+                                $cascade_stmt = $conn->prepare("UPDATE proposal SET pemohon = ? WHERE pemohon = ?");
+                                $cascade_stmt->bind_param("ss", $nama, $old_name);
+                                $cascade_stmt->execute();
+                                $cascade_stmt->close();
+                            }
                             $success_message = "✅ User berhasil diupdate!";
                             error_log("ADMIN ACTION: User ID $current_user_id updated user ID $id_user (role changed: $current_role → $role)");
                         } else {
@@ -98,6 +112,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmt->bind_param("ssssi", $nama, $role, $email, $no_HP, $id_user);
 
                     if ($stmt->execute()) {
+                        // CASCADE: Update pemohon in proposal table if name changed
+                        if ($old_name !== $nama) {
+                            $cascade_stmt = $conn->prepare("UPDATE proposal SET pemohon = ? WHERE pemohon = ?");
+                            $cascade_stmt->bind_param("ss", $nama, $old_name);
+                            $cascade_stmt->execute();
+                            $cascade_stmt->close();
+                        }
                         $success_message = "✅ User berhasil diupdate!";
                         error_log("ADMIN ACTION: User ID $current_user_id updated user ID $id_user");
                     } else {
@@ -114,8 +135,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error_message = "❌ Tidak dapat menghapus akun Anda sendiri!";
         } else {
             // 🔒 PROTECTION 2: Check if deleting last admin
-            $check_user = $conn->query("SELECT role FROM user WHERE id_user = $id_user");
+            $check_stmt = $conn->prepare("SELECT role FROM user WHERE id_user = ?");
+            $check_stmt->bind_param("i", $id_user);
+            $check_stmt->execute();
+            $check_user = $check_stmt->get_result();
             $user_role = $check_user->fetch_assoc()['role'];
+            $check_stmt->close();
             
             if ($user_role === 'Admin') {
                 $admin_count = countAdmins($conn);

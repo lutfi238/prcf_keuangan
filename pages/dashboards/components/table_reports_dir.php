@@ -12,9 +12,15 @@
                                     <?php echo isset($report['tanggal_laporan']) ? date('d/m/Y', strtotime($report['tanggal_laporan'])) : ''; ?>
                                 </td>
                                 <td class="px-6 py-4">
-                                    <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                        <i class="fas fa-check-circle mr-1"></i> Final Approved
-                                    </span>
+                                    <?php if ($report['status_lap'] === 'approved'): ?>
+                                        <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                            <i class="fas fa-check-double mr-1"></i> Final Approved
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                                            <i class="fas fa-check-circle mr-1"></i> Approved by FM
+                                        </span>
+                                    <?php endif; ?>
                                 </td>
                                 <td class="px-6 py-4 text-sm">
                                     <a href="../reports/view_report.php?id=<?php echo $report['id_laporan_keu']; ?>&return_tab=reports" 

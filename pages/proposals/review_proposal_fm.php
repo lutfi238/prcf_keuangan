@@ -132,13 +132,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
             
-            // 5. Update Proposal Status
+            // 5. Update Proposal Status - For proposals, FM approval is final (Director views only)
             $check_column = $conn->query("SHOW COLUMNS FROM proposal LIKE 'approved_by_fm'");
             $is_2stage = ($check_column && $check_column->num_rows > 0);
             
             if ($is_2stage) {
-                $stmt = $conn->prepare("UPDATE proposal SET status = 'approved_fm', approved_by_fm = ?, fm_approval_date = NOW() WHERE id_proposal = ?");
-                $stmt->bind_param("ii", $user_id, $proposal_id);
+                // Set status to approved directly as per user request (Director view only)
+                $stmt = $conn->prepare("UPDATE proposal SET status = 'approved', approved_by_fm = ?, fm_approval_date = NOW(), approved_by_dir = ?, dir_approval_date = NOW() WHERE id_proposal = ?");
+                $stmt->bind_param("iii", $user_id, $user_id, $proposal_id);
             } else {
                 $stmt = $conn->prepare("UPDATE proposal SET status = 'approved' WHERE id_proposal = ?");
                 $stmt->bind_param("i", $proposal_id);

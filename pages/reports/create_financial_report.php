@@ -243,6 +243,30 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
                         </div>
                     </div>
 
+                    <!-- Proposal Budget Summary -->
+                    <div id="proposalBudgetSummary" class="hidden bg-blue-50 border border-blue-200 rounded-lg p-4 mb-2">
+                        <div class="flex justify-between items-center mb-2">
+                            <h4 class="font-bold text-blue-800"><i class="fas fa-file-invoice-dollar mr-2"></i>Budget Approval Diterima</h4>
+                            <span id="proposalTotalAmount" class="text-sm font-bold text-blue-700"></span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-xs text-left">
+                                <thead class="bg-blue-100 text-blue-800">
+                                    <tr>
+                                        <th class="px-2 py-1">Deskripsi</th>
+                                        <th class="px-2 py-1">Place Code</th>
+                                        <th class="px-2 py-1 text-right">USD</th>
+                                        <th class="px-2 py-1 text-right">IDR</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="proposalBudgetBody" class="divide-y divide-blue-200">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="text-[10px] text-blue-600 mt-2 italic">* Rincian pengeluaran akan otomatis diisi berdasarkan budget di atas</p>
+                    </div>
+
 
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
@@ -377,11 +401,93 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
             }
         });
 
-        function addItem() {
+        // Fetch proposal details and budget items when proposal is selected
+        document.getElementById('id_proposal').addEventListener('change', function() {
+            const id_proposal = this.value;
+            const summaryDiv = document.getElementById('proposalBudgetSummary');
+            const summaryBody = document.getElementById('proposalBudgetBody');
+            const itemsContainer = document.getElementById('itemsContainer');
+            
+            if (id_proposal) {
+                summaryDiv.classList.remove('hidden');
+                summaryBody.innerHTML = '<tr><td colspan="4" class="text-center py-2 text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>Memuat budget...</td></tr>';
+                
+                // Show loading indicator in items container
+                itemsContainer.innerHTML = '<div class="text-center py-4 text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>Memasukkan data budget ke rincian...</div>';
+                
+                fetch(`../../api/get_proposal_details.php?id_proposal=${id_proposal}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        summaryBody.innerHTML = '';
+                        itemsContainer.innerHTML = '';
+                        itemCount = 0;
+                        
+                        if (data.success) {
+                            if (data.items.length > 0) {
+                                data.items.forEach(item => {
+                                    const row = document.createElement('tr');
+                                    row.innerHTML = `
+                                        <td class="px-2 py-1 text-gray-700">${item.description || '-'}</td>
+                                        <td class="px-2 py-1 font-mono text-gray-600">${item.place_code}</td>
+                                        <td class="px-2 py-1 text-right text-indigo-600">$${parseFloat(item.requested_usd).toLocaleString()}</td>
+                                        <td class="px-2 py-1 text-right text-green-600">Rp ${parseFloat(item.requested_idr).toLocaleString()}</td>
+                                    `;
+                                    summaryBody.appendChild(row);
+                                    addItem(item);
+                                });
+                            } else {
+                                summaryBody.innerHTML = '<tr><td colspan="4" class="text-center py-2 text-gray-500">Tidak ada rincian budget.</td></tr>';
+                                addItem();
+                            }
+                        } else {
+                            summaryBody.innerHTML = `<tr><td colspan="4" class="text-center py-2 text-red-500">${data.message}</td></tr>`;
+                            addItem();
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching proposal details:', error);
+                        summaryBody.innerHTML = '<tr><td colspan="4" class="text-center py-2 text-red-500">Gagal memuat budget.</td></tr>';
+                        itemsContainer.innerHTML = '';
+                        addItem();
+                    });
+            } else {
+                summaryDiv.classList.add('hidden');
+                itemsContainer.innerHTML = '';
+                itemCount = 0;
+                addItem();
+            }
+        });
+
+        // Handle currency change to re-trigger population based on new currency
+        document.getElementById('mata_uang').addEventListener('change', function() {
+            const id_proposal = document.getElementById('id_proposal').value;
+            if (id_proposal) {
+                document.getElementById('id_proposal').dispatchEvent(new Event('change'));
+            }
+        });
+
+        function addItem(item = null) {
             itemCount++;
             const container = document.getElementById('itemsContainer');
             const itemDiv = document.createElement('div');
             itemDiv.className = 'border border-gray-200 rounded-lg p-4 bg-gray-50 space-y-4';
+
+            // Extract values if item is provided
+            const desc = item ? (item.description || '') : '';
+            const place = item ? (item.place_code || '') : '';
+            const exp = item ? (item.exp_code || '') : '';
+            
+            // For budget, determine value based on current report currency
+            const currentCurrency = document.getElementById('mata_uang').value;
+            let amount = 0;
+            if (item) {
+                if (currentCurrency === 'USD') {
+                    amount = parseFloat(item.requested_usd || 0);
+                } else {
+                    amount = parseFloat(item.requested_idr || 0);
+                }
+            }
+
             itemDiv.innerHTML = `
                 <div class="flex justify-between items-center">
                     <h4 class="font-medium text-gray-800">Item #${itemCount}</h4>
@@ -397,7 +503,7 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
                     </div>
                     <div class="md:col-span-2">
                         <label class="block text-gray-700 text-sm font-medium mb-2">Deskripsi Item *</label>
-                        <input type="text" name="items[${itemCount}][item_desc]" required
+                        <input type="text" name="items[${itemCount}][item_desc]" required value="${desc}"
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
                     </div>
                     <div>
@@ -407,7 +513,7 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
                     </div>
                     <div class="relative">
                         <label class="block text-gray-700 text-sm font-medium mb-2">Kode Tempat</label>
-                        <input type="text" name="items[${itemCount}][place_code]" 
+                        <input type="text" name="items[${itemCount}][place_code]" value="${place}"
                             class="place-code-input w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
                             data-item-index="${itemCount}"
                             autocomplete="off"
@@ -416,7 +522,7 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
                     </div>
                     <div>
                         <label class="block text-gray-700 text-sm font-medium mb-2">Kode Pengeluaran</label>
-                        <input type="text" name="items[${itemCount}][exp_code]" 
+                        <input type="text" name="items[${itemCount}][exp_code]" value="${exp}"
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
                     </div>
                     <div>
@@ -426,17 +532,17 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
                     </div>
                     <div>
                         <label class="block text-gray-700 text-sm font-medium mb-2">Biaya per Unit</label>
-                        <input type="text" name="items[${itemCount}][unit_cost]" value="0"
+                        <input type="text" name="items[${itemCount}][unit_cost]" value="${amount}"
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
                     </div>
                     <div>
                         <label class="block text-gray-700 text-sm font-medium mb-2">Budget Diajukan *</label>
-                        <input type="text" name="items[${itemCount}][requested]" value="0" required
+                        <input type="text" name="items[${itemCount}][requested]" value="${amount}" required
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
                     </div>
                     <div>
                         <label class="block text-gray-700 text-sm font-medium mb-2">Realisasi *</label>
-                        <input type="text" name="items[${itemCount}][actual]" value="0" required
+                        <input type="text" name="items[${itemCount}][actual]" value="${amount}" required
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
                     </div>
                     <div class="md:col-span-2">
@@ -467,6 +573,22 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
         }
 
         function applyCurrencyFormattingToItem(itemDiv) {
+            // Logic for calculating Realisasi (actual) = unit_total * unit_cost
+            const unitTotalInput = itemDiv.querySelector('input[name*="unit_total"]');
+            const unitCostInput = itemDiv.querySelector('input[name*="unit_cost"]');
+            const actualInput = itemDiv.querySelector('input[name*="actual"]');
+
+            const calculateActual = () => {
+                const total = parseFloat(unitTotalInput.value) || 0;
+                const cost = parseCurrency(unitCostInput.value) || 0;
+                const result = total * cost;
+                actualInput.value = formatCurrency(result);
+            };
+
+            if (unitTotalInput) {
+                unitTotalInput.addEventListener('input', calculateActual);
+            }
+
             // Find all currency input fields in the newly added item
             const currencyInputs = itemDiv.querySelectorAll('input[name*="unit_cost"], input[name*="requested"], input[name*="actual"]');
 
@@ -484,6 +606,11 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
 
                     // Update input value
                     e.target.value = formatted;
+
+                    // If this is unit_cost, recalculate actual
+                    if (input === unitCostInput) {
+                        calculateActual();
+                    }
 
                     // Adjust cursor position more carefully
                     // Calculate how many separator characters were added before cursor
