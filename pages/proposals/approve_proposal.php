@@ -201,6 +201,7 @@ if (!$proposal) {
     <title>Approve Proposal - Direktur</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -407,17 +408,82 @@ if (!$proposal) {
                     <div class="flex justify-between items-center pt-4">
                         <button type="submit" name="reject"
                             class="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition duration-200 font-medium shadow-lg flex items-center"
-                            onclick="if(this.form.catatan.value.trim() === '') { alert('Mohon isi catatan alasan penolakan!'); this.form.catatan.focus(); return false; } return confirm('Yakin ingin MENOLAK proposal ini? Budget yang telah ditarik akan DIKEMBALIKAN (Refund) dan transaksi dibatalkan.');">
+                            onclick="confirmRejection(event)">
                             <i class="fas fa-times-circle mr-2"></i> Tolak Proposal
                         </button>
 
                         <button type="submit" name="approve"
                             class="px-8 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition duration-200 font-medium text-lg shadow-lg flex items-center"
-                            onclick="return confirm('Setujui proposal ini sebagai FINAL APPROVAL (2/2)?')">
+                            onclick="confirmApproval(event)">
                             <i class="fas fa-check-double mr-2"></i> Approve Final (2/2)
                         </button>
                     </div>
                 </form>
+
+                <script>
+                function confirmApproval(e) {
+                    if(e) e.preventDefault();
+                    Swal.fire({
+                        title: 'Approve Proposal?',
+                        text: 'Setujui proposal ini sebagai FINAL APPROVAL (2/2)?',
+                        icon: 'success',
+                        showCancelButton: true,
+                        confirmButtonColor: '#9333EA', // purple-600
+                        cancelButtonColor: '#6B7280',
+                        confirmButtonText: 'Ya, Approve Final!',
+                        cancelButtonText: 'Batal'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            // Find the form that contains the clicked button
+                            const form = e.target.closest('form');
+                            const hiddenInput = document.createElement('input');
+                            hiddenInput.type = 'hidden';
+                            hiddenInput.name = 'approve';
+                            hiddenInput.value = '1';
+                            form.appendChild(hiddenInput);
+                            form.submit();
+                        }
+                    });
+                }
+
+                function confirmRejection(e) {
+                    if(e) e.preventDefault();
+                    const form = e.target.closest('form');
+                    const catatan = form.querySelector('[name="catatan"]');
+                    
+                    // Basic validation
+                    if(catatan.value.trim() === '') {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Wajib Diisi',
+                            text: 'Mohon isi catatan alasan penolakan!',
+                            confirmButtonColor: '#EF4444'
+                        });
+                        catatan.focus();
+                        return;
+                    }
+
+                    Swal.fire({
+                        title: 'Tolak Proposal?',
+                        text: 'Yakin ingin MENOLAK? Budget akan dikembalikan (Refund) dan transaksi dibatalkan.',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#EF4444', 
+                        cancelButtonColor: '#6B7280',
+                        confirmButtonText: 'Ya, Tolak!',
+                        cancelButtonText: 'Batal'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            const hiddenInput = document.createElement('input');
+                            hiddenInput.type = 'hidden';
+                            hiddenInput.name = 'reject';
+                            hiddenInput.value = '1';
+                            form.appendChild(hiddenInput);
+                            form.submit();
+                        }
+                    });
+                }
+                </script>
             </div>
             <?php elseif ($proposal['status'] === 'submitted'): ?>
             <!-- Waiting FM Approval (Stage 1) -->

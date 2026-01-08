@@ -38,6 +38,7 @@ $villages = $conn->query($villages_query);
     <title>Manage Villages - PRCF Keuangan</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -260,43 +261,54 @@ $villages = $conn->query($villages_query);
         }
 
         async function confirmDelete(villageId, villageName) {
-            if (!confirm(`Are you sure you want to delete village "${villageName}"?\n\nNote: This is a soft delete. The village will be hidden from dropdowns but preserved for historical budget data.`)) {
-                return;
-            }
+            Swal.fire({
+                title: 'Delete Village?',
+                html: `Are you sure you want to delete village "<strong>${villageName}</strong>"?<br><br><span class="text-sm text-gray-500">Note: This is a soft delete. The village will be hidden from dropdowns but preserved for historical budget data.</span>`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#EF4444',
+                cancelButtonColor: '#6B7280',
+                confirmButtonText: 'Yes, Delete'
+            }).then(async (result) => {
+                if (result.isConfirmed) {
+                    try {
+                        const response = await fetch('../../api/manage_village.php?action=delete', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ id_village: villageId })
+                        });
 
-            try {
-                const response = await fetch('../../api/manage_village.php?action=delete', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ id_village: villageId })
-                });
+                        const result = await response.json();
 
-                const result = await response.json();
-
-                if (result.success) {
-                    showAlert(result.message, 'success');
-                    setTimeout(() => location.reload(), 1000);
-                } else {
-                    showAlert(result.message, 'error');
+                        if (result.success) {
+                            Swal.fire({
+                                title: 'Deleted!',
+                                text: result.message,
+                                icon: 'success',
+                                timer: 1500,
+                                showConfirmButton: false
+                            }).then(() => location.reload());
+                        } else {
+                            Swal.fire('Error', result.message, 'error');
+                        }
+                    } catch (error) {
+                        Swal.fire('Error', error.message, 'error');
+                    }
                 }
-            } catch (error) {
-                showAlert('Error: ' + error.message, 'error');
-            }
+            });
         }
 
         function showAlert(message, type) {
-            const alertClass = type === 'success' ? 'bg-green-100 border-green-400 text-green-700' : 'bg-red-100 border-red-400 text-red-700';
-            const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
-            
-            const alert = document.createElement('div');
-            alert.className = `${alertClass} border px-4 py-3 rounded mb-6`;
-            alert.innerHTML = `<i class="fas ${icon} mr-2"></i>${message}`;
-            
-            document.getElementById('alertContainer').innerHTML = '';
-            document.getElementById('alertContainer').appendChild(alert);
-            
-            // Auto-hide after 5 seconds
-            setTimeout(() => alert.remove(), 5000);
+            const icon = type === 'success' ? 'success' : 'error';
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: icon,
+                title: message,
+                showConfirmButton: false,
+                timer: 3000,
+                timerProgressBar: true
+            });
         }
 
         // Search functionality

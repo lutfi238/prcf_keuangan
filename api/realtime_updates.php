@@ -109,9 +109,16 @@ while (true) {
                 break;
                 
             case 'Project Manager':
-                // Count revision requests
-                $revision_proposals = $conn->query("SELECT COUNT(*) as count FROM proposal WHERE status = 'revision_requested' AND created_by = $user_id")->fetch_assoc()['count'];
-                $revision_reports = $conn->query("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'revision_requested' AND created_by = $user_id")->fetch_assoc()['count'];
+                // Count revision requests - FIXED: Use prepared statements
+                $stmt_proposals = $conn->prepare("SELECT COUNT(*) as count FROM proposal WHERE status = 'revision_requested' AND created_by = ?");
+                $stmt_proposals->bind_param("i", $user_id);
+                $stmt_proposals->execute();
+                $revision_proposals = $stmt_proposals->get_result()->fetch_assoc()['count'];
+                
+                $stmt_reports = $conn->prepare("SELECT COUNT(*) as count FROM laporan_keuangan_header WHERE status_lap = 'revision_requested' AND created_by = ?");
+                $stmt_reports->bind_param("i", $user_id);
+                $stmt_reports->execute();
+                $revision_reports = $stmt_reports->get_result()->fetch_assoc()['count'];
                 
                 $updates['revision_proposals'] = $revision_proposals;
                 $updates['revision_reports'] = $revision_reports;

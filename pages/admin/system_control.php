@@ -2,6 +2,7 @@
 session_start();
 require_once '../../includes/config.php';
 require_once '../../includes/maintenance_config.php';
+require_once '../../includes/csrf_helper.php';
 
 // Check admin access
 if (!isset($_SESSION['logged_in']) || $_SESSION['user_role'] !== 'Admin') {
@@ -25,7 +26,10 @@ header("Expires: 0");
 
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['toggle_maintenance'])) {
+    // CSRF validation
+    if (!csrf_validate()) {
+        $error_message = 'Invalid security token. Please refresh and try again.';
+    } elseif (isset($_POST['toggle_maintenance'])) {
         $new_status = ($_POST['maintenance_status'] === 'true');
         
         // Update maintenance config file
@@ -103,6 +107,7 @@ $registration_enabled = defined('REGISTRATION_ENABLED') && REGISTRATION_ENABLED 
     <title>System Control - Admin Panel</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <!-- Header -->
@@ -227,6 +232,7 @@ $registration_enabled = defined('REGISTRATION_ENABLED') && REGISTRATION_ENABLED 
                 </div>
 
                 <!-- Hidden form for submission -->
+                <?php echo csrf_field(); ?>
                 <input type="hidden" name="maintenance_status" id="maintenance_status" value="">
                 <input type="hidden" name="toggle_maintenance" value="1">
             </form>
@@ -278,6 +284,7 @@ $registration_enabled = defined('REGISTRATION_ENABLED') && REGISTRATION_ENABLED 
                 </div>
 
                 <!-- Hidden form for submission -->
+                <?php echo csrf_field(); ?>
                 <input type="hidden" name="registration_status" id="registration_status" value="">
                 <input type="hidden" name="toggle_registration" value="1">
             </form>
@@ -318,38 +325,48 @@ $registration_enabled = defined('REGISTRATION_ENABLED') && REGISTRATION_ENABLED 
 
     <script>
         function toggleMaintenanceConfirm(enable) {
-            const action = enable ? 'ENABLE' : 'DISABLE';
             const message = enable ? 
-                '⚠️ Are you sure you want to ENABLE Maintenance Mode?\n\n' +
-                '• All users (except Admin) will be logged out\n' +
-                '• Public will see maintenance page\n' +
-                '• Website will be offline' :
-                '✅ Are you sure you want to DISABLE Maintenance Mode?\n\n' +
-                '• Website will be accessible to all users\n' +
-                '• Public can access login page';
+                '<ul class="text-left text-sm list-disc pl-4 mt-2"><li>All users (except Admin) will be logged out</li><li>Public will see maintenance page</li><li>Website will be offline</li></ul>' :
+                '<ul class="text-left text-sm list-disc pl-4 mt-2"><li>Website will be accessible to all users</li><li>Public can access login page</li></ul>';
             
-            if (confirm(message)) {
-                document.getElementById('maintenance_status').value = enable;
-                document.querySelector('form').submit();
-            }
+            Swal.fire({
+                title: enable ? 'ENABLE Maintenance Mode?' : 'DISABLE Maintenance Mode?',
+                html: message,
+                icon: enable ? 'warning' : 'success',
+                showCancelButton: true,
+                confirmButtonColor: enable ? '#EF4444' : '#10B981',
+                cancelButtonColor: '#6B7280',
+                confirmButtonText: enable ? 'Yes, Enable' : 'Yes, Disable',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    document.getElementById('maintenance_status').value = enable;
+                    document.querySelector('form').submit();
+                }
+            });
         }
         
         function toggleRegistrationConfirm(enable) {
             const message = enable ? 
-                '✅ Are you sure you want to ENABLE Public Registration?\n\n' +
-                '• Anyone can create new accounts via /auth/register.php\n' +
-                '• Users can choose their role during registration\n' +
-                '• Useful for open enrollment or public testing' :
-                '⚠️ Are you sure you want to DISABLE Public Registration?\n\n' +
-                '• Registration page will show "Closed" message\n' +
-                '• Only Admin can create accounts manually\n' +
-                '• Existing users can still login normally';
+                '<ul class="text-left text-sm list-disc pl-4 mt-2"><li>Anyone can create new accounts via /auth/register.php</li><li>Users can choose their role during registration</li><li>Useful for open enrollment or public testing</li></ul>' :
+                '<ul class="text-left text-sm list-disc pl-4 mt-2"><li>Registration page will show "Closed" message</li><li>Only Admin can create accounts manually</li><li>Existing users can still login normally</li></ul>';
             
-            if (confirm(message)) {
-                document.getElementById('registration_status').value = enable;
-                const forms = document.querySelectorAll('form');
-                forms[1].submit(); // Submit the second form (registration form)
-            }
+            Swal.fire({
+                title: enable ? 'ENABLE Public Registration?' : 'DISABLE Public Registration?',
+                html: message,
+                icon: enable ? 'warning' : 'info',
+                showCancelButton: true,
+                confirmButtonColor: enable ? '#10B981' : '#F59E0B',
+                cancelButtonColor: '#6B7280',
+                confirmButtonText: enable ? 'Yes, Enable' : 'Yes, Disable',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    document.getElementById('registration_status').value = enable;
+                    const forms = document.querySelectorAll('form');
+                    forms[1].submit(); // Submit the second form (registration form)
+                }
+            });
         }
     </script>
 </body>

@@ -36,7 +36,10 @@ $user_id = $_SESSION['user_id'];
 // Get user's last notification check time
 $check_notif_column = $conn->query("SHOW COLUMNS FROM user LIKE 'last_notification_check'");
 if ($check_notif_column && $check_notif_column->num_rows > 0) {
-    $last_check_query = $conn->query("SELECT last_notification_check FROM user WHERE id_user = {$user_id}");
+    $stmt = $conn->prepare("SELECT last_notification_check FROM user WHERE id_user = ?");
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    $last_check_query = $stmt->get_result();
     $last_check_data = $last_check_query->fetch_assoc();
     $last_notification_check = $last_check_data['last_notification_check'] ?? '1970-01-01 00:00:00';
 } else {

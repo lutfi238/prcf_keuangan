@@ -3,6 +3,7 @@ session_start();
 require_once '../../includes/config.php';
 require_once '../../includes/maintenance_config.php';
 require_once '../../includes/date_helper.php';
+require_once '../../includes/csrf_helper.php';
 
 // Check maintenance mode
 check_maintenance();
@@ -21,7 +22,11 @@ $user_name = $_SESSION['user_name'];
 $user_id = $_SESSION['user_id'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_proposal'])) {
-    $judul = $_POST['judul_proposal'];
+    // CSRF validation
+    if (!csrf_validate()) {
+        $error = 'Invalid security token. Please refresh and try again.';
+    } else {
+        $judul = $_POST['judul_proposal'];
     $pj = $_POST['pj'];
     $date = parseDateID($_POST['date']); // Convert DD/MM/YYYY to YYYY-MM-DD
     $pemohon = $_POST['pemohon'];
@@ -165,6 +170,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_proposal'])) {
         $conn->rollback();
         $error = "Gagal menyimpan proposal: " . $e->getMessage();
     }
+    } // Close CSRF else block
 }
 
 
@@ -180,6 +186,7 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="../../assets/js/toast.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <!-- Flatpickr Date Picker -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
@@ -224,6 +231,7 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
             </div>
 
             <form method="POST" enctype="multipart/form-data" class="space-y-6">
+                <?php echo csrf_field(); ?>
                 <!-- Informasi Dasar -->
                 <div class="space-y-4">
                     <h3 class="text-lg font-bold text-gray-800 border-b pb-2">I. INFORMASI DASAR</h3>
@@ -394,8 +402,14 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
         });
 
         function addBudgetRow() {
+
             if (!selectedProject) {
-                Toast.warning('Pilih proyek terlebih dahulu!');
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Proyek Belum Dipilih',
+                    text: 'Silakan pilih proyek terlebih dahulu!',
+                    confirmButtonColor: '#F59E0B'
+                });
                 return;
             }
             
@@ -602,17 +616,34 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
             const budgetRows = document.getElementById('budgetTableBody').children.length;
             if (budgetRows === 0) {
                 e.preventDefault();
-                Toast.warning('Tambahkan minimal 1 baris budget detail!');
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Budget Kosong',
+                    text: 'Tambahkan minimal 1 baris budget detail!',
+                    confirmButtonColor: '#F59E0B'
+                });
                 return false;
             }
             
             // Check for budget warnings
             const warnings = document.querySelectorAll('[id^="budget_status_"] span.text-red-600');
             if (warnings.length > 0) {
-                if (!confirm('Ada budget yang melebihi alokasi atau belum dialokasikan. Tetap lanjutkan?')) {
-                    e.preventDefault();
-                    return false;
-                }
+                e.preventDefault(); // Stop initial submission
+                
+                Swal.fire({
+                    title: 'Peringatan Budget',
+                    text: 'Ada budget yang melebihi alokasi atau belum dialokasikan. Tetap lanjutkan?',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EF4444',
+                    cancelButtonColor: '#6B7280',
+                    confirmButtonText: 'Ya, Lanjutkan!',
+                    cancelButtonText: 'Batal'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        e.target.submit();
+                    }
+                });
             }
         });
         

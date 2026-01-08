@@ -5,20 +5,20 @@ ob_start();
 session_start();
 require_once '../includes/config.php';
 require_once '../includes/maintenance_config.php';
+require_once '../includes/csrf_helper.php';
 
 // Check maintenance mode
 check_maintenance();
 
-// Debug: Log session state
-error_log("🔍 verify_otp.php - Session state: " . json_encode([
-    'pending_login' => isset($_SESSION['pending_login']),
-    'user_id' => $_SESSION['user_id'] ?? null,
-    'logged_in' => $_SESSION['logged_in'] ?? false,
-    'session_id' => session_id()
-]));
+// Debug: Log session state (SANITIZED - no sensitive data)
+if (defined('DEVELOPER_MODE') && DEVELOPER_MODE) {
+    error_log("🔍 verify_otp.php - Session check: pending=" . (isset($_SESSION['pending_login']) ? 'yes' : 'no') . ", user_id=" . ($_SESSION['user_id'] ?? 'none'));
+}
 
 if (!isset($_SESSION['pending_login'])) {
-    error_log("⚠️ verify_otp.php - No pending_login, redirecting to login.php");
+    if (defined('DEVELOPER_MODE') && DEVELOPER_MODE) {
+        error_log("⚠️ verify_otp.php - No pending_login, redirecting to login.php");
+    }
     header('Location: login.php');
     exit();
 }
@@ -27,23 +27,17 @@ $error = '';
 $success = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Debug: Log POST data
-    error_log("🔍 verify_otp.php - POST received: " . json_encode([
-        'verify_otp_isset' => isset($_POST['verify_otp']),
-        'otp_isset' => isset($_POST['otp']),
-        'otp_value' => $_POST['otp'] ?? 'NOT SET',
-        'resend_otp_isset' => isset($_POST['resend_otp']),
-        'session_otp' => $_SESSION['otp'] ?? 'NOT SET',
-        'session_otp_time' => $_SESSION['otp_time'] ?? 'NOT SET'
-    ]));
-    
-    if (!empty($_POST['verify_otp'])) {
+    // CSRF validation
+    if (!csrf_validate()) {
+        $error = 'Invalid security token. Please refresh and try again.';
+    } elseif (!empty($_POST['verify_otp'])) {
         $entered_otp = preg_replace('/\D/', '', $_POST['otp'] ?? '');
         $current_time = time();
         
-        // Debug: Log OTP comparison
-        error_log("🔍 OTP Comparison - Entered: '$entered_otp' vs Session: '" . ($_SESSION['otp'] ?? 'NOT SET') . "'");
-        error_log("🔍 Time check - Current: $current_time, OTP Time: " . ($_SESSION['otp_time'] ?? 0) . ", Diff: " . ($current_time - ($_SESSION['otp_time'] ?? 0)) . " seconds");
+        // Debug: Log OTP attempt (SANITIZED - no actual OTP values)
+        if (defined('DEVELOPER_MODE') && DEVELOPER_MODE) {
+            error_log("🔍 OTP attempt for user: " . ($_SESSION['user_email'] ?? 'unknown'));
+        }
         
         // Check if OTP expired (300 seconds = 5 minutes)
         if ($current_time - ($_SESSION['otp_time'] ?? 0) > 300) {
@@ -115,7 +109,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $_SESSION['otp_attempts'] = ($_SESSION['otp_attempts'] ?? 0) + 1;
             $error = 'Kode OTP salah, ulangi lagi';
-            error_log("❌ OTP Wrong - Entered: '$entered_otp' vs Expected: '" . ($_SESSION['otp'] ?? 'NOT SET') . "' (Attempt: " . $_SESSION['otp_attempts'] . ")");
+            if (defined('DEVELOPER_MODE') && DEVELOPER_MODE) {
+                error_log("❌ OTP Wrong - Attempt: " . $_SESSION['otp_attempts'] . " for user: " . ($_SESSION['user_email'] ?? 'unknown'));
+            }
         }
     } elseif (!empty($_POST['resend_otp'])) {
         $current_time = time();
@@ -130,15 +126,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $new_otp = random_int(100000, 999999);
             
-            error_log("🔄 Resend OTP: Generating new OTP: $new_otp");
-            error_log("🔄 Resend OTP: User email: " . ($_SESSION['user_email'] ?? 'NOT SET'));
-            error_log("🔄 Resend OTP: EMAIL_OTP_ENABLED: " . (defined('EMAIL_OTP_ENABLED') ? (EMAIL_OTP_ENABLED ? 'TRUE' : 'FALSE') : 'NOT_DEFINED'));
+            if (defined('DEVELOPER_MODE') && DEVELOPER_MODE) {
+                error_log("🔄 Resend OTP: Request for " . ($_SESSION['user_email'] ?? 'unknown'));
+            }
 
             if (!empty($_SESSION['user_email']) && EMAIL_OTP_ENABLED) {
                 // Try to send email BEFORE updating session
                 $email_sent = send_otp_email($_SESSION['user_email'], $new_otp);
-                
-                error_log("🔄 Resend OTP: Email send result: " . ($email_sent ? 'SUCCESS' : 'FAILED'));
                 
                 if ($email_sent) {
                     // Only update session if email was sent successfully
@@ -146,11 +140,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['otp_time'] = $current_time;
                     $_SESSION['otp_attempts'] = 0;
                     $success = 'Kode OTP baru telah dikirim ke email Anda: ' . htmlspecialchars($_SESSION['user_email']);
-                    error_log("✅ Resend OTP: Success - New OTP stored in session");
                 } else {
                     // Keep old OTP if email failed
                     $error = 'Gagal mengirim OTP email. Silakan coba lagi atau hubungi administrator.';
-                    error_log("❌ Resend OTP: Failed - Keeping old OTP in session");
                 }
             } else {
                 $error = 'OTP email saat ini tidak tersedia. Hubungi administrator.';
@@ -193,17 +185,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php endif; ?>
 
             <!-- DEBUG MODE: Show OTP (REMOVE IN PRODUCTION!) -->
-            <?php if ((defined('DEVELOPER_MODE') && DEVELOPER_MODE) || (defined('SKIP_OTP_FOR_ALL') && SKIP_OTP_FOR_ALL)): ?>
-            <div class="mb-6 bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded-lg text-sm" role="alert">
-                <strong>🔧 DEBUG MODE:</strong><br>
-                Current OTP: <strong class="text-2xl font-mono"><?php echo $_SESSION['otp'] ?? 'NOT SET'; ?></strong><br>
-                <small>Time remaining: <?php echo max(0, 300 - (time() - ($_SESSION['otp_time'] ?? time()))); ?> seconds</small><br>
-                <small>Email: <?php echo htmlspecialchars($_SESSION['user_email'] ?? 'NOT SET'); ?></small><br>
-                <small class="text-red-600 font-semibold">⚠️ Email sending is disabled in Developer Mode - Use OTP above</small>
-            </div>
-            <?php endif; ?>
+            <?php // Debug OTP display disabled for security ?>
+            <?php // if ((defined('DEVELOPER_MODE') && DEVELOPER_MODE) || (defined('SKIP_OTP_FOR_ALL') && SKIP_OTP_FOR_ALL)): ?>
+            <?php // <div class="mb-6 bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded-lg text-sm" role="alert"> ?>
+            <?php // <strong>🔧 DEBUG MODE:</strong><br> ?>
+            <?php // Current OTP: <strong class="text-2xl font-mono"><?php echo $_SESSION['otp'] ?? 'NOT SET'; ?></strong><br> ?>
+            <?php // <small>Time remaining: <?php echo max(0, 300 - (time() - ($_SESSION['otp_time'] ?? time()))); ?> seconds</small><br> ?>
+            <?php // <small>Email: <?php echo htmlspecialchars($_SESSION['user_email'] ?? 'NOT SET'); ?></small><br> ?>
+            <?php // <small class="text-red-600 font-semibold">⚠️ Email sending is disabled in Developer Mode - Use OTP above</small> ?>
+            <?php // </div> ?>
+            <?php // endif; ?>
 
             <form method="POST" class="space-y-6" id="otpForm">
+                <?php echo csrf_field(); ?>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">Kode OTP</label>
                     <input type="text" name="otp" maxlength="6" required autocomplete="one-time-code"
@@ -229,6 +223,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             <!-- Hidden form for resend OTP -->
             <form method="POST" id="resendOtpForm" style="display: none;">
+                <?php echo csrf_field(); ?>
                 <input type="hidden" name="resend_otp" value="1">
             </form>
         </div>

@@ -2,6 +2,7 @@
 session_start();
 require_once '../../includes/config.php';
 require_once '../../includes/maintenance_config.php';
+require_once '../../includes/csrf_helper.php';
 
 // Check maintenance mode
 check_maintenance();
@@ -28,6 +29,11 @@ if (isset($_POST['check_username'])) {
 
 // Handle profile update
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
+    // CSRF validation
+    if (!csrf_validate()) {
+        header('Location: profile.php?error=csrf_invalid');
+        exit();
+    }
     $new_username = $_POST['username'];
     
     // Get current username
@@ -70,6 +76,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
 
 // Handle password change (SIMPLIFIED - NO OTP for prototype)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
+    // CSRF validation
+    if (!csrf_validate()) {
+        header('Location: profile.php?error=csrf_invalid');
+        exit();
+    }
     $old_password = $_POST['old_password'];
     $new_password = $_POST['new_password'];
     $confirm_password = $_POST['confirm_password'];
@@ -291,6 +302,7 @@ if (isset($_GET['info'])) {
                     <h3 class="text-lg font-bold text-gray-800 mb-4">Informasi Profil</h3>
                     
                     <form method="POST" class="space-y-4">
+                        <?php echo csrf_field(); ?>
                         <div>
                             <label class="block text-gray-700 text-sm font-medium mb-2">Username</label>
                             <input type="text" name="username" id="username" value="<?php echo $user['nama']; ?>" required 
@@ -332,6 +344,7 @@ if (isset($_GET['info'])) {
                         </button>
 
                         <form method="POST" id="changePasswordForm" class="hidden space-y-4 mt-4">
+                            <?php echo csrf_field(); ?>
                             <div>
                                 <label class="block text-gray-700 text-sm font-medium mb-2">Password Lama *</label>
                                 <input type="password" name="old_password" required 

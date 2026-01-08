@@ -105,6 +105,7 @@ $items = $details->get_result();
     <title>Validasi Laporan - PRCFI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -285,7 +286,7 @@ $items = $details->get_result();
                         </button>
                         <button type="submit" name="validate" id="validateBtn"
                             class="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition duration-200 font-medium"
-                            onclick="return confirm('Apakah Anda yakin laporan ini sudah valid?')">
+                            onclick="confirmValidate(event)">
                             <i class="fas fa-check-circle mr-2"></i> <span id="validateBtnText">Validasi & Kirim ke FM</span>
                         </button>
                     </div>
@@ -317,7 +318,7 @@ $items = $details->get_result();
                         validateBtn.setAttribute('name', 'request_revision');
                         validateBtn.classList.remove('bg-green-500', 'hover:bg-green-600');
                         validateBtn.classList.add('bg-red-500', 'hover:bg-red-600');
-                        validateBtn.onclick = function() { return confirm('Kirim permintaan revisi ke Project Manager?'); };
+                        validateBtn.onclick = confirmRevision;
                     } else {
                         // Hide revision notes
                         container.classList.add('hidden');
@@ -333,8 +334,56 @@ $items = $details->get_result();
                         validateBtn.setAttribute('name', 'validate');
                         validateBtn.classList.remove('bg-red-500', 'hover:bg-red-600');
                         validateBtn.classList.add('bg-green-500', 'hover:bg-green-600');
-                        validateBtn.onclick = function() { return confirm('Apakah Anda yakin laporan ini sudah valid?'); };
+                        validateBtn.onclick = confirmValidate;
                     }
+                }
+
+                function confirmValidate(e) {
+                    if(e) e.preventDefault();
+                    Swal.fire({
+                        title: 'Validasi Laporan?',
+                        text: 'Laporan akan divalidasi dan dikirim ke Finance Manager.',
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonColor: '#10B981', // green-500
+                        cancelButtonColor: '#6B7280',
+                        confirmButtonText: 'Ya, Validasi!',
+                        cancelButtonText: 'Batal'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            const form = document.getElementById('validationForm');
+                            const hiddenInput = document.createElement('input');
+                            hiddenInput.type = 'hidden';
+                            hiddenInput.name = 'validate';
+                            hiddenInput.value = '1';
+                            form.appendChild(hiddenInput);
+                            form.submit();
+                        }
+                    });
+                }
+
+                function confirmRevision(e) {
+                    if(e) e.preventDefault();
+                    Swal.fire({
+                        title: 'Kirim Revisi?',
+                        text: 'Permintaan revisi beserta catatan akan dikirim ke Project Manager.',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#EF4444', // red-500
+                        cancelButtonColor: '#6B7280',
+                        confirmButtonText: 'Ya, Minta Revisi!',
+                        cancelButtonText: 'Batal'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            const form = document.getElementById('validationForm');
+                            const hiddenInput = document.createElement('input');
+                            hiddenInput.type = 'hidden';
+                            hiddenInput.name = 'request_revision';
+                            hiddenInput.value = '1';
+                            form.appendChild(hiddenInput);
+                            form.submit();
+                        }
+                    });
                 }
                 </script>
             </div>

@@ -3,6 +3,7 @@ session_start();
 require_once '../../includes/config.php';
 require_once '../../includes/maintenance_config.php';
 require_once '../../includes/date_helper.php';
+require_once '../../includes/csrf_helper.php';
 
 // Check maintenance mode
 check_maintenance();
@@ -21,16 +22,20 @@ $user_name = $_SESSION['user_name'];
 $user_id = $_SESSION['user_id'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_report'])) {
-    $conn->begin_transaction();
+    // CSRF validation
+    if (!csrf_validate()) {
+        $error = 'Invalid security token. Please refresh and try again.';
+    } else {
+        $conn->begin_transaction();
 
-    try {
-        $kode_projek = $_POST['kode_projek'];
-        $id_proposal = $_POST['id_proposal']; // Changed from nama_projek to id_proposal
-        $pelaksana = $_POST['pelaksana'];
-        $tanggal_pelaksanaan = parseDateID($_POST['tanggal_pelaksanaan']);
-        $tanggal_laporan = parseDateID($_POST['tanggal_laporan']);
-        $mata_uang = $_POST['mata_uang'];
-        $exrate = $_POST['exrate'];
+        try {
+            $kode_projek = $_POST['kode_projek'];
+            $id_proposal = $_POST['id_proposal']; // Changed from nama_projek to id_proposal
+            $pelaksana = $_POST['pelaksana'];
+            $tanggal_pelaksanaan = parseDateID($_POST['tanggal_pelaksanaan']);
+            $tanggal_laporan = parseDateID($_POST['tanggal_laporan']);
+            $mata_uang = $_POST['mata_uang'];
+            $exrate = $_POST['exrate'];
 
         // Get proposal title for nama_projek
         $proposal_stmt = $conn->prepare("SELECT judul_proposal FROM proposal WHERE id_proposal = ?");
@@ -105,12 +110,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_report'])) {
                         throw new Exception('Format file nota tidak didukung: ' . $original_name);
                     }
 
-                    $safe_name = preg_replace('/[^A-Za-z0-9_\-]/', '_', pathinfo($original_name, PATHINFO_FILENAME));
-                    $filename = time() . '_' . $index . '_' . ($safe_name ?: 'nota');
-                    if ($extension) {
-                        $filename .= '.' . $extension;
+                    // SECURITY FIX: Use random filename to prevent path traversal
+                    $filename = bin2hex(random_bytes(16)) . '_' . time() . '.' . $extension;
+                    
+                    // SECURITY FIX: Validate destination path
+                    $real_upload_dir = realpath($upload_dir);
+                    if ($real_upload_dir === false) {
+                        throw new Exception('Upload directory tidak valid');
                     }
-                    $destination = $upload_dir . $filename;
+                    $destination = $real_upload_dir . DIRECTORY_SEPARATOR . $filename;
+                    
+                    // Double-check path is still within upload directory
+                    if (strpos($destination, $real_upload_dir) !== 0) {
+                        throw new Exception('Path file tidak valid');
+                    }
 
                     if (!move_uploaded_file($file_tmp, $destination)) {
                         throw new Exception('Gagal menyimpan file nota: ' . $original_name);
@@ -160,10 +173,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_report'])) {
         // Redirect to dashboard with success message (auto-update data)
         header('Location: ../dashboards/dashboard_pm.php?success=report_created');
         exit();
-    } catch (Exception $e) {
-        $conn->rollback();
-        $error = 'Gagal mengirimkan laporan keuangan: ' . $e->getMessage();
-    }
+        } catch (Exception $e) {
+            $conn->rollback();
+            $error = 'Gagal mengirimkan laporan keuangan: ' . $e->getMessage();
+        }
+    } // Close else block for CSRF validation
 }
 
 $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE status_proyek != 'cancelled'");
@@ -218,6 +232,7 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
             </div>
 
             <form method="POST" id="reportForm" enctype="multipart/form-data" class="space-y-6">
+                <?php echo csrf_field(); ?>
                 <!-- Informasi Umum -->
                 <div class="space-y-4">
                     <h3 class="text-lg font-bold text-gray-800 border-b pb-2">INFORMASI UMUM</h3>

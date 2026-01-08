@@ -9,6 +9,7 @@ header("Pragma: no-cache");
 require_once '../../includes/config.php';
 require_once '../../includes/maintenance_config.php';
 require_once '../../includes/finance_functions.php';
+require_once '../../includes/csrf_helper.php';
 
 // Check maintenance mode
 check_maintenance();
@@ -31,7 +32,10 @@ $return_tab = $_GET['return_tab'] ?? 'proposals'; // Default to proposals if not
 
 // Handle FM Approval (Stage 1)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['approve'])) {
+    // CSRF validation
+    if (!csrf_validate()) {
+        $error = 'Invalid security token. Please refresh and try again.';
+    } elseif (isset($_POST['approve'])) {
         $conn->begin_transaction();
         try {
             // 1. Get Full Proposal Data
@@ -230,6 +234,7 @@ session_write_close();
     <title>Review Proposal (FM) - PRCF INDONESIA</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -658,6 +663,7 @@ session_write_close();
                 </div>
                 
                 <form method="POST" class="space-y-4" id="reviewForm">
+                    <?php echo csrf_field(); ?>
                     <div id="revisionNotesContainer" class="hidden">
                         <label class="block text-gray-700 text-sm font-medium mb-2">Catatan untuk Project Manager *</label>
                         <textarea name="catatan" id="catatanField" rows="4" 
@@ -673,7 +679,7 @@ session_write_close();
                         </button>
                         <button type="submit" name="approve" id="approveBtn"
                             class="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition duration-200 font-medium"
-                            onclick="return confirm('Setujui proposal ini? (Final Approval)')">
+                            onclick="confirmApprove(event)">
                             <i class="fas fa-check-circle mr-2"></i> <span id="approveBtnText">Setujui (Final)</span>
                         </button>
                     </div>
@@ -690,7 +696,6 @@ session_write_close();
                     const revisionBtnText = document.getElementById('revisionBtnText');
                     const approveBtnText = document.getElementById('approveBtnText');
                     const catatanField = document.getElementById('catatanField');
-                    const form = document.getElementById('reviewForm');
                     
                     if (revisionMode) {
                         // Show revision notes
@@ -706,7 +711,7 @@ session_write_close();
                         approveBtn.setAttribute('name', 'request_revision');
                         approveBtn.classList.remove('bg-green-500', 'hover:bg-green-600');
                         approveBtn.classList.add('bg-red-500', 'hover:bg-red-600');
-                        approveBtn.onclick = function() { return confirm('Kirim permintaan revisi ke Project Manager?'); };
+                        approveBtn.onclick = confirmRevision;
                     } else {
                         // Hide revision notes
                         container.classList.add('hidden');
@@ -722,8 +727,56 @@ session_write_close();
                         approveBtn.setAttribute('name', 'approve');
                         approveBtn.classList.remove('bg-red-500', 'hover:bg-red-600');
                         approveBtn.classList.add('bg-green-500', 'hover:bg-green-600');
-                        approveBtn.onclick = function() { return confirm('Setujui proposal ini? (Final Approval)'); };
+                        approveBtn.onclick = confirmApprove;
                     }
+                }
+
+                function confirmApprove(e) {
+                    if(e) e.preventDefault();
+                    Swal.fire({
+                        title: 'Setujui Proposal?',
+                        text: 'Proposal akan disetujui secara final dan dana akan dicairkan.',
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonColor: '#10B981', // green-500
+                        cancelButtonColor: '#6B7280',
+                        confirmButtonText: 'Ya, Setujui!',
+                        cancelButtonText: 'Batal'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            const form = document.getElementById('reviewForm');
+                            const hiddenInput = document.createElement('input');
+                            hiddenInput.type = 'hidden';
+                            hiddenInput.name = 'approve';
+                            hiddenInput.value = '1';
+                            form.appendChild(hiddenInput);
+                            form.submit();
+                        }
+                    });
+                }
+
+                function confirmRevision(e) {
+                    if(e) e.preventDefault();
+                    Swal.fire({
+                        title: 'Kirim Revisi?',
+                        text: 'Permintaan revisi beserta catatan akan dikirim ke Project Manager.',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#EF4444', // red-500
+                        cancelButtonColor: '#6B7280',
+                        confirmButtonText: 'Ya, Minta Revisi!',
+                        cancelButtonText: 'Batal'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            const form = document.getElementById('reviewForm');
+                            const hiddenInput = document.createElement('input');
+                            hiddenInput.type = 'hidden';
+                            hiddenInput.name = 'request_revision';
+                            hiddenInput.value = '1';
+                            form.appendChild(hiddenInput);
+                            form.submit();
+                        }
+                    });
                 }
                 </script>
             </div>

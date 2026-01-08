@@ -2,6 +2,7 @@
 session_start();
 require_once '../../includes/config.php';
 require_once '../../includes/maintenance_config.php';
+require_once '../../includes/csrf_helper.php';
 
 // Check maintenance mode
 check_maintenance();
@@ -22,7 +23,11 @@ $error = '';
 
 // Handle Form Submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_budget'])) {
-    $kode_proyek = $_POST['kode_proyek'];
+    // CSRF validation
+    if (!csrf_validate()) {
+        $error = 'Invalid security token. Please refresh and try again.';
+    } else {
+        $kode_proyek = $_POST['kode_proyek'];
     $id_village = $_POST['id_village'];
     $exp_code = $_POST['exp_code'];
     $currency = $_POST['currency']; // USD or IDR
@@ -78,6 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_budget'])) {
             $error = "Gagal menyimpan budget: " . $conn->error;
         }
     }
+    } // Close CSRF else block
 }
 
 // Get Projects
@@ -108,15 +114,28 @@ $query = "SELECT b.*, v.village_name, p.nama_proyek
           JOIN proyek p ON b.kode_proyek = p.kode_proyek 
           WHERE 1=1";
 
+$params = [];
+$types = "";
+
 if (!empty($filter_proyek)) {
-    $query .= " AND b.kode_proyek = '$filter_proyek'";
+    $query .= " AND b.kode_proyek = ?";
+    $params[] = $filter_proyek;
+    $types .= "s";
 }
 if (!empty($filter_village)) {
-    $query .= " AND b.id_village = '$filter_village'";
+    $query .= " AND b.id_village = ?";
+    $params[] = $filter_village;
+    $types .= "i";
 }
 
 $query .= " ORDER BY b.created_at DESC";
-$budgets = $conn->query($query);
+
+$stmt = $conn->prepare($query);
+if (!empty($params)) {
+    $stmt->bind_param($types, ...$params);
+}
+$stmt->execute();
+$budgets = $stmt->get_result();
 
 // Get projects with budget summary for validation
 $projects_budget_summary = $conn->query("
@@ -151,6 +170,7 @@ if ($projects_budget_summary) {
     <script src="../../assets/js/tailwindcss.js"></script>
     <script src="../../assets/js/toast.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <!-- Header -->
@@ -210,7 +230,8 @@ if ($projects_budget_summary) {
                     </div>
                     
                     <h2 class="text-lg font-bold text-gray-800 mb-4">Input / Update Budget</h2>
-                    <form method="POST" id="budgetForm" class="space-y-4" onsubmit="return validateBudget()">
+                    <form method="POST" id="budgetForm" class="space-y-4" onsubmit="validateBudget(event)">
+                        <?php echo csrf_field(); ?>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Proyek</label>
                             <select name="kode_proyek" id="kode_proyek" required class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
@@ -649,7 +670,9 @@ if ($projects_budget_summary) {
         }
         
         // Validate budget before submit
-        function validateBudget() {
+        function validateBudget(e) {
+            e.preventDefault();
+            
             const kodeProyek = document.getElementById('kode_proyek').value;
             const amount = parseFloat(document.getElementById('amount').value) || 0;
             const currency = document.getElementById('currency').value;
@@ -668,12 +691,26 @@ if ($projects_budget_summary) {
                 
                 if (amountIDR > remaining) {
                     const deficit = amountIDR - remaining;
-                    const message = `⚠️ PERINGATAN: Budget yang diinput (Rp ${amountIDR.toLocaleString('id-ID')}) melebihi sisa budget proyek (Rp ${remaining.toLocaleString('id-ID')}).\n\nSelisih: Rp ${deficit.toLocaleString('id-ID')}\n\nLanjutkan tetap simpan?`;
-                    return confirm(message);
+                    Swal.fire({
+                        title: 'Peringatan Budget',
+                        html: `Budget yang diinput (Rp ${amountIDR.toLocaleString('id-ID')}) melebihi sisa budget proyek (Rp ${remaining.toLocaleString('id-ID')}).<br><br>Selisih: <strong>Rp ${deficit.toLocaleString('id-ID')}</strong><br><br>Lanjutkan tetap simpan?`,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#F59E0B',
+                        cancelButtonColor: '#6B7280',
+                        confirmButtonText: 'Ya, Tetap Simpan',
+                        cancelButtonText: 'Batal'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            document.getElementById('budgetForm').submit();
+                        }
+                    });
+                    return false;
                 }
             }
             
-            return true;
+            // If no warning, just submit
+            document.getElementById('budgetForm').submit();
         }
     </script>
 </body>

@@ -2,6 +2,7 @@
 session_start();
 require_once '../includes/config.php';
 require_once '../includes/maintenance_config.php';
+require_once '../includes/csrf_helper.php';
 
 // Check maintenance mode
 check_maintenance();
@@ -10,7 +11,10 @@ $error = '';
 $success = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['login'])) {
+    // CSRF validation
+    if (!csrf_validate()) {
+        $error = 'Invalid security token. Please refresh and try again.';
+    } elseif (isset($_POST['login'])) {
         $identifier = trim($_POST['identifier']);
         $password = $_POST['password'];
 
@@ -38,17 +42,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             if ($user_status === 'inactive') {
                 $error = 'Akun Anda telah dinonaktifkan. Silakan hubungi administrator.';
-            } elseif ($user_status === 'pending') {
-                // Set session for pending user and redirect to pending page
-                $_SESSION['user_id'] = $user['id_user'];
-                $_SESSION['user_name'] = $user['nama'];
-                $_SESSION['user_role'] = $user['role'];
-                $_SESSION['user_email'] = $user['email'];
-                $_SESSION['user_status'] = 'pending';
-                $_SESSION['logged_in'] = true;
-                header('Location: account_pending.php');
-                exit();
             } elseif (password_verify($password, $user['password_hash'])) {
+                // Password verified - now check if pending
+                if ($user_status === 'pending') {
+                    // SECURITY FIX: Password verified before session set
+                    session_regenerate_id(true);
+                    $_SESSION['user_id'] = $user['id_user'];
+                    $_SESSION['user_name'] = $user['nama'];
+                    $_SESSION['user_role'] = $user['role'];
+                    $_SESSION['user_email'] = $user['email'];
+                    $_SESSION['user_status'] = 'pending';
+                    $_SESSION['logged_in'] = true;
+                    header('Location: account_pending.php');
+                    exit();
+                }
                 
                 // 🔧 DEVELOPER MODE: Check if OTP should be bypassed
                 $is_developer = (defined('DEVELOPER_MODE') && DEVELOPER_MODE && 
@@ -171,6 +178,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php endif; ?>
 
             <form method="POST" class="space-y-4">
+                <?php echo csrf_field(); ?>
                 <div>
                     <label class="block text-gray-700 text-sm font-medium mb-2">Email atau Nomor HP</label>
                     <input type="text" name="identifier" required 

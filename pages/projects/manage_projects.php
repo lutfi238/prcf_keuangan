@@ -260,6 +260,7 @@ $projects->data_seek(0);
         }
     </style>
     <script src="../../assets/js/toast.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <!-- Flatpickr Date Picker -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
@@ -629,7 +630,7 @@ $projects->data_seek(0);
                                     <div class="whitespace-pre-line"><?php echo nl2br(htmlspecialchars($exp['description'] ?? '-')); ?></div>
                                 </td>
                                 <td class="px-6 py-4 text-center">
-                                    <form method="POST" class="inline" onsubmit="return confirm('Hapus exp code ini?')">
+                                    <form method="POST" class="inline" onsubmit="confirmDeleteExpCode(event)">
                                         <input type="hidden" name="expcode_id" value="<?php echo $exp['id']; ?>">
                                         <button type="submit" name="delete_expcode" 
                                             class="text-red-600 hover:text-red-900" title="Hapus">
@@ -765,32 +766,7 @@ $projects->data_seek(0);
         </div>
     </div>
 
-    <!-- Village Delete Confirmation Modal -->
-    <div id="villageDeleteModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-        <div class="relative top-1/3 mx-auto p-5 border w-96 shadow-lg rounded-lg bg-white">
-            <div class="text-center">
-                <i class="fas fa-exclamation-triangle text-5xl text-red-500 mb-4"></i>
-                <h3 class="text-lg font-bold text-gray-900 mb-2">Konfirmasi Hapus Desa</h3>
-                <p class="text-sm text-gray-600 mb-4">Apakah Anda yakin ingin menghapus desa <strong id="deleteVillageName"></strong>?</p>
-                <p class="text-xs text-gray-500 mb-6">Data desa yang sudah digunakan di exp code tidak dapat dihapus.</p>
-                
-                <form onsubmit="deleteVillageHandler(event)" id="villageDeleteForm">
-                    <input type="hidden" name="delete_village" value="1">
-                    <input type="hidden" name="village_id" id="deleteVillageId">
-                    <div class="flex justify-center space-x-3">
-                        <button type="button" onclick="closeVillageDeleteModal()" 
-                            class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition duration-200 font-medium">
-                            Batal
-                        </button>
-                        <button type="submit"
-                            class="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition duration-200 font-medium">
-                            <i class="fas fa-trash mr-2"></i> Hapus
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
+    <!-- Pre-existing modals removed in favor of SweetAlert2 -->
 
     <!-- Edit Modal -->
     <div id="editModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
@@ -878,31 +854,7 @@ $projects->data_seek(0);
         </div>
     </div>
 
-    <!-- Delete Confirmation Modal -->
-    <div id="deleteModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-        <div class="relative top-1/3 mx-auto p-5 border w-96 shadow-lg rounded-lg bg-white">
-            <div class="text-center">
-                <i class="fas fa-exclamation-triangle text-5xl text-red-500 mb-4"></i>
-                <h3 class="text-lg font-bold text-gray-900 mb-2">Konfirmasi Hapus Proyek</h3>
-                <p class="text-sm text-gray-600 mb-4">Apakah Anda yakin ingin menghapus proyek ini?</p>
-                <p class="text-xs text-gray-500 mb-6">Proyek yang sudah digunakan tidak dapat dihapus, hanya akan diubah statusnya menjadi Cancelled.</p>
-                
-                <form method="POST" id="deleteForm">
-                    <input type="hidden" name="kode_proyek" id="delete_kode_proyek">
-                    <div class="flex justify-center space-x-3">
-                        <button type="button" onclick="closeDeleteModal()" 
-                            class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition duration-200 font-medium">
-                            Batal
-                        </button>
-                        <button type="submit" name="delete_project"
-                            class="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition duration-200 font-medium">
-                            <i class="fas fa-trash mr-2"></i> Hapus
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
+    <!-- Delete Modal removed in favor of SweetAlert2 -->
 
     <script>
         function toggleCreateForm(forceState) {
@@ -945,12 +897,43 @@ $projects->data_seek(0);
         }
 
         function confirmDelete(kodeProyek) {
-            document.getElementById('delete_kode_proyek').value = kodeProyek;
-            document.getElementById('deleteModal').classList.remove('hidden');
+            Swal.fire({
+                title: 'Hapus Proyek?',
+                text: `Apakah Anda yakin ingin menghapus proyek ${kodeProyek}?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#EF4444',
+                cancelButtonColor: '#6B7280',
+                confirmButtonText: 'Ya, Hapus!',
+                cancelButtonText: 'Batal'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.innerHTML = `<input type="hidden" name="delete_project" value="1"><input type="hidden" name="kode_proyek" value="${kodeProyek}">`;
+                    document.body.appendChild(form);
+                    form.submit();
+                }
+            });
         }
-
-        function closeDeleteModal() {
-            document.getElementById('deleteModal').classList.add('hidden');
+        
+        function confirmDeleteExpCode(e) {
+            e.preventDefault();
+            const form = e.target;
+            Swal.fire({
+                title: 'Hapus Exp Code?',
+                text: 'Anda yakin ingin menghapus assignment exp code ini?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#EF4444',
+                cancelButtonColor: '#6B7280',
+                confirmButtonText: 'Ya, Hapus',
+                cancelButtonText: 'Batal'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    form.submit();
+                }
+            });
         }
 
         function formatCurrency(input) {
@@ -1038,161 +1021,49 @@ $projects->data_seek(0);
         }
 
         function confirmDeleteVillage(id, name) {
-            document.getElementById('deleteVillageId').value = id;
-            document.getElementById('deleteVillageName').textContent = name;
-            document.getElementById('villageDeleteModal').classList.remove('hidden');
-        }
-
-        function closeVillageDeleteModal() {
-            document.getElementById('villageDeleteModal').classList.add('hidden');
-        }
-
-        function searchVillages() {
-            const input = document.getElementById('villageSearchInput');
-            const filter = input.value.toLowerCase();
-            const rows = document.getElementsByClassName('village-row');
-
-            for (let i = 0; i < rows.length; i++) {
-                const searchText = rows[i].getAttribute('data-search');
-                if (searchText.includes(filter)) {
-                    rows[i].style.display = '';
-                } else {
-                    rows[i].style.display = 'none';
+            Swal.fire({
+                title: 'Hapus Desa?',
+                html: `Apakah Anda yakin ingin menghapus desa <strong>${name}</strong>?<br><span class="text-sm text-gray-500">Data desa yang sudah digunakan di exp code tidak dapat dihapus.</span>`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#EF4444',
+                cancelButtonColor: '#6B7280',
+                confirmButtonText: 'Ya, Hapus!',
+                cancelButtonText: 'Batal',
+                showLoaderOnConfirm: true,
+                preConfirm: async () => {
+                    const formData = new FormData();
+                    formData.append('delete_village', '1');
+                    formData.append('village_id', id);
+                    
+                    try {
+                        const response = await fetch('../../api/manage_village.php', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        const result = await response.json();
+                        if (!result.success) {
+                            throw new Error(result.message);
+                        }
+                        return result;
+                    } catch (error) {
+                        Swal.showValidationMessage(
+                            `Request failed: ${error}`
+                        );
+                    }
+                },
+                allowOutsideClick: () => !Swal.isLoading()
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({
+                        title: 'Berhasil!',
+                        text: 'Desa berhasil dihapus.',
+                        icon: 'success'
+                    }).then(() => {
+                        window.location.reload();
+                    });
                 }
-            }
-        }
-
-        function filterExpCodes() {
-            const projectFilter = document.getElementById('filterProject').value;
-            const villageFilter = document.getElementById('filterVillage').value;
-            const rows = document.getElementsByClassName('expcode-row');
-
-            for (let i = 0; i < rows.length; i++) {
-                const project = rows[i].getAttribute('data-project');
-                const village = rows[i].getAttribute('data-village');
-                
-                const matchProject = projectFilter === "" || project === projectFilter;
-                const matchVillage = villageFilter === "" || village === villageFilter;
-
-                if (matchProject && matchVillage) {
-                    rows[i].style.display = '';
-                } else {
-                    rows[i].style.display = 'none';
-                }
-            }
-        }
-
-        async function saveVillage(event) {
-            event.preventDefault();
-            
-            const submitBtn = document.getElementById('villageSubmitBtn');
-            // Check if button exists before proceeding
-            if (!submitBtn) {
-                console.error('Village submit button not found');
-                return;
-            }
-
-            try {
-                submitBtn.disabled = true;
-                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Menyimpan...';
-
-                const villageId = document.getElementById('villageId') ? document.getElementById('villageId').value : '';
-                const villageCodeElement = document.getElementById('villageCode');
-                const villageNameElement = document.getElementById('villageName');
-                const villageAbbrElement = document.getElementById('villageAbbr');
-
-                if (!villageCodeElement || !villageNameElement || !villageAbbrElement) {
-                    throw new Error('Required form elements not found');
-                }
-
-                const villageCode = villageCodeElement.value.toUpperCase();
-                const villageName = villageNameElement.value;
-                const villageAbbr = villageAbbrElement.value.toUpperCase();
-
-                // Create form data
-                const formData = new FormData();
-                if (villageId) {
-                    formData.append('edit_village', '1');
-                    formData.append('village_id', villageId);
-                } else {
-                    formData.append('save_village', '1');
-                }
-                formData.append('village_code', villageCode);
-                formData.append('village_name', villageName);
-                formData.append('village_abbr', villageAbbr);
-
-                // Submit via fetch
-                const response = await fetch('../../api/manage_village.php', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                // Handle non-OK responses
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
-                const text = await response.text();
-                let result;
-                try {
-                    result = JSON.parse(text);
-                } catch (e) {
-                    console.error('JSON Parse Error:', text);
-                    throw new Error('Invalid server response');
-                }
-                
-                if (result.success) {
-                    closeVillageModal();
-                    window.location.reload();
-                } else {
-                    Toast.error('Gagal menyimpan desa: ' + result.message);
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = villageId ? 'Update Desa' : 'Tambah Desa';
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                Toast.error('Terjadi kesalahan sistem: ' + error.message);
-                if (submitBtn) {
-                    submitBtn.disabled = false;
-                    // Restore text based on context or default
-                    const villageIdVal = document.getElementById('villageId') ? document.getElementById('villageId').value : '';
-                    submitBtn.textContent = villageIdVal ? 'Update Desa' : 'Tambah Desa';
-                }
-            }
-        }
-
-        async function deleteVillageHandler(event) {
-            event.preventDefault();
-            
-            const form = event.target;
-            const formData = new FormData(form);
-            const submitBtn = form.querySelector('button[type="submit"]');
-            
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Menghapus...';
-
-            try {
-                const response = await fetch('../../api/manage_village.php', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    closeVillageDeleteModal();
-                    window.location.reload();
-                } else {
-                    Toast.error('Gagal menghapus desa: ' + result.message);
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = '<i class="fas fa-trash mr-2"></i> Hapus';
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                Toast.error('Terjadi kesalahan sistem saat menghapus: ' + error.message);
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '<i class="fas fa-trash mr-2"></i> Hapus';
-            }
+            });
         }
 
         // Close modals when clicking outside

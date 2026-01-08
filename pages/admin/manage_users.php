@@ -2,6 +2,7 @@
 session_start();
 require_once '../../includes/config.php';
 require_once '../../includes/maintenance_config.php';
+require_once '../../includes/csrf_helper.php';
 
 // Check maintenance mode
 check_maintenance();
@@ -24,7 +25,10 @@ function countAdmins($conn) {
 
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['create_user'])) {
+    // CSRF validation
+    if (!csrf_validate()) {
+        $error_message = 'Invalid security token. Please refresh and try again.';
+    } elseif (isset($_POST['create_user'])) {
         $nama = $_POST['nama'];
         $email = $_POST['email'];
         $role = $_POST['role'];
@@ -220,6 +224,7 @@ $admin_count = countAdmins($conn);
     <title>Manage Users - Admin Panel</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -378,6 +383,7 @@ $admin_count = countAdmins($conn);
         <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4">
             <h3 id="modalTitle" class="text-xl font-bold text-gray-800 mb-6">Add New User</h3>
             <form method="POST" id="userForm">
+                <?php echo csrf_field(); ?>
                 <input type="hidden" name="id_user" id="userId">
                 
                 <div class="mb-4">
@@ -436,6 +442,7 @@ $admin_count = countAdmins($conn);
         <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4">
             <h3 class="text-xl font-bold text-gray-800 mb-6">Reset Password</h3>
             <form method="POST">
+                <?php echo csrf_field(); ?>
                 <input type="hidden" name="id_user" id="resetUserId">
                 
                 <p class="text-gray-600 mb-4">Reset password for: <strong id="resetUserName"></strong></p>
@@ -462,6 +469,7 @@ $admin_count = countAdmins($conn);
 
     <!-- Delete Confirmation Form -->
     <form method="POST" id="deleteForm" class="hidden">
+        <?php echo csrf_field(); ?>
         <input type="hidden" name="id_user" id="deleteUserId">
         <input type="hidden" name="delete_user" value="1">
     </form>
@@ -507,44 +515,67 @@ $admin_count = countAdmins($conn);
         }
 
         function confirmDelete(userId, userName) {
-            if (confirm(`Are you sure you want to delete user "${userName}"? This action cannot be undone.`)) {
-                document.getElementById('deleteUserId').value = userId;
-                document.getElementById('deleteForm').submit();
-            }
+            Swal.fire({
+                title: 'Hapus User?',
+                text: `Anda yakin ingin menghapus user "${userName}"? Tindakan ini tidak dapat dibatalkan.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#EF4444', // red-500
+                cancelButtonColor: '#6B7280', // gray-500
+                confirmButtonText: 'Ya, Hapus!',
+                cancelButtonText: 'Batal'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    document.getElementById('deleteUserId').value = userId;
+                    document.getElementById('deleteForm').submit();
+                }
+            });
         }
 
         function toggleUserStatus(userId, currentStatus, userName) {
-            const action = currentStatus === 'active' ? 'deactivate' : 'activate';
-            const confirmMessage = `Are you sure you want to ${action} user "${userName}"?\n\n${
-                action === 'deactivate'
-                    ? '• User will not be able to login\n• All active sessions will be terminated'
-                    : '• User will be able to login normally'
-            }`;
+            const action = currentStatus === 'active' ? 'Deactivate' : 'Activate';
+            const actionText = currentStatus === 'active' ? 'menonaktifkan' : 'mengaktifkan';
+            const isDeactivating = currentStatus === 'active';
+            
+            const htmlText = isDeactivating
+                ? '<ul class="text-left text-sm mt-3 space-y-1"><li>&bull; User tidak akan bisa login</li><li>&bull; Sesi aktif akan diakhiri</li></ul>'
+                : '<p class="text-sm mt-2">User akan bisa login kembali secara normal.</p>';
 
-            if (confirm(confirmMessage)) {
-                // Create a form to submit the toggle request
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.style.display = 'none';
+            Swal.fire({
+                title: `${action} User?`,
+                html: `Apakah Anda yakin ingin <strong>${actionText}</strong> user "${userName}"?${htmlText}`,
+                icon: isDeactivating ? 'warning' : 'question',
+                showCancelButton: true,
+                confirmButtonColor: isDeactivating ? '#F59E0B' : '#10B981', // yellow-500 : green-500
+                cancelButtonColor: '#6B7280',
+                confirmButtonText: `Ya, ${action}!`,
+                cancelButtonText: 'Batal'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Create a form to submit the toggle request
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.style.display = 'none';
 
-                const idInput = document.createElement('input');
-                idInput.name = 'id_user';
-                idInput.value = userId;
-                form.appendChild(idInput);
+                    const idInput = document.createElement('input');
+                    idInput.name = 'id_user';
+                    idInput.value = userId;
+                    form.appendChild(idInput);
 
-                const statusInput = document.createElement('input');
-                statusInput.name = 'current_status';
-                statusInput.value = currentStatus;
-                form.appendChild(statusInput);
+                    const statusInput = document.createElement('input');
+                    statusInput.name = 'current_status';
+                    statusInput.value = currentStatus;
+                    form.appendChild(statusInput);
 
-                const toggleInput = document.createElement('input');
-                toggleInput.name = 'toggle_status';
-                toggleInput.value = '1';
-                form.appendChild(toggleInput);
+                    const toggleInput = document.createElement('input');
+                    toggleInput.name = 'toggle_status';
+                    toggleInput.value = '1';
+                    form.appendChild(toggleInput);
 
-                document.body.appendChild(form);
-                form.submit();
-            }
+                    document.body.appendChild(form);
+                    form.submit();
+                }
+            });
         }
 
         // Search and Filter

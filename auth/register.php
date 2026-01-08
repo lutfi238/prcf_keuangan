@@ -2,6 +2,7 @@
 session_start();
 require_once '../includes/config.php';
 require_once '../includes/maintenance_config.php';
+require_once '../includes/csrf_helper.php';
 
 // Check maintenance mode
 check_maintenance();
@@ -38,16 +39,37 @@ if (isset($_POST['check_phone'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
-    $username = $_POST['username'];
-    $email = $_POST['email'];
-    $password = $_POST['password'];
-    $confirm_password = $_POST['confirm_password'];
-    $phone = $_POST['phone'];
-    $role = $_POST['role'];
+    // CSRF validation
+    if (!csrf_validate()) {
+        $error = 'Invalid security token. Please refresh and try again.';
+    } else {
+        $username = $_POST['username'];
+        $email = $_POST['email'];
+        $password = $_POST['password'];
+        $confirm_password = $_POST['confirm_password'];
+        $phone = $_POST['phone'];
+        $role = $_POST['role'];
     
     // Validation
-    if (strlen($password) < 8) {
-        $error = 'Password minimal 8 karakter';
+    $password_errors = [];
+    if (strlen($password) < 12) {
+        $password_errors[] = 'minimal 12 karakter';
+    }
+    if (!preg_match('/[A-Z]/', $password)) {
+        $password_errors[] = 'huruf besar (A-Z)';
+    }
+    if (!preg_match('/[a-z]/', $password)) {
+        $password_errors[] = 'huruf kecil (a-z)';
+    }
+    if (!preg_match('/[0-9]/', $password)) {
+        $password_errors[] = 'angka (0-9)';
+    }
+    if (!preg_match('/[!@#$%^&*(),.?":{}|<>]/', $password)) {
+        $password_errors[] = 'karakter khusus (!@#$%^&*)';
+    }
+    
+    if (!empty($password_errors)) {
+        $error = 'Password harus mengandung: ' . implode(', ', $password_errors);
     } elseif ($password !== $confirm_password) {
         $error = 'Password tidak cocok';
     } else {
@@ -98,6 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
             }
         }
     }
+    } // Close CSRF else block
 }
 ?>
 <!DOCTYPE html>
@@ -132,6 +155,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
             </div>
         <?php else: ?>
             <form method="POST" id="registerForm" class="space-y-4">
+                <?php echo csrf_field(); ?>
                 <div>
                     <label class="block text-gray-700 text-sm font-medium mb-2">Username</label>
                     <input type="text" name="username" id="username" required 

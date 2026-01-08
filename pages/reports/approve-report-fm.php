@@ -9,6 +9,7 @@ header("Pragma: no-cache");
 require_once '../../includes/config.php';
 require_once '../../includes/maintenance_config.php';
 require_once '../../includes/finance_functions.php';
+require_once '../../includes/csrf_helper.php';
 
 // Check maintenance mode
 check_maintenance();
@@ -32,9 +33,11 @@ $report_id = $_GET['id'] ?? 0;
 $return_tab = $_GET['return_tab'] ?? 'proposals'; // Default to proposals if not specified
 
 // Handle approval
-// Handle approval
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['approve'])) {
+    // CSRF validation
+    if (!csrf_validate()) {
+        $error = 'Invalid security token. Please refresh and try again.';
+    } elseif (isset($_POST['approve'])) {
         $conn->begin_transaction();
         try {
             // Update Status
@@ -114,6 +117,7 @@ $items = $details->get_result();
     <title>Approve Laporan - PRCFI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -305,7 +309,7 @@ $items = $details->get_result();
                 <?php if ($report['catatan_finance']): ?>
                 <div class="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
                     <p class="text-sm font-medium text-gray-700 mb-2">Catatan dari Staff Accounting:</p>
-                    <p class="text-sm text-gray-600"><?php echo nl2br($report['catatan_finance']); ?></p>
+                    <p class="text-sm text-gray-600"><?php echo nl2br(htmlspecialchars($report['catatan_finance'])); ?></p>
                 </div>
                 <?php endif; ?>
             </div>
@@ -326,6 +330,7 @@ $items = $details->get_result();
                 </div>
                 
                 <form method="POST" class="space-y-4" id="approvalForm">
+                    <?php echo csrf_field(); ?>
                     <div id="revisionNotesContainer" class="hidden">
                         <label class="block text-gray-700 text-sm font-medium mb-2">Catatan untuk Project Manager *</label>
                         <textarea name="catatan_fm" id="catatanField" rows="4" 
@@ -361,7 +366,7 @@ $items = $details->get_result();
                         </button>
                         <button type="submit" name="approve" id="approveBtn"
                             class="px-8 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition duration-200 font-medium text-lg shadow-lg"
-                            onclick="return confirm('Apakah Anda yakin ingin meng-approve laporan ini?\n\nLaporan akan dikirim ke Direktur untuk review.')">
+                            onclick="confirmApprove(event)">
                             <i class="fas fa-check-circle mr-2"></i> <span id="approveBtnText">Approve</span>
                         </button>
                     </div>
@@ -393,7 +398,7 @@ $items = $details->get_result();
                         approveBtn.setAttribute('name', 'request_revision');
                         approveBtn.classList.remove('bg-green-500', 'hover:bg-green-600');
                         approveBtn.classList.add('bg-red-500', 'hover:bg-red-600');
-                        approveBtn.onclick = function() { return confirm('Kirim permintaan revisi ke Project Manager?'); };
+                        approveBtn.onclick = confirmRevision;
                     } else {
                         // Hide revision notes
                         container.classList.add('hidden');
@@ -409,8 +414,56 @@ $items = $details->get_result();
                         approveBtn.setAttribute('name', 'approve');
                         approveBtn.classList.remove('bg-red-500', 'hover:bg-red-600');
                         approveBtn.classList.add('bg-green-500', 'hover:bg-green-600');
-                        approveBtn.onclick = function() { return confirm('Apakah Anda yakin ingin meng-approve laporan ini?\n\nLaporan akan dikirim ke Direktur untuk review.'); };
+                        approveBtn.onclick = confirmApprove;
                     }
+                }
+
+                function confirmApprove(e) {
+                    if(e) e.preventDefault();
+                    Swal.fire({
+                        title: 'Approve Laporan?',
+                        text: 'Laporan akan dikirim ke Direktur untuk review. Pastikan semua data sudah benar.',
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonColor: '#10B981', // green-500
+                        cancelButtonColor: '#6B7280',
+                        confirmButtonText: 'Ya, Approve!',
+                        cancelButtonText: 'Batal'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            const form = document.getElementById('approvalForm');
+                            const hiddenInput = document.createElement('input');
+                            hiddenInput.type = 'hidden';
+                            hiddenInput.name = 'approve';
+                            hiddenInput.value = '1';
+                            form.appendChild(hiddenInput);
+                            form.submit();
+                        }
+                    });
+                }
+
+                function confirmRevision(e) {
+                    if(e) e.preventDefault();
+                    Swal.fire({
+                        title: 'Kirim Revisi?',
+                        text: 'Permintaan revisi beserta catatan akan dikirim ke Project Manager.',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#EF4444', // red-500
+                        cancelButtonColor: '#6B7280',
+                        confirmButtonText: 'Ya, Minta Revisi!',
+                        cancelButtonText: 'Batal'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            const form = document.getElementById('approvalForm');
+                            const hiddenInput = document.createElement('input');
+                            hiddenInput.type = 'hidden';
+                            hiddenInput.name = 'request_revision';
+                            hiddenInput.value = '1';
+                            form.appendChild(hiddenInput);
+                            form.submit();
+                        }
+                    });
                 }
                 </script>
             </div>

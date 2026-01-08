@@ -57,6 +57,7 @@ if ($details_stmt) {
     <title>View Laporan Keuangan - PRCF INDONESIA</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -234,7 +235,7 @@ if ($details_stmt) {
                     </p>
                 </div>
                 
-                <form action="authorize-report-dir.php?id=<?php echo $report_id; ?>&return_tab=reports" method="POST" class="space-y-4" onsubmit="return confirm('Apakah Anda yakin ingin menyetujui laporan ini?\n\nTindakan ini akan:\n1. Memfinalisasi laporan.\n2. Memproses settlement keuangan (Bank & Budget).\n3. Mengirim notifikasi ke PM dan FM.')">
+                <form action="authorize-report-dir.php?id=<?php echo $report_id; ?>&return_tab=reports" method="POST" class="space-y-4" onsubmit="confirmApproval(event)">
                     <div class="bg-white p-6 rounded-lg border border-gray-200">
                         <div class="flex items-start space-x-4">
                             <div class="flex-shrink-0">
@@ -335,6 +336,40 @@ if ($details_stmt) {
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') closeReceiptPreview();
         });
+
+        function confirmApproval(e) {
+            e.preventDefault();
+            const form = e.target;
+            
+            Swal.fire({
+                title: 'Final Approve & Settle?',
+                html: `<div class="text-left text-sm">
+                        <p class="mb-3">Apakah Anda yakin ingin menyetujui laporan ini? Tindakan ini akan:</p>
+                        <ol class="list-decimal ml-5 space-y-1">
+                            <li>Memfinalisasi laporan secara permanen.</li>
+                            <li>Memproses settlement keuangan (Bank & Budget).</li>
+                            <li>Mengirim notifikasi ke PM dan FM.</li>
+                        </ol>
+                       </div>`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#2563EB', // blue-600
+                cancelButtonColor: '#6B7280',
+                confirmButtonText: 'Ya, Final Approve!',
+                cancelButtonText: 'Batal'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Inject hidden input to ensure 'approve' key exists
+                    const hiddenInput = document.createElement('input');
+                    hiddenInput.type = 'hidden';
+                    hiddenInput.name = 'approve';
+                    hiddenInput.value = '1';
+                    form.appendChild(hiddenInput);
+                    
+                    form.submit();
+                }
+            });
+        }
     </script>
 </body>
 </html>
