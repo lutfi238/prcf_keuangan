@@ -8,6 +8,7 @@ header("Pragma: no-cache");
 
 require_once '../../includes/config.php';
 require_once '../../includes/maintenance_config.php';
+require_once '../../includes/date_helper.php';
 
 // Check maintenance mode
 check_maintenance();
@@ -57,8 +58,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $status_proyek = $_POST['status_proyek'];
         $donor = $_POST['donor'];
         $nilai_anggaran = str_replace(['.', ','], '', $_POST['nilai_anggaran']);
-        $periode_mulai = $_POST['periode_mulai'];
-        $periode_selesai = $_POST['periode_selesai'];
+        $periode_mulai = parseDateID($_POST['periode_mulai']);
+        $periode_selesai = parseDateID($_POST['periode_selesai']);
         $rekening_khusus = $_POST['rekening_khusus'];
         
         // Check if kode_proyek already exists
@@ -86,8 +87,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $status_proyek = $_POST['status_proyek'];
         $donor = $_POST['donor'];
         $nilai_anggaran = str_replace(['.', ','], '', $_POST['nilai_anggaran']);
-        $periode_mulai = $_POST['periode_mulai'];
-        $periode_selesai = $_POST['periode_selesai'];
+        $periode_mulai = parseDateID($_POST['periode_mulai']);
+        $periode_selesai = parseDateID($_POST['periode_selesai']);
         $rekening_khusus = $_POST['rekening_khusus'];
         
         $stmt = $conn->prepare("UPDATE proyek SET nama_proyek = ?, status_proyek = ?, donor = ?, nilai_anggaran = ?, periode_mulai = ?, periode_selesai = ?, rekening_khusus = ? WHERE kode_proyek = ?");
@@ -258,6 +259,11 @@ $projects->data_seek(0);
             to { opacity: 1; transform: translateY(0); }
         }
     </style>
+    <script src="../../assets/js/toast.js"></script>
+    <!-- Flatpickr Date Picker -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/id.js"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <!-- Header -->
@@ -375,13 +381,13 @@ $projects->data_seek(0);
 
                     <div>
                         <label class="block text-gray-700 text-sm font-medium mb-2">Periode Mulai</label>
-                        <input type="date" name="periode_mulai" 
+                        <input type="text" name="periode_mulai" id="create_periode_mulai" placeholder="DD/MM/YYYY"
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
                     </div>
 
                     <div>
                         <label class="block text-gray-700 text-sm font-medium mb-2">Periode Selesai</label>
-                        <input type="date" name="periode_selesai" 
+                        <input type="text" name="periode_selesai" id="create_periode_selesai" placeholder="DD/MM/YYYY"
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
                     </div>
                 </div>
@@ -673,7 +679,7 @@ $projects->data_seek(0);
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
                         <?php 
-                        $villages_result_all = $conn->query("SELECT * FROM villages WHERE is_deleted = 0 ORDER BY village_name ASC");
+                        $villages_result_all = $conn->query("SELECT * FROM villages WHERE is_deleted = 0 ORDER BY village_code DESC");
                         if ($villages_result_all && $villages_result_all->num_rows > 0): 
                             while ($vill = $villages_result_all->fetch_assoc()): 
                         ?>
@@ -847,13 +853,13 @@ $projects->data_seek(0);
 
                     <div>
                         <label class="block text-gray-700 text-sm font-medium mb-2">Periode Mulai</label>
-                        <input type="date" name="periode_mulai" id="edit_periode_mulai" 
+                        <input type="text" name="periode_mulai" id="edit_periode_mulai" placeholder="DD/MM/YYYY"
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
                     </div>
 
                     <div>
                         <label class="block text-gray-700 text-sm font-medium mb-2">Periode Selesai</label>
-                        <input type="date" name="periode_selesai" id="edit_periode_selesai" 
+                        <input type="text" name="periode_selesai" id="edit_periode_selesai" placeholder="DD/MM/YYYY"
                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
                     </div>
                 </div>
@@ -997,11 +1003,23 @@ $projects->data_seek(0);
         })();
 
         // Village Management Functions
-        function openVillageModal() {
+        async function openVillageModal() {
             document.getElementById('villageForm').reset();
             document.getElementById('villageId').value = '';
             document.getElementById('villageModalTitle').textContent = 'Tambah Desa Baru';
             document.getElementById('villageSubmitBtn').textContent = 'Tambah Desa';
+            
+            // Auto-fetch next available code
+            try {
+                const response = await fetch('../../api/get_next_village_code.php');
+                const result = await response.json();
+                if (result.success) {
+                    document.getElementById('villageCode').value = result.next_code;
+                }
+            } catch (error) {
+                console.error('Error fetching next code:', error);
+            }
+            
             document.getElementById('villageModal').classList.remove('hidden');
         }
 
@@ -1127,13 +1145,13 @@ $projects->data_seek(0);
                     closeVillageModal();
                     window.location.reload();
                 } else {
-                    alert('Gagal menyimpan desa: ' + result.message);
+                    Toast.error('Gagal menyimpan desa: ' + result.message);
                     submitBtn.disabled = false;
                     submitBtn.textContent = villageId ? 'Update Desa' : 'Tambah Desa';
                 }
             } catch (error) {
                 console.error('Error:', error);
-                alert('Terjadi kesalahan sistem: ' + error.message);
+                Toast.error('Terjadi kesalahan sistem: ' + error.message);
                 if (submitBtn) {
                     submitBtn.disabled = false;
                     // Restore text based on context or default
@@ -1165,13 +1183,13 @@ $projects->data_seek(0);
                     closeVillageDeleteModal();
                     window.location.reload();
                 } else {
-                    alert('Gagal menghapus desa: ' + result.message);
+                    Toast.error('Gagal menghapus desa: ' + result.message);
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = '<i class="fas fa-trash mr-2"></i> Hapus';
                 }
             } catch (error) {
                 console.error('Error:', error);
-                alert('Terjadi kesalahan sistem saat menghapus: ' + error.message);
+                Toast.error('Terjadi kesalahan sistem saat menghapus: ' + error.message);
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = '<i class="fas fa-trash mr-2"></i> Hapus';
             }
@@ -1197,6 +1215,18 @@ $projects->data_seek(0);
                 closeVillageDeleteModal();
             }
         }
+        
+        // Initialize Flatpickr for all date inputs
+        const flatpickrConfig = {
+            dateFormat: "d/m/Y",
+            locale: "id",
+            allowInput: true
+        };
+        
+        flatpickr("#create_periode_mulai", flatpickrConfig);
+        flatpickr("#create_periode_selesai", flatpickrConfig);
+        flatpickr("#edit_periode_mulai", flatpickrConfig);
+        flatpickr("#edit_periode_selesai", flatpickrConfig);
     </script>
 </body>
 </html>

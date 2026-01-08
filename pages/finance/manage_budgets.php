@@ -148,8 +148,8 @@ if ($projects_budget_summary) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kelola Budget - PRCF Keuangan</title>
-    <!-- Local Assets -->
     <script src="../../assets/js/tailwindcss.js"></script>
+    <script src="../../assets/js/toast.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -634,12 +634,12 @@ if ($projects_budget_summary) {
                 } else if (result.success) {
                     empty.classList.remove('hidden');
                 } else {
-                    alert('Gagal mengambil data: ' + (result.message || 'Unknown error'));
+                    Toast.error('Gagal mengambil data: ' + (result.message || 'Unknown error'));
                     closeDetailModal();
                 }
             } catch (error) {
                 console.error('Error fetching budget details:', error);
-                alert('Terjadi kesalahan saat mengambil data.');
+                Toast.error('Terjadi kesalahan saat mengambil data.');
                 closeDetailModal();
             }
         }

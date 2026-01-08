@@ -8,6 +8,7 @@ header("Pragma: no-cache");
 
 require_once '../../includes/config.php';
 require_once '../../includes/maintenance_config.php';
+require_once '../../includes/date_helper.php';
 
 // Check maintenance mode
 check_maintenance();
@@ -120,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_header'])) {
 // Handle add detail entry
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_detail'])) {
     $id_bank_header = $_POST['id_bank_header'];
-    $tanggal = $_POST['tanggal'];
+    $tanggal = parseDateID($_POST['tanggal']); // Convert DD/MM/YYYY to YYYY-MM-DD
     $reff = $_POST['reff'];
     $title_activity = $_POST['title_activity'];
     $cost_description = $_POST['cost_description'];
@@ -294,6 +295,11 @@ $month_names = [
             transform: rotate(90deg);
         }
     </style>
+    <script src="../../assets/js/toast.js"></script>
+    <!-- Flatpickr Date Picker -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/id.js"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <header class="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
@@ -403,8 +409,9 @@ $month_names = [
                         <label class="block text-gray-700 text-sm font-semibold mb-2">
                             <i class="fas fa-calendar text-blue-500 mr-1"></i> Tanggal *
                         </label>
-                        <input type="date" name="tanggal" required value="<?php echo date('Y-m-d'); ?>"
-                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
+                        <input type="text" name="tanggal" id="bank_date" required value="<?php echo date('d/m/Y'); ?>"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                            placeholder="DD/MM/YYYY">
                     </div>
 
                     <div>
@@ -1205,7 +1212,7 @@ $month_names = [
             // Replace select values with custom input values if custom option is selected
             if (bankNameSelect.value === '__custom__') {
                 if (!bankNameCustom.value.trim()) {
-                    alert('Silakan masukkan nama bank!');
+                    Toast.warning('Silakan masukkan nama bank!');
                     bankNameCustom.focus();
                     return false;
                 }
@@ -1220,7 +1227,7 @@ $month_names = [
             
             if (accountNameSelect.value === '__custom__') {
                 if (!accountNameCustom.value.trim()) {
-                    alert('Silakan masukkan nama akun!');
+                    Toast.warning('Silakan masukkan nama akun!');
                     accountNameCustom.focus();
                     return false;
                 }
@@ -1234,7 +1241,7 @@ $month_names = [
             
             if (accountNumberSelect.value === '__custom__') {
                 if (!accountNumberCustom.value.trim()) {
-                    alert('Silakan masukkan nomor rekening!');
+                    Toast.warning('Silakan masukkan nomor rekening!');
                     accountNumberCustom.focus();
                     return false;
                 }
@@ -1313,6 +1320,14 @@ $month_names = [
                 }, 300);
             }
         }
+        
+        // Initialize Flatpickr for date input
+        flatpickr("#bank_date", {
+            dateFormat: "d/m/Y",
+            locale: "id",
+            allowInput: true,
+            defaultDate: "today"
+        });
     </script>
 </body>
 </html>

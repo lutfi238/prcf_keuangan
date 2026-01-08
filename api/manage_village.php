@@ -99,9 +99,9 @@ function addVillage($conn, $user_id) {
         return;
     }
     
-    // Validate village_code format (V###)
-    if (!preg_match('/^[A-Z0-9]{1,4}$/', $village_code)) {
-        echo json_encode(['success' => false, 'message' => 'Village code must be 1-4 characters (alphanumeric)']);
+    // Validate village_code format (1-10 alphanumeric characters)
+    if (!preg_match('/^[A-Z0-9]{1,10}$/', $village_code)) {
+        echo json_encode(['success' => false, 'message' => 'Village code must be 1-10 characters (alphanumeric)']);
         return;
     }
     
@@ -173,9 +173,9 @@ function updateVillage($conn, $user_id) {
         return;
     }
     
-    // Validate formats
-    if (!preg_match('/^[A-Z0-9]{1,4}$/', $village_code)) {
-        echo json_encode(['success' => false, 'message' => 'Village code must be 1-4 characters (alphanumeric)']);
+    // Validate village_code format (1-10 alphanumeric characters)
+    if (!preg_match('/^[A-Z0-9]{1,10}$/', $village_code)) {
+        echo json_encode(['success' => false, 'message' => 'Village code must be 1-10 characters (alphanumeric)']);
         return;
     }
     
@@ -220,7 +220,13 @@ function updateVillage($conn, $user_id) {
  * Soft delete village
  */
 function deleteVillage($conn, $user_id) {
-    $data = json_decode(file_get_contents('php://input'), true);
+    // Support both JSON and Form Data
+    $content_type = $_SERVER['CONTENT_TYPE'] ?? '';
+    if (stripos($content_type, 'application/json') !== false) {
+        $data = json_decode(file_get_contents('php://input'), true);
+    } else {
+        $data = $_POST;
+    }
     $id_village = intval($data['id_village'] ?? 0);
     
     if ($id_village <= 0) {
@@ -237,9 +243,9 @@ function deleteVillage($conn, $user_id) {
     if ($usage_result['count'] > 0) {
         echo json_encode([
             'success' => false, 
-            'message' => 'Cannot delete village: It is used in ' . $usage_result['count'] . ' budget allocation(s). The village will be hidden from dropdowns but preserved for historical data.'
+            'message' => 'Cannot delete village: It is used in ' . $usage_result['count'] . ' budget allocation(s). Please remove the village from budget allocations first.'
         ]);
-        // Still proceed with soft delete to hide it
+        return;
     }
     
     // Soft delete

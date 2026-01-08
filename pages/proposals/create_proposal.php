@@ -2,6 +2,7 @@
 session_start();
 require_once '../../includes/config.php';
 require_once '../../includes/maintenance_config.php';
+require_once '../../includes/date_helper.php';
 
 // Check maintenance mode
 check_maintenance();
@@ -22,7 +23,7 @@ $user_id = $_SESSION['user_id'];
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_proposal'])) {
     $judul = $_POST['judul_proposal'];
     $pj = $_POST['pj'];
-    $date = $_POST['date'];
+    $date = parseDateID($_POST['date']); // Convert DD/MM/YYYY to YYYY-MM-DD
     $pemohon = $_POST['pemohon'];
     $kode_proyek = $_POST['kode_proyek'];
     $currency = $_POST['currency'];
@@ -177,7 +178,12 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Buat Proposal - PRCFI</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="../../assets/js/toast.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Flatpickr Date Picker -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/id.js"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <!-- Header -->
@@ -237,8 +243,9 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
 
                         <div>
                             <label class="block text-gray-700 text-sm font-medium mb-2">Tanggal Pengajuan *</label>
-                            <input type="date" name="date" required value="<?php echo date('Y-m-d'); ?>"
-                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
+                            <input type="text" name="date" id="proposal_date" required value="<?php echo date('d/m/Y'); ?>"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                placeholder="DD/MM/YYYY">
                         </div>
                     </div>
 
@@ -388,7 +395,7 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
 
         function addBudgetRow() {
             if (!selectedProject) {
-                alert('Pilih proyek terlebih dahulu!');
+                Toast.warning('Pilih proyek terlebih dahulu!');
                 return;
             }
             
@@ -595,7 +602,7 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
             const budgetRows = document.getElementById('budgetTableBody').children.length;
             if (budgetRows === 0) {
                 e.preventDefault();
-                alert('Tambahkan minimal 1 baris budget detail!');
+                Toast.warning('Tambahkan minimal 1 baris budget detail!');
                 return false;
             }
             
@@ -607,6 +614,14 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
                     return false;
                 }
             }
+        });
+        
+        // Initialize Flatpickr for date input
+        flatpickr("#proposal_date", {
+            dateFormat: "d/m/Y",
+            locale: "id",
+            allowInput: true,
+            defaultDate: "today"
         });
     </script>
 

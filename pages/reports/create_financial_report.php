@@ -2,6 +2,7 @@
 session_start();
 require_once '../../includes/config.php';
 require_once '../../includes/maintenance_config.php';
+require_once '../../includes/date_helper.php';
 
 // Check maintenance mode
 check_maintenance();
@@ -26,8 +27,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_report'])) {
         $kode_projek = $_POST['kode_projek'];
         $id_proposal = $_POST['id_proposal']; // Changed from nama_projek to id_proposal
         $pelaksana = $_POST['pelaksana'];
-        $tanggal_pelaksanaan = $_POST['tanggal_pelaksanaan'];
-        $tanggal_laporan = $_POST['tanggal_laporan'];
+        $tanggal_pelaksanaan = parseDateID($_POST['tanggal_pelaksanaan']);
+        $tanggal_laporan = parseDateID($_POST['tanggal_laporan']);
         $mata_uang = $_POST['mata_uang'];
         $exrate = $_POST['exrate'];
 
@@ -72,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_report'])) {
             $max_size = 5 * 1024 * 1024; // 5MB
 
             foreach ($_POST['items'] as $index => $item) {
-                $invoice_date = trim($item['invoice_date'] ?? '');
+                $invoice_date = parseDateID(trim($item['invoice_date'] ?? ''));
                 $item_desc = trim($item['item_desc'] ?? '');
                 $recipient = trim($item['recipient'] ?? '');
                 $place_code = trim($item['place_code'] ?? '');
@@ -176,6 +177,10 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="../../assets/js/currency_format.js"></script>
+    <!-- Flatpickr Date Picker -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/id.js"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -277,13 +282,13 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
 
                         <div>
                             <label class="block text-gray-700 text-sm font-medium mb-2">Tanggal Pelaksanaan *</label>
-                            <input type="date" name="tanggal_pelaksanaan" required 
+                            <input type="text" name="tanggal_pelaksanaan" id="tanggal_pelaksanaan" required placeholder="DD/MM/YYYY"
                                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
                         </div>
 
                         <div>
                             <label class="block text-gray-700 text-sm font-medium mb-2">Tanggal Laporan *</label>
-                            <input type="date" name="tanggal_laporan" required value="<?php echo date('Y-m-d'); ?>" readonly
+                            <input type="text" name="tanggal_laporan" id="tanggal_laporan" required value="<?php echo date('d/m/Y'); ?>" readonly
                                 class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-400">
                         </div>
                     </div>
@@ -498,8 +503,9 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
                 <div class="grid grid-cols-1 gap-4">
                     <div>
                         <label class="block text-gray-700 text-sm font-medium mb-2">Tanggal Invoice</label>
-                        <input type="date" name="items[${itemCount}][invoice_date]"
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        <input type="text" name="items[${itemCount}][invoice_date]" id="invoice_date_${itemCount}"
+                            class="invoice-date-input w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                            placeholder="DD/MM/YYYY">
                     </div>
                     <div class="md:col-span-2">
                         <label class="block text-gray-700 text-sm font-medium mb-2">Deskripsi Item *</label>
@@ -902,6 +908,28 @@ $projects = $conn->query("SELECT kode_proyek, nama_proyek FROM proyek WHERE stat
                     suggestionBox.classList.add('hidden');
                 });
         }
+        
+        // Initialize Flatpickr for static date inputs
+        const flatpickrConfig = {
+            dateFormat: "d/m/Y",
+            locale: "id",
+            allowInput: true
+        };
+        
+        flatpickr("#tanggal_pelaksanaan", flatpickrConfig);
+        flatpickr("#tanggal_laporan", { ...flatpickrConfig, clickOpens: false });
+        
+        // Initialize Flatpickr for dynamically added invoice dates
+        const originalAddItem = window.addItem;
+        const addItemWrapper = function(item = null) {
+            originalAddItem(item);
+            // Initialize Flatpickr on the newly added invoice date input
+            const newInput = document.querySelector(`#invoice_date_${itemCount}`);
+            if (newInput) {
+                flatpickr(newInput, flatpickrConfig);
+            }
+        };
+        window.addItem = addItemWrapper;
     </script>
 </body>
 </html>
